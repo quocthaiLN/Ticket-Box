@@ -26,3 +26,14 @@
 #### 2. Claims nên đặt trong JWT
 - Refresh token: đặt UUID
 - Access token: đặt UUID + ROLE
+
+#### 3. Cấu trúc thư mục
+
+#### 4. UserDetails và UserDetailsService
+- Được Spring Security dùng để định danh User sau khi đã xác thực.
+- Có thể implement từ UserDetails và UserDetailsService để tuy chỉnh cho phù hợp.
+
+#### 5. Spring Data Redis
+- Dependency hỗ trợ Redis
+- RedisTemplate: abstract layer của Spring Data Redis -> cung cấp các phương thức để thực hiện các thao tác đọc/ghi dữ liệu vào Redis
+- StringRedisTemplate: cũng là RedisTemplate nhưng Key và Value đều là String
