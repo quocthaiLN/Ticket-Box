@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: ticketbox
+  profiles:
+    active: api
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ticketbox}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
+  mail:
+    host: ${MAIL_HOST:}          # Placeholders for user SMTP configuration
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+jwt:
+  access-token: fbf31e0e58fa369c5ad1909f9d013ee03fb267e767aedff8b2fff6cc9b6dc9f6
+  access-token-expiration: 900000 # 15 mins in ms
+  refresh-token: ccd0c7a7b168a1fe1a719e0afa3ad66b0a2afb6fba8bf0f877faa1e855349a66
+  refresh-token-expiration: 2592000000 # 30 days in ms
