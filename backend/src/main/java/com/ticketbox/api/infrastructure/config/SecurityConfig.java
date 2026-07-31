@@ -27,7 +27,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public static BCryptPasswordEncoder passwordEncoder() {
+    public static BCryptPasswordEncoder bCryptPasswordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
@@ -38,7 +38,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests((authorize) -> authorize
-                        .requestMatchers(HttpMethod.POST, "/user/register", "/user/login", "/user/verify-otp")
+                        .requestMatchers(HttpMethod.POST, "/user/register", "/user/login", "/user/verify-otp", "/user/refresh-token")
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/user/verify-otp").permitAll()
                         .anyRequest().authenticated()

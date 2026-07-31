@@ -1,0 +1,47 @@
+# Secrets & Local Configuration Files
+application-local.yml
+application-secret.yml
+application-secrets.yml
+*.local.yml
+*.secret.yml
+.env
+.env.*
+.env.local
+
+# Allow tracked base application configs
+!backend/src/main/resources/application.yml
+!backend/src/main/resources/application-api.yml
+!backend/src/main/resources/application-worker.yml
+!docker-compose.yml
+!docker-compose.*.yml
+
+# Build & Compilation Output
+target/
+build/
+out/
+bin/
+node_modules/
+
+# IDE & Editor Files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+.sts4-cache/
+.factorypath
+.apt_generated
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Logs & Temporary Files
+*.log
+logs/
+*.tmp

@@ -27,16 +27,16 @@ public class JwtUtils {
 
     private static final Logger log = LoggerFactory.getLogger(JwtUtils.class);
 
-    @Value("${access-token}")
+    @Value("${jwt.access-token}")
     private String accessTokenSecret;
 
-    @Value("${access-token-expiration}")
+    @Value("${jwt.access-token-expiration}")
     private String accessTokenExpirationRaw;
 
-    @Value("${refresh-token}")
+    @Value("${jwt.refresh-token}")
     private String refreshTokenSecret;
 
-    @Value("${refresh-token-expiration}")
+    @Value("${jwt.refresh-token-expiration}")
     private String refreshTokenExpirationRaw;
 
     private Key accessKey;
@@ -71,13 +71,20 @@ public class JwtUtils {
             return 3600000L; // default 1 hour
         }
         try {
-            String[] parts = expression.split("\\*");
-            long result = 1;
-            for (String part : parts) {
-                result *= Long.parseLong(part.trim());
-            }
-            return result;
+            return Long.parseLong(expression.trim());
         } catch (NumberFormatException e) {
+            if (expression.contains("*")) {
+                try {
+                    String[] parts = expression.split("\\*");
+                    long result = 1;
+                    for (String part : parts) {
+                        result *= Long.parseLong(part.trim());
+                    }
+                    return result;
+                } catch (NumberFormatException ex) {
+                    // Fall back to logging error below
+                }
+            }
             log.error("Failed to parse token expiration expression: {}", expression, e);
             return 3600000L; // default 1 hour
         }
@@ -103,12 +110,8 @@ public class JwtUtils {
                 .compact();
     }
 
-    public boolean validateToken(String token) {
-        return validateToken(token, accessKey);
-    }
-
     public boolean validateAccessToken(String token) {
-        return validateToken(token);
+        return validateToken(token, accessKey);
     }
 
     public boolean validateRefreshToken(String token) {

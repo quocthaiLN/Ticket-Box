@@ -5,14 +5,19 @@ spring:
     active: api
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:ticketbox}
-    username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:password}
+    url: jdbc:postgresql://ep-snowy-firefly-azpxmhww-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?user=neondb_owner&password=npg_xS7QFDkMXYC5&sslmode=require&channelBinding=require
+    username: ${DB_USER:neondb_owner}
+    password: ${DB_PASSWORD:npg_xS7QFDkMXYC5}
     driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    repair-on-migrate: true
+    locations: classpath:db/migration
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
@@ -21,20 +26,26 @@ spring:
 
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
+      host: ${REDIS_HOST:moving-roughy-76529.upstash.io}
       port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:gQAAAAAAASrxAAIgcDI2M2QzMDRhMDA1Y2E0YmU2ODM1MDAxYWJmM2E3MTY2Mw}
+      ssl:
+        enabled: ${REDIS_SSL:true}
 
   rabbitmq:
-    host: ${RABBITMQ_HOST:localhost}
-    port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USER:guest}
-    password: ${RABBITMQ_PASSWORD:guest}
+    host: ${RABBITMQ_HOST:fuji.lmq.cloudamqp.com}
+    virtual-host: ${RABBITMQ_VHOST:ykxlsjhy}
+    port: ${RABBITMQ_PORT:5671}
+    username: ${RABBITMQ_USER:ykxlsjhy}
+    password: ${RABBITMQ_PASSWORD:N0LiNWaBQARTfuK-r-B4DsKYPazMalm7}
+    ssl:
+      enabled: ${RABBITMQ_SSL:true}
 
   mail:
-    host: ${MAIL_HOST:}          # Placeholders for user SMTP configuration
+    host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
+    username: ${MAIL_USERNAME:quocthailenguyen41@gmail.com}
+    password: ${MAIL_PASSWORD:krmaawatipuhtlio}
     properties:
       mail:
         smtp:
