@@ -90,8 +90,14 @@ public class JwtUtils {
         }
     }
 
+    public long getAccessTokenExpirationMillis() {
+        return accessTokenExpiration;
+    }
+
     public String generateAccessToken(UUID id, String role) {
+        String jti = UUID.randomUUID().toString();
         return Jwts.builder()
+                .setId(jti)
                 .setSubject(id.toString())
                 .claim("role", role)
                 .setIssuedAt(new Date())
@@ -101,7 +107,9 @@ public class JwtUtils {
     }
 
     public String generateRefreshToken(UUID id, String role) {
+        String jti = UUID.randomUUID().toString();
         return Jwts.builder()
+                .setId(jti)
                 .setSubject(id.toString())
                 .claim("role", role)
                 .setIssuedAt(new Date())
@@ -146,12 +154,32 @@ public class JwtUtils {
         return UUID.fromString(extractClaim(token, refreshKey, Claims::getSubject));
     }
 
+    public String extractJtiFromAccessToken(String token) {
+        return extractClaim(token, accessKey, Claims::getId);
+    }
+
+    public String extractJtiFromRefreshToken(String token) {
+        return extractClaim(token, refreshKey, Claims::getId);
+    }
+
     public String extractRoleFromAccessToken(String token) {
         return extractClaim(token, accessKey, claims -> claims.get("role", String.class));
     }
 
     public String extractRoleFromRefreshToken(String token) {
         return extractClaim(token, refreshKey, claims -> claims.get("role", String.class));
+    }
+
+    public long getRemainingTtlMillisFromAccessToken(String token) {
+        Date expiration = extractClaim(token, accessKey, Claims::getExpiration);
+        long diff = expiration.getTime() - System.currentTimeMillis();
+        return Math.max(diff, 0);
+    }
+
+    public long getRemainingTtlMillisFromRefreshToken(String token) {
+        Date expiration = extractClaim(token, refreshKey, Claims::getExpiration);
+        long diff = expiration.getTime() - System.currentTimeMillis();
+        return Math.max(diff, 0);
     }
 
     public <T> T extractClaim(String token, Key key, Function<Claims, T> claimsResolver) {

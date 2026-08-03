@@ -19,6 +19,7 @@ cd backend
 ### Run
 
 ```
+cd backend
 ./mvnw spring-boot:run "-Dspring-boot.run.profiles=api"
 ./mvnw spring-boot:run "-Dspring-boot.run.profiles=worker"
 ./mvnw spring-boot:run "-Dspring-boot.run.profiles=api,worker"

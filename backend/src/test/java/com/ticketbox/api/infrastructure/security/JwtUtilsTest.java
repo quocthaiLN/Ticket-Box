@@ -4,7 +4,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 class JwtUtilsTest {
 
@@ -27,5 +29,19 @@ class JwtUtilsTest {
 
         assertEquals(900000L, accessExp);
         assertEquals(2592000000L, refreshExp);
+    }
+
+    @Test
+    void testGenerateAndValidateAccessToken() {
+        UUID userId = UUID.randomUUID();
+        String role = "AUDIENCE";
+
+        String token = jwtUtils.generateAccessToken(userId, role);
+        assertNotNull(token);
+        assertTrue(jwtUtils.validateAccessToken(token));
+
+        assertEquals(userId, jwtUtils.extractIdFromAccessToken(token));
+        assertEquals(role, jwtUtils.extractRoleFromAccessToken(token));
+        assertNotNull(jwtUtils.extractJtiFromAccessToken(token));
     }
 }
