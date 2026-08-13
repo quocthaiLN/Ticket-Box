@@ -1,0 +1,30 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "{{userEmail}}",
+      "password": "{{userPassword}}",
+      "confirm_password": "{{userPassword}}",
+      "full_name": "Test User",
+      "phone": "+84987654321"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 201 Created', function () {
+          pm.response.to.have.status(201);
+      });
+
+      pm.test('Response contains registered user data', function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property('data');
+          pm.expect(jsonData.data).to.have.property('id');
+          pm.expect(jsonData.data.email).to.eql(pm.environment.get('userEmail'));
+      });
+    language: text/javascript
+order: 1000

@@ -1,0 +1,10 @@
+name: TicketBox Dev Environment
+values:
+  - key: baseUrl
+    value: 'http://localhost:8081'
+  - key: userEmail
+    value: testuser@example.com
+  - key: userPassword
+    value: Password123!
+  - key: otpCode
+    value: ''

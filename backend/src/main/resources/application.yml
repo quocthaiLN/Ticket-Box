@@ -4,6 +4,14 @@ spring:
   profiles:
     active: api
 
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:611766124507-1u35lsu8ftr2270o0p5lg9np8vpuchdo.apps.googleusercontent.com}
+            client-secret: ${GOOGLE_CLIENT_SECRET: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}
+
   datasource:
     url: jdbc:postgresql://ep-snowy-firefly-azpxmhww-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?user=neondb_owner&password=npg_xS7QFDkMXYC5&sslmode=require&channelBinding=require
     username: ${DB_USER:neondb_owner}
@@ -58,3 +66,9 @@ jwt:
   access-token-expiration: 900000 # 15 mins in ms
   refresh-token: 004edc7d0d12e37e71f2229712d9fcb3b3db5a52c87ddacbfd39677565fafefe
   refresh-token-expiration: 2592000000 # 30 days in ms
+
+app:
+  otp:
+    ttl-minutes: ${OTP_TTL_MINUTES:5}
+
+

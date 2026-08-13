@@ -8,8 +8,6 @@ import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import com.ticketbox.api.module.inventory.domain.entities.TicketType;
-
 import java.time.LocalDateTime;
 
 @Entity

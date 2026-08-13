@@ -1,10 +1,8 @@
 package com.ticketbox.api.module.auth.services;
 
 
-import com.ticketbox.api.module.auth.domain.dtos.LoginRequest;
-import com.ticketbox.api.module.auth.domain.dtos.LoginResponse;
-import com.ticketbox.api.module.auth.domain.dtos.RegisterRequest;
-import com.ticketbox.api.module.auth.domain.dtos.UserResponse;
+import com.ticketbox.api.module.auth.domain.dtos.*;
+
 
 
 import java.util.UUID;
@@ -13,7 +11,12 @@ public interface UserService {
 
     UserResponse register(RegisterRequest request);
 
+    UserResponse verifyOtp(VerifyOtpRequest request);
+
+    void resendOtp(ResendOtpRequest request);
+
     LoginResponse login(LoginRequest request);
+
 
     void logout(String accessToken);
 

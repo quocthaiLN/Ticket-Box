@@ -1,0 +1,28 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/refresh"
+method: POST
+headers:
+  Cookie: refresh_token={{refreshToken}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('Status code is 200 OK', function () {
+          pm.response.to.have.status(200);
+      });
+
+      pm.test('Extract and update new access token', function () {
+          var jsonData = pm.response.json();
+          pm.expect(jsonData).to.have.property('data');
+          pm.expect(jsonData.data).to.have.property('access_token');
+          
+          var newToken = jsonData.data.access_token;
+          pm.environment.set('accessToken', newToken);
+          console.log('Updated new Access Token:', newToken);
+
+          if (jsonData.data.refresh_token) {
+              pm.environment.set('refreshToken', jsonData.data.refresh_token);
+              console.log('Updated new Refresh Token:', jsonData.data.refresh_token);
+          }
+      });
+    language: text/javascript
+order: 6000

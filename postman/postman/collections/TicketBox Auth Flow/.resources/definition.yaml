@@ -1,0 +1,2 @@
+$kind: collection
+description: "Postman Collection for testing TicketBox Authentication workflow: Register -> Resend OTP -> Verify OTP -> Login -> Auth Me -> Refresh Token -> Logout"

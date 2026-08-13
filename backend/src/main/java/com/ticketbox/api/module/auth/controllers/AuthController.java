@@ -4,7 +4,9 @@ import com.ticketbox.api.infrastructure.response.ApiResponse;
 import com.ticketbox.api.module.auth.domain.dtos.LoginRequest;
 import com.ticketbox.api.module.auth.domain.dtos.LoginResponse;
 import com.ticketbox.api.module.auth.domain.dtos.RegisterRequest;
+import com.ticketbox.api.module.auth.domain.dtos.ResendOtpRequest;
 import com.ticketbox.api.module.auth.domain.dtos.UserResponse;
+import com.ticketbox.api.module.auth.domain.dtos.VerifyOtpRequest;
 import com.ticketbox.api.module.auth.services.CustomUserDetails;
 import com.ticketbox.api.module.auth.services.UserService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,6 +32,19 @@ public class AuthController {
         UserResponse user = userService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(user));
     }
+
+    @PostMapping("/verify-otp")
+    public ResponseEntity<ApiResponse<UserResponse>> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        UserResponse user = userService.verifyOtp(request);
+        return ResponseEntity.ok(ApiResponse.success(user));
+    }
+
+    @PostMapping("/resend-otp")
+    public ResponseEntity<ApiResponse<String>> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
+        userService.resendOtp(request);
+        return ResponseEntity.ok(ApiResponse.success("OTP has been resent to your email"));
+    }
+
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginResponse>> login(
