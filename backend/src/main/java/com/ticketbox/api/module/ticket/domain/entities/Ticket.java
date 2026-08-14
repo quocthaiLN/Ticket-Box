@@ -1,6 +1,6 @@
 package com.ticketbox.api.module.ticket.domain.entities;
 
-import com.ticketbox.api.module.inventory.domain.entities.TicketType;
+import com.ticketbox.api.module.catalog.domain.entities.TicketType;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
 import com.ticketbox.api.module.catalog.domain.entities.SeatZone;
 import com.ticketbox.api.module.order.domain.entities.Order;

@@ -1,16 +1,23 @@
 package com.ticketbox.api.module.catalog.repositories;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
 import java.util.UUID;
 
-public interface ConcertRepository extends JpaRepository<Concert, UUID> {
+@Repository
+public interface ConcertRepository extends JpaRepository<Concert, UUID>, JpaSpecificationExecutor<Concert> {
 
+    Optional<Concert> findBySlug(String slug);
+
+    boolean existsBySlug(String slug);
+
+    Page<Concert> findByOrganizerId(UUID organizerId, Pageable pageable);
+
+    Optional<Concert> findByIdAndOrganizerId(UUID id, UUID organizerId);
 }
-
-
-
-
-

@@ -2,7 +2,8 @@ package com.ticketbox.api.module.notification.consumer;
 
 import com.ticketbox.api.infrastructure.config.RabbitMqConstants;
 import com.ticketbox.api.module.notification.services.EmailService;
-import com.ticketbox.api.module.share.dtos.AuthOtpMessageDTO;
+import com.ticketbox.api.module.shared.domain.dtos.AuthOtpMessageDTO;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;

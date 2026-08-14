@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.ticketbox.api.module.ticket.domain.entities.Ticket;
-import com.ticketbox.api.module.inventory.domain.entities.TicketType;
+import com.ticketbox.api.module.catalog.domain.entities.TicketType;
 
 @Entity
 @Table(name = "order_items", indexes = {

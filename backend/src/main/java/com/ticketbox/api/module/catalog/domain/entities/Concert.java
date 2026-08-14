@@ -1,6 +1,6 @@
 package com.ticketbox.api.module.catalog.domain.entities;
 
-import com.ticketbox.api.module.inventory.domain.entities.TicketType;
+import com.ticketbox.api.module.auth.domain.entities.User;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
@@ -20,7 +20,8 @@ import java.util.UUID;
         @UniqueConstraint(name = "uk_concerts_slug", columnNames = "slug")
 }, indexes = {
         @Index(name = "idx_concerts_title", columnList = "title"),
-        @Index(name = "idx_concerts_slug", columnList = "slug")
+        @Index(name = "idx_concerts_slug", columnList = "slug"),
+        @Index(name = "idx_concerts_organizer_id", columnList = "organizer_id")
 })
 @Getter
 @Setter
@@ -34,6 +35,11 @@ public class Concert {
     @Column(name = "id", updatable = false, nullable = false)
     @NotNull(message = "Id cannot be null")
     private UUID id;
+
+    @NotNull(message = "Organizer cannot be null")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "organizer_id", nullable = false, foreignKey = @ForeignKey(name = "fk_concerts_organizer"))
+    private User organizer;
 
     @NotBlank(message = "Title cannot be blank")
     @Size(max = 255, message = "Title must not exceed 255 characters")

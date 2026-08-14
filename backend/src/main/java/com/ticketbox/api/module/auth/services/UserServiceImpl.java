@@ -9,7 +9,8 @@ import com.ticketbox.api.module.auth.domain.entities.UserAccount;
 import com.ticketbox.api.module.auth.producer.AuthProducer;
 import com.ticketbox.api.module.auth.repositories.UserAccountRepository;
 import com.ticketbox.api.module.auth.repositories.UserRepository;
-import com.ticketbox.api.module.share.dtos.AuthOtpMessageDTO;
+import com.ticketbox.api.module.shared.domain.dtos.AuthOtpMessageDTO;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;

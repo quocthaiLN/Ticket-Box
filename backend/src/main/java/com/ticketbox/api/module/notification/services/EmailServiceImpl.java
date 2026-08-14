@@ -1,6 +1,5 @@
 package com.ticketbox.api.module.notification.services;
 
-import com.ticketbox.api.module.share.dtos.AuthOtpMessageDTO;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +8,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+
+import com.ticketbox.api.module.shared.domain.dtos.AuthOtpMessageDTO;
 
 import java.nio.charset.StandardCharsets;
 

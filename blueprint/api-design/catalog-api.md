@@ -124,18 +124,15 @@ Backend vẫn phải kiểm tra ownership sau API Gateway. Không chỉ dựa v�
 | --- | --- | --- | --- |
 | `GET` | `/concerts` | Public | Danh sách concert `PUBLISHED`. |
 | `GET` | `/concerts/{concert_id}` | Public | Chi tiết concert cho trang detail. |
-| `GET` | `/concerts/{concert_id}/metadata` | Public/CDN | Metadata tĩnh, venue, zones, bio, asset URLs. |
-| `GET` | `/concerts/{concert_id}/seat-map` | Public/CDN | Sơ đồ SVG hoặc metadata seat map. |
+| `GET` | `/concerts/{concert_id}/metadata` | Public | Metadata tĩnh, venue, zones, bio, asset URLs. |
+| `GET` | `/concerts/{concert_id}/seat-map` | Public| Sơ đồ SVG hoặc metadata seat map. |
 | `GET` | `/concerts/{concert_id}/ticket-types` | Public | Danh sách loại vé được hiển thị. |
 | `GET` | `/concerts/{concert_id}/inventory` | Public | Tồn kho gần thời gian thực từ Redis. |
 
-### 5.2. Admin endpoints
+### 5.2. Admin/Organizer endpoints
 
 | Method | Endpoint | Auth | Mục đích |
 | --- | --- | --- | --- |
-| `GET` | `/admin/venues` | `ORGANIZER`, `ADMIN` | Danh sách venue để cấu hình concert. |
-| `POST` | `/admin/venues` | `ORGANIZER`, `ADMIN` | Tạo venue. |
-| `PATCH` | `/admin/venues/{venue_id}` | `ORGANIZER`, `ADMIN` | Cập nhật venue. |
 | `GET` | `/admin/concerts` | `ORGANIZER`, `ADMIN` | Danh sách concert quản trị, có cả draft/cancelled. |
 | `POST` | `/admin/concerts` | `ORGANIZER`, `ADMIN` | Tạo concert ở `DRAFT`. |
 | `PATCH` | `/admin/concerts/{concert_id}` | `ORGANIZER`, `ADMIN` | Cập nhật concert. |

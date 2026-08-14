@@ -46,6 +46,15 @@ class UserServiceTest {
     @Mock
     private TokenBlacklistService tokenBlacklistService;
 
+    @Mock
+    private com.ticketbox.api.module.auth.producer.AuthProducer authProducer;
+
+    @Mock
+    private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
+
+    @Mock
+    private org.springframework.data.redis.core.ValueOperations<String, String> valueOperations;
+
     @InjectMocks
     private UserServiceImpl userService;
 
@@ -54,6 +63,7 @@ class UserServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
         UUID userId = UUID.randomUUID();
         sampleUser = User.builder()
                 .id(userId)

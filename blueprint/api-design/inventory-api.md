@@ -1,6 +1,9 @@
-# TicketBox — Inventory API Design
+# TicketBox — Inventory API Design (Deprecated / Consolidated)
 
-Tài liệu này thiết kế API vận hành tồn kho vé. Public read tồn kho cho UI nằm trong `catalog-api.md`; file này tập trung vào nghiệp vụ thay đổi tồn kho an toàn: hold, release, payment confirmed và admin adjustment.
+> [!NOTE]
+> **Thay đổi kiến trúc (Consolidation):** Module HTTP `inventory` độc lập đã được loại bỏ.
+> - **Catalog Module (`catalog-api.md`):** Quản lý thực thể `TicketType`, phục vụ Admin API xem thông tin tồn kho source-of-truth (`total_quantity`, `held_quantity`, `sold_quantity`, `available_quantity`), Admin điều chỉnh loại vé qua `PATCH /admin/ticket-types/{id}`, và Public API xem số lượng vé tồn kho từ Redis cache (`GET /concerts/{concertId}/inventory`).
+> - **Order Module (`order-api.md`):** Quản lý thực thể `UserTicketTypeCounter` (`max_per_user`) và thực hiện các giao dịch Postgres row-level lock (`SELECT ... FOR UPDATE`) cho các thao tác hold/release vé nội bộ khi tạo/hủy đơn hàng.
 
 Nguồn nghiệp vụ chính:
 
