@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,4 +22,6 @@ public interface ConcertRepository extends JpaRepository<Concert, UUID>, JpaSpec
     Page<Concert> findByOrganizerId(UUID organizerId, Pageable pageable);
 
     Optional<Concert> findByIdAndOrganizerId(UUID id, UUID organizerId);
+
+    List<Concert> findByStatusAndStartsAtBetween(Concert.ConcertStatus status, LocalDateTime start, LocalDateTime end);
 }

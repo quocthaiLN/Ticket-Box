@@ -15,7 +15,9 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.H2Dialect
+  mail:
+    host: localhost
+    port: 25
 
 jwt:
   access-token: fbf31e0e58fa369c5ad1909f9d013ee03fb267e767aedff8b2fff6cc9b6dc9f6
