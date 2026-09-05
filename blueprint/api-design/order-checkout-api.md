@@ -1,548 +1,99 @@
 # TicketBox — Order Checkout API Design
 
-Tài liệu này thiết kế API cho checkout: tạo order giữ vé, tạo payment URL, polling trạng thái order và xử lý webhook thanh toán.
+Tài liệu tóm tắt các API của Order Checkout theo code hiện tại.
 
-Nguồn nghiệp vụ chính:
+- Order API tạo order `HELD`, quản lý quota, chi tiết và hủy giữ chỗ.
+- Payment API là bước riêng để tạo giao dịch và checkout URL.
+- Worker hoặc dịch vụ nội bộ xử lý order hết hạn.
+- Organizer và Admin có API tra cứu danh sách order phục vụ vận hành.
 
-- `blueprint/specs/01-ticket-inventory.md`
-- `blueprint/specs/02-per-user-ticket-limit.md`
-- `blueprint/specs/03-payment-idempotency.md`
-- `blueprint/specs/10-order-checkout.md`
-- `blueprint/database-design.md`
-- `blueprint/api-design/base-api.md`
-- `blueprint/api-design/inventory-api.md`
-- `blueprint/api-design/e-ticket-api.md`
+## 1. Audience Order API
 
----
+Các API sau yêu cầu đăng nhập và role `AUDIENCE` hoặc `ADMIN`.
 
-## 1. Mục tiêu
-
-- Checkout hợp lệ tạo order `HELD` và payment URL.
-- Hold vé, kiểm tra tồn kho và kiểm tra `max_per_user` trong cùng PostgreSQL transaction.
-- Không tạo payment nếu hold vé thất bại.
-- Client retry không tạo order/payment trùng nhờ `Idempotency-Key`.
-- Webhook VNPAY/MoMo idempotent, verify chữ ký và không phát hành vé hai lần.
-- Order hết hạn release vé và quota user.
-
----
-
-## 2. Resource và mapping database
-
-| Resource | Bảng | Vai trò |
-| --- | --- | --- |
-| `order` | `orders` | Đơn hàng và trạng thái nghiệp vụ checkout. |
-| `order_item` | `order_items` | Dòng vé trong order. |
-| `payment` | `payments` | Payment attempt, trạng thái thanh toán và raw webhook payload cuối. |
-| `ticket_type` | `ticket_types` | Tồn kho, sale window và per-user limit source. |
-| `user_ticket_type_counter` | `user_ticket_type_counters` | Giới hạn vé mỗi user. |
-| `ticket` | `tickets` | Vé phát hành sau payment success. |
-| `audit_log` | `audit_logs` | Audit thao tác admin/nghiệp vụ nếu cần. |
-
-Order status MVP: `HELD`, `CONFIRMED`, `CANCELLED`, `EXPIRED`.
-
-Payment status: `PENDING`, `SUCCEEDED`, `FAILED`, `CANCELLED`, `REFUNDED`.
-
-Idempotency runtime nằm ở Redis. PostgreSQL chỉ giữ unique constraint trên `orders.idempotency_key` và `payments.idempotency_key` để bảo vệ cuối cùng.
-
----
-
-## 3. Endpoint tổng hợp
-
-| Method | Endpoint | Auth | Mục đích |
+| Method | Endpoint | Chức năng | Ghi chú chính |
 | --- | --- | --- | --- |
-| `POST` | `/orders` | `AUDIENCE` | Tạo order held và payment URL. |
-| `GET` | `/orders/{order_id}` | `AUDIENCE`, `ADMIN` | Poll trạng thái order. |
-| `POST` | `/orders/{order_id}/cancel` | `AUDIENCE` | Hủy order còn `HELD`. |
-| `POST` | `/orders/{order_id}/payments` | `AUDIENCE` | Tạo payment attempt mới (retry). |
-| `POST` | `/payments/webhooks/{provider}` | Public + signature | Webhook/IPN VNPAY/MoMo. |
-| `POST` | `/internal/orders/{order_id}/expire` | Internal/Worker | Expire order hết TTL. |
-| `GET` | `/admin/orders` | `ORGANIZER`, `ADMIN` | Tra cứu order quản trị. |
+| `GET` | `/concerts/{concert_id}/my-ticket-quota` | Lấy hạn mức mua vé của user theo từng ticket type. | Trả số tối đa, số đang giữ, số đã thanh toán và số còn được mua; phản hồi `no-store`. |
+| `POST` | `/orders` | Tạo order và giữ vé. | Yêu cầu `Idempotency-Key`; chỉ tạo order `HELD`, không tạo checkout URL; trả `201`. |
+| `GET` | `/orders/{order_id}` | Lấy chi tiết order của user hiện tại. | Gồm item, payment mới nhất và vé đã phát hành; chỉ chủ sở hữu được đọc; phản hồi `no-store`. |
+| `POST` | `/orders/{order_id}/cancel` | Hủy order còn giữ chỗ. | Chỉ hủy order `HELD` của chính user; trả tồn kho và quota trong cùng transaction. |
 
----
+### Header của API tạo order
 
-## 4. API chi tiết
-
-### 4.1. `POST /orders`
-
-Tạo order và payment URL.
-
-**Headers**
-
-```http
-Authorization: Bearer <jwt>
-Idempotency-Key: <uuid_v4>
-Content-Type: application/json
-```
-
-**Request**
-
-```json
-{
-  "concert_id": "crt_01JX9Q2M5P7KZ3R4N8Y6",
-  "payment_provider": "VNPAY",
-  "items": [
-    {
-      "ticket_type_id": "tkt_01JX9Q5A",
-      "quantity": 2
-    }
-  ]
-}
-```
-
-**Response `201`**
-
-```json
-{
-  "data": {
-    "order_id": "ord_01JX9QA1",
-    "concert_id": "crt_01JX9Q2M5P7KZ3R4N8Y6",
-    "status": "HELD",
-    "total_amount": {
-      "amount": 9000000,
-      "currency": "VND"
-    },
-    "hold_expires_at": "2026-05-30T10:25:30Z",
-    "payment": {
-      "id": "pay_01JX9QB2",
-      "provider": "VNPAY",
-      "status": "PENDING",
-      "checkout_url": "https://sandbox.vnpayment.vn/payment/vnpay.html?token=vnp_01JXC"
-    },
-    "items": [
-      {
-        "ticket_type_id": "tkt_01JX9Q5A",
-        "quantity": 2,
-        "unit_price": {
-          "amount": 4500000,
-          "currency": "VND"
-        },
-        "line_total": {
-          "amount": 9000000,
-          "currency": "VND"
-        }
-      }
-    ]
-  },
-  "meta": {
-    "request_id": "req_01JX9Q6N4E"
-  }
-}
-```
-
-**Transaction rules**
-
-1. Idempotency middleware lock key trạng thái `PROCESSING` trong Redis.
-2. Lock `ticket_types` rows bằng `SELECT ... FOR UPDATE`.
-3. Lock hoặc tạo `user_ticket_type_counters`.
-4. Kiểm tra:
-   - ticket type thuộc concert;
-   - sale window hợp lệ;
-   - computed `available_quantity = total_quantity - held_quantity - sold_quantity` đủ cho `quantity`;
-   - `held_quantity + paid_quantity + quantity <= max_per_user`.
-5. Tạo order `HELD`, `hold_expires_at = now() + TTL`.
-6. Tạo order items, tính total amount.
-7. Cập nhật inventory và user counters.
-8. Commit transaction.
-9. Tạo payment `PENDING` và checkout URL.
-10. Cache idempotency response trong Redis.
-
-Nếu payment provider circuit breaker đang open, backend có thể fail-fast và release hold ngay, hoặc giữ order đến TTL tùy policy. Khuyến nghị với đồ án: fail-fast, release hold, trả `503 PAYMENT_PROVIDER_UNAVAILABLE`.
-
----
-
-### 4.2. `GET /orders/{order_id}`
-
-Khán giả poll trạng thái order sau khi quay về từ payment provider.
-
-Auth: JWT Bearer token. `user_id` extract từ JWT để verify ownership (`order.user_id === token.sub`). Admin không cần check ownership.
-
-**Headers**
-
-```http
-Authorization: Bearer <jwt>
-```
-
-**Response `200` khi `HELD`**
-
-```json
-{
-  "data": {
-    "order_id": "ord_01JX9QA1",
-    "status": "HELD",
-    "hold_expires_at": "2026-05-30T10:25:30Z",
-    "payment": {
-      "id": "pay_01JX9QB2",
-      "provider": "VNPAY",
-      "status": "PENDING"
-    },
-    "tickets": []
-  },
-  "meta": {
-    "request_id": "req_01JX9Q6N4E"
-  }
-}
-```
-
-**Response `200` khi `CONFIRMED`**
-
-```json
-{
-  "data": {
-    "order_id": "ord_01JX9QA1",
-    "status": "CONFIRMED",
-    "payment": {
-      "id": "pay_01JX9QB2",
-      "status": "SUCCEEDED",
-      "paid_at": "2026-05-30T10:18:30Z"
-    },
-    "total_amount": {
-      "amount": 9000000,
-      "currency": "VND"
-    },
-    "created_at": "2026-05-30T10:15:30Z",
-    "updated_at": "2026-05-30T10:18:35Z",
-    "tickets": [
-      {
-        "ticket_id": "tic_01JX9QC1",
-        "ticket_type_name": "SVIP Early Bird",
-        "seat_zone_code": "SVIP",
-        "status": "ISSUED"
-      }
-    ]
-  },
-  "meta": {
-    "request_id": "req_01JX9Q6N4E"
-  }
-}
-```
-
-Headers:
-
-```http
-Cache-Control: no-store
-```
-
-Ownership:
-
-- AUDIENCE chỉ xem order của chính mình.
-- Organizer/Admin xem order qua `/admin/orders` theo scope.
-
----
-
-### 4.3. `POST /orders/{order_id}/cancel`
-
-User hủy order còn `HELD` trước khi thanh toán.
-
-Auth: JWT Bearer token. `user_id` extract từ JWT để verify ownership trước khi cho phép hủy — không nhận `user_id` từ body.
-
-**Headers**
-
-```http
-Authorization: Bearer <jwt>
-```
-
-**Response `200`**
-
-```json
-{
-  "data": {
-    "order_id": "ord_01JX9QA1",
-    "status": "CANCELLED",
-    "released_at": "2026-05-30T10:20:00Z"
-  },
-  "meta": {
-    "request_id": "req_01JX9Q6N4E"
-  }
-}
-```
-
-Ràng buộc:
-
-- Chỉ hủy order `HELD`.
-- Release inventory và user held counter trong transaction.
-- Không hủy order `CONFIRMED`; refund là flow riêng của Payment/Admin.
-
----
-
-### 4.4. `POST /payments/webhooks/{provider}`
-
-Webhook/IPN từ VNPAY/MoMo. Endpoint public nhưng bắt buộc verify signature.
-
-Auth: Không có user JWT. Xác thực duy nhất là verify chữ ký HMAC/hash của provider trong payload. Không có `user_id` trong flow này — identity được xác định qua `order_id` từ payload.
-
-**Path parameters**
-
-| Tên | Giá trị |
+| Header | Yêu cầu |
 | --- | --- |
-| `provider` | `vnpay`, `momo` |
+| `Authorization` | Access token của user có role `AUDIENCE` hoặc `ADMIN`. |
+| `Idempotency-Key` | Bắt buộc, không rỗng, tối đa 128 ký tự và được phân vùng theo user. |
 
-**Lưu ý: ReturnUrl vs IPN**
+Request tạo order chỉ nhận `concert_id` và danh sách `items`; mỗi item gồm `ticket_type_id` cùng `quantity` nguyên dương. Giá, tổng tiền và hạn giữ vé do server quyết định.
 
-VNPAY và MoMo đều có hai loại callback. Backend chỉ xử lý IPN (server-to-server). `ReturnUrl` là browser redirect về frontend — frontend hiển thị màn hình "đang xử lý" và poll `GET /orders/{order_id}`, không gọi backend để confirm.
+## 2. Payment API liên quan
 
-**VNPAY IPN payload ví dụ**
+Payment là module riêng nhưng là bước kế tiếp trực tiếp của checkout.
 
-```json
-{
-  "vnp_Amount": "900000000",
-  "vnp_BankCode": "NCB",
-  "vnp_BankTranNo": "VNP14829301",
-  "vnp_OrderInfo": "Thanh toan don hang ord_01JX9QA1",
-  "vnp_PayDate": "20260530101830",
-  "vnp_ResponseCode": "00",
-  "vnp_TmnCode": "TBOX01",
-  "vnp_TransactionNo": "7482910",
-  "vnp_TxnRef": "ord_01JX9QA1",
-  "vnp_SecureHash": "a5b6c7d8e9f0123456789abcdef"
-}
-```
+| Method | Endpoint | Chức năng | Ghi chú chính |
+| --- | --- | --- | --- |
+| `POST` | `/orders/{order_id}/payments` | Tạo một payment attempt và checkout URL cho order. | Yêu cầu đăng nhập, role `AUDIENCE` hoặc `ADMIN` và `Idempotency-Key` thuộc scope `payments`. |
 
-Signature: HMAC-SHA512 trên chuỗi query params đã sort theo key, dùng `VNPAY_HASH_SECRET`. `vnp_ResponseCode = "00"` là thành công.
+Order API không tự gọi endpoint này. Web App nhận order `HELD`, sau đó chủ động tạo payment attempt. Việc return URL, webhook, đối soát và phát hành vé thuộc Payment module.
 
-**MoMo IPN payload ví dụ**
+## 3. Internal Order API
 
-```json
-{
-  "partnerCode": "TICKETBOX",
-  "orderId": "ord_01JX9QA1",
-  "requestId": "ord_01JX9QA1",
-  "amount": 9000000,
-  "orderInfo": "Thanh toan don hang ord_01JX9QA1",
-  "orderType": "momo_wallet",
-  "transId": 4082488746,
-  "resultCode": 0,
-  "message": "Successful.",
-  "payType": "qr",
-  "responseTime": 1748600310000,
-  "extraData": "",
-  "signature": "abc123def456"
-}
-```
+| Method | Endpoint | Chức năng | Ghi chú chính |
+| --- | --- | --- | --- |
+| `POST` | `/internal/orders/{order_id}/expire` | Chuyển order `HELD` sang `EXPIRED` và trả tồn kho/quota. | Xử lý có tính lặp an toàn nếu order không còn `HELD`; order không tồn tại trả `404`. |
 
-Signature: HMAC-SHA256 trên raw string `accessKey=...&amount=...&extraData=...&message=...&orderId=...&orderInfo=...&orderType=...&partnerCode=...&payType=...&requestId=...&responseTime=...&resultCode=...&transId=...`, dùng `MOMO_SECRET_KEY`. `resultCode = 0` là thành công.
+Endpoint này dành cho worker hoặc dịch vụ nội bộ, không dành cho client công khai.
 
-**Response `200` theo provider (VNPAY)**
+## 4. Organizer và Admin Order API
 
-```json
-{
-  "RspCode": "00",
-  "Message": "Confirm Success"
-}
-```
+Endpoint sau yêu cầu đăng nhập và role `ORGANIZER` hoặc `ADMIN`.
 
-**Response `200` theo provider (MoMo)**
+| Method | Endpoint | Chức năng | Ghi chú chính |
+| --- | --- | --- | --- |
+| `GET` | `/admin/orders` | Tra cứu danh sách order phục vụ vận hành. | Sắp xếp theo `created_at`, `id` giảm dần; hỗ trợ cursor và tối đa 100 dòng theo code repository. |
 
-```json
-{
-  "status": 200,
-  "message": "success"
-}
-```
+### Query danh sách order
 
-**Webhook processing rules**
-
-1. Resolve order/payment theo provider payload.
-2. Lưu raw payload cuối vào `payments.webhook_payload`, `webhook_received_at`.
-3. Verify chữ ký provider, set `payments.webhook_signature_valid`.
-4. Kiểm tra amount khớp order.
-5. Dùng unique constraint `(provider, provider_transaction_id)` để chống webhook trùng.
-6. Nếu success:
-   - update `payments.status = SUCCEEDED`;
-   - update `orders.status = CONFIRMED`;
-   - chuyển inventory held sang sold;
-   - chuyển user counter held sang paid;
-   - phát hành tickets;
-   - publish notification event.
-7. Nếu fail/cancel:
-   - update payment failed/cancelled;
-   - release hold nếu order còn `HELD`.
-8. Cache webhook/idempotency result nếu cần để provider retry nhận `200` ổn định.
-
-Webhook trùng phải trả `200` idempotent nhưng không phát hành vé lần hai.
-
----
-
-### 4.5. `POST /internal/orders/{order_id}/expire`
-
-Worker gọi khi order quá `hold_expires_at`.
-
-Auth: Internal service auth, không có user JWT. Trong modular monolith thường là direct module call; nếu expose HTTP thì chỉ private network + service token.
-
-**Response `200`**
-
-```json
-{
-  "data": {
-    "order_id": "ord_01JX9QA1",
-    "status": "EXPIRED",
-    "released_items": [
-      {
-        "ticket_type_id": "tkt_01JX9Q5A",
-        "quantity": 2
-      }
-    ]
-  },
-  "meta": {
-    "request_id": "req_01JX9Q6N4E"
-  }
-}
-```
-
-Idempotent: nếu order đã `CONFIRMED`, `CANCELLED` hoặc `EXPIRED`, không release lần hai.
-
----
-
-### 4.6. `GET /admin/orders`
-
-Admin/Organizer tra cứu order.
-
-Auth: JWT Bearer token với role `ORGANIZER` hoặc `ADMIN`. Organizer scope (concert nào được xem) derive từ JWT claims, không nhận từ query params.
-
-**Headers**
-
-```http
-Authorization: Bearer <jwt>  (role = ORGANIZER | ADMIN)
-```
-
-**Query parameters**
-
-| Tên | Mô tả |
+| Query | Chức năng |
 | --- | --- |
-| `concert_id` | Lọc theo concert. |
-| `status` | Lọc theo order status. |
-| `user_id` | Lọc theo user. |
-| `from`, `to` | Lọc theo `created_at`. |
-| `limit`, `cursor` | Phân trang. |
+| `concert_id` | Lọc order theo concert. |
+| `status` | Lọc theo trạng thái order. |
+| `user_id` | Lọc theo user đặt vé. |
+| `from`, `to` | Lọc theo thời điểm tạo order. |
+| `limit` | Mặc định 20, repository giới hạn tối đa 100. |
+| `cursor` | Cursor base64url tạo từ `created_at` và `id`; response trả `next_cursor` cùng `has_more`. |
 
-Organizer chỉ xem order thuộc concert mình quản lý.
+## 5. Quy tắc nghiệp vụ chính
 
----
+| Quy tắc | Yêu cầu |
+| --- | --- |
+| Trạng thái ban đầu | `POST /orders` chỉ tạo order `HELD`; Payment module mới chuyển order sang `CONFIRMED` khi thanh toán thành công. |
+| Điều kiện giữ vé | Mọi ticket type phải thuộc cùng concert, đang `ON_SALE`, nằm trong khung giờ bán, đủ tồn kho và không làm user vượt `max_per_user`. |
+| Giữ nhiều loại vé | Các ticket type được lock theo thứ tự ổn định; một item lỗi làm toàn bộ transaction rollback. |
+| Thời hạn giữ | Server tự tính `hold_expires_at`; mặc định hiện tại là 900 giây. Client không được truyền hạn giữ. |
+| Hủy và hết hạn | Chỉ order `HELD` được release; thao tác giảm cả tồn kho held và quota held, sau đó vô hiệu hóa snapshot inventory của Catalog. |
+| Giá order | Đơn giá và thành tiền lấy từ PostgreSQL tại thời điểm giữ vé, không lấy từ client. |
 
-### 4.7. `POST /orders/{order_id}/payments`
+## 6. Cơ chế bảo vệ và tính nhất quán
 
-Tạo payment attempt mới khi payment trước đó `FAILED`. Order phải còn `HELD` và chưa hết hạn.
+| Cơ chế | Triển khai hiện tại |
+| --- | --- |
+| Rate limit | `POST /orders` có fixed window 300 request/60 giây/IP trước auth và 30 request/60 giây/user sau auth. |
+| Admission control | Redis semaphore giới hạn số transaction tạo order đồng thời theo concert; mặc định 10 lease/concert, hết slot trả `429` thay vì xếp hàng. |
+| Idempotency | Redis lưu/replay response theo scope, user, key và fingerprint; unique database bảo vệ trường hợp tranh chấp hiếm. |
+| Transaction | Tạo hold cập nhật order, items, tồn kho và quota cùng nhau; lỗi tranh chấp/deadlock phù hợp được thử lại tối đa 3 lần. |
+| Cache | Chi tiết order và quota dùng `no-store`; các luồng HTTP thay đổi hold xóa snapshot inventory của concert. |
 
-Auth: JWT Bearer token. `user_id` từ JWT để verify ownership.
+## 7. Mã lỗi chính
 
-**Headers**
-
-```http
-Authorization: Bearer <jwt>
-```
-
-**Request**
-
-```json
-{
-  "payment_provider": "MOMO"
-}
-```
-
-**Response `201`**
-
-```json
-{
-  "data": {
-    "payment_id": "pay_01JX9QD3",
-    "provider": "MOMO",
-    "status": "PENDING",
-    "checkout_url": "https://test-payment.momo.vn/v2/gateway/...",
-    "order_id": "ord_01JX9QA1",
-    "hold_expires_at": "2026-05-30T10:25:30Z"
-  },
-  "meta": {
-    "request_id": "req_01JX9Q6N4E"
-  }
-}
-```
-
-Ràng buộc:
-
-- Order phải `HELD` và `hold_expires_at > now()`.
-- Order không được có payment `SUCCEEDED` hoặc `PENDING` đang active.
-- Không tạo thêm payment nếu đã có `PENDING` — trả `409 PAYMENT_ALREADY_PENDING` để tránh double payment.
-- Không thay đổi inventory hold.
-
----
-
-## 5. State machine
-
-Order transitions hợp lệ:
-
-```text
-HELD -> CONFIRMED
-HELD -> CANCELLED
-HELD -> EXPIRED
-```
-
-Không phát hành ticket nếu payment chưa `SUCCEEDED` hoặc order chưa `CONFIRMED`.
-
-Payment transitions hợp lệ:
-
-```text
-PENDING -> SUCCEEDED
-PENDING -> FAILED
-PENDING -> CANCELLED
-SUCCEEDED -> REFUNDED
-```
-
----
-
-## 6. Idempotency và consistency
-
-- `POST /orders` bắt buộc `Idempotency-Key`.
-- Redis lưu key trạng thái nhanh với TTL tối thiểu 24h.
-- PostgreSQL unique constraint trên `orders.idempotency_key` và `payments.idempotency_key`.
-- Nếu key đang `PROCESSING`, trả `409 IDEMPOTENCY_IN_PROGRESS`.
-- Nếu key đã hoàn tất, trả response cũ.
-- Webhook idempotent theo provider transaction id và unique `(provider, provider_transaction_id)`.
-- Nếu Redis mất dữ liệu, PostgreSQL unique constraint là lớp bảo vệ cuối.
-
----
-
-## 7. Error catalog
-
-| HTTP | Code | Khi nào xảy ra |
+| HTTP | Code | Trường hợp |
 | --- | --- | --- |
-| `400` | `INVALID_CHECKOUT_REQUEST` | Body sai format hoặc item rỗng. |
-| `401` | `UNAUTHORIZED` | Chưa đăng nhập. |
-| `403` | `ORDER_ACCESS_DENIED` | User không sở hữu order. |
-| `404` | `ORDER_NOT_FOUND` | Order không tồn tại hoặc không được phép lộ. |
-| `409` | `TICKET_SOLD_OUT` | Không đủ vé. |
-| `409` | `IDEMPOTENCY_IN_PROGRESS` | Request cùng key đang xử lý. |
-| `409` | `ORDER_ALREADY_FINALIZED` | Hủy/expire order đã confirmed/cancelled/expired. |
-| `409` | `PAYMENT_ALREADY_PENDING` | Retry khi đã có payment PENDING active. |
-| `422` | `ORDER_NOT_HELD` | Retry payment nhưng order không còn HELD. |
-| `422` | `PER_USER_LIMIT_EXCEEDED` | Vượt giới hạn mỗi user. |
-| `422` | `TICKET_TYPE_NOT_ON_SALE` | Loại vé chưa mở bán/hết hạn/closed. |
-| `422` | `PAYMENT_SIGNATURE_INVALID` | Webhook sai chữ ký. |
-| `422` | `PAYMENT_AMOUNT_MISMATCH` | Amount webhook không khớp order. |
-| `503` | `PAYMENT_PROVIDER_UNAVAILABLE` | Circuit breaker payment mở. |
-| `503` | `LOCK_TIMEOUT_RETRYABLE` | DB lock timeout/deadlock. |
-
----
-
-## 8. RBAC
-
-| Endpoint group | `GUEST` | `AUDIENCE` | `ORGANIZER` | `ADMIN` | Provider/Internal |
-| --- | --- | --- | --- | --- | --- |
-| `POST /orders` | 401 | Allow | 403 | Allow for test/support only | 403 |
-| `GET /orders/{id}` | 401 | Own order only | 403 | Allow | 403 |
-| `POST /orders/{id}/cancel` | 401 | Own held order only | 403 | Allow | 403 |
-| `POST /orders/{id}/payments` | 401 | Own held order only | 403 | Allow | 403 |
-| Payment webhook | Allow only with valid signature | 403 | 403 | 403 | Provider |
-| Internal expire | 403 | 403 | 403 | 403 | Internal only |
-| Admin order search | 401 | 403 | Scoped by concert | Allow | 403 |
-
----
-
-## 9. Acceptance criteria
-
-- Checkout hợp lệ tạo order `HELD`, order items, payment `PENDING` và checkout URL.
-- Retry cùng `Idempotency-Key` không tạo order/payment trùng.
-- User không thể vượt `max_per_user` dù gửi nhiều request song song.
-- Hai người mua vé cuối cùng chỉ một người hold thành công.
-- Order hết hạn release inventory và quota user.
-- Webhook success verify đúng chữ ký/amount mới chuyển order `CONFIRMED`.
-- Webhook trùng không phát hành vé trùng.
-- Payment provider lỗi không làm sập catalog/check-in.
+| `400` | `INVALID_CHECKOUT_REQUEST` | Thiếu hoặc sai dữ liệu tạo order; cursor danh sách không hợp lệ. |
+| `400` | `MISSING_IDEMPOTENCY_KEY` / `IDEMPOTENCY_KEY_REUSED` | Thiếu key hoặc dùng lại key cho request có nội dung khác. |
+| `401` / `403` | `UNAUTHORIZED` / `FORBIDDEN` | Chưa đăng nhập hoặc không có role phù hợp. |
+| `403` / `404` | `ORDER_ACCESS_DENIED` / `ORDER_NOT_FOUND` | Không phải chủ order hoặc order không tồn tại. |
+| `409` | `TICKET_SOLD_OUT` / `PER_USER_LIMIT_EXCEEDED` | Không đủ tồn kho hoặc vượt giới hạn mua của user. |
+| `409` | `ORDER_ALREADY_FINALIZED` | Cố hủy order không còn ở trạng thái `HELD`. |
+| `422` | `TICKET_TYPE_NOT_ON_SALE` / `SALE_WINDOW_CLOSED` | Loại vé chưa mở bán, đã đóng hoặc nằm ngoài khung giờ bán. |
+| `429` / `503` | `RATE_LIMITED`, `ORDER_CAPACITY_REACHED` / `ORDER_ADMISSION_UNAVAILABLE` | Vượt giới hạn request, hết admission slot hoặc Redis admission không khả dụng. |

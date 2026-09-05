@@ -50,7 +50,8 @@ Thành phần ngoài PostgreSQL:
 
 | Bảng | Mục đích |
 | --- | --- |
-| `users` | Tài khoản và role chính. |
+| `users` | Thông tin người dùng, profile, role và trạng thái tài khoản. |
+| `user_accounts` | Các phương thức xác thực / danh tính đăng nhập (Local, Google...) liên kết với user. |
 | `venues` | Địa điểm tổ chức concert. |
 | `concerts` | Thông tin concert, artist public bio, seat map URL. |
 | `seat_zones` | Khu vé trong từng concert. |
@@ -73,19 +74,18 @@ Thành phần ngoài PostgreSQL:
 
 #### 5.1.1 `users`
 
-- **Mục đích:** lưu tài khoản audience, organizer, checker, admin.
-- **Quan hệ chính:** organizer của `concerts`, owner của `orders/tickets`, actor của `audit_logs`.
+- **Mục đích:** lưu thông tin profile và phân quyền người dùng (audience, organizer, checker, admin).
+- **Quan hệ chính:** sở hữu danh sách `user_accounts` (1:N), organizer của `concerts`, owner của `orders/tickets`, actor của `audit_logs`.
 - **Constraint/index:** unique `email`, unique `phone`, index `role`, index `status`, check định dạng email/phone.
 
 | Field | Kiểu | Ràng buộc chính | Ý nghĩa |
 | --- | --- | --- | --- |
 | `id` | UUID | PK, default `gen_random_uuid()` | Định danh user. |
-| `email` | VARCHAR(255) | NOT NULL, UNIQUE, check có `@` | Email đăng nhập. |
-| `password_hash` | TEXT | NOT NULL | Mật khẩu đã hash. |
+| `email` | VARCHAR(255) | NOT NULL, UNIQUE, check có `@` | Email đăng nhập / liên hệ chính. |
 | `full_name` | VARCHAR(255) | NOT NULL | Tên hiển thị. |
 | `phone` | VARCHAR(20) | UNIQUE, nullable, check format | Số điện thoại liên hệ. |
 | `role` | `user_role` | NOT NULL, default `AUDIENCE`, index | Role chính để phân quyền. |
-| `status` | `user_status` | NOT NULL, default `ACTIVE`, index | Trạng thái tài khoản. |
+| `status` | `user_status` | NOT NULL, default `PENDING`, index | Trạng thái tài khoản. |
 | `created_at` | TIMESTAMP | NOT NULL | Thời điểm tạo. |
 | `updated_at` | TIMESTAMP | NOT NULL, auto update | Thời điểm cập nhật gần nhất. |
 | `deleted_at` | TIMESTAMP | nullable | Soft delete nếu cần. |
@@ -93,10 +93,50 @@ Thành phần ngoài PostgreSQL:
 Role hợp lệ:
 
 ```text
-AUDIENCE, ORGANIZER, ADMIN
+AUDIENCE, ORGANIZER, CHECKER, ADMIN
 ```
 
+Status hợp lệ:
+
+```text
+PENDING, ACTIVE, SUSPENDED, DELETED
+```
+
+- `PENDING`: Đã đăng ký, chờ xác thực email/OTP.
+- `ACTIVE`: Đang hoạt động bình thường.
+- `SUSPENDED`: Bị tạm dừng / cấm (Admin phạt, điều tra vi phạm).
+- `DELETED`: Đã xóa (Soft-delete / Hủy tài khoản).
+
 `users.role` là nguồn phân quyền chính. Permission chi tiết nằm ở code/API policy, không nằm trong schema MVP.
+
+#### 5.1.2 `user_accounts`
+
+- **Mục đích:** lưu thông tin các phương thức xác thực / credential đăng nhập (Local password, Google OAuth...) liên kết với user (mô hình 1 User - N Accounts).
+- **Quan hệ chính:** thuộc về `users` (`user_id` FK).
+- **Constraint/index:** FK `users(id)` ON DELETE CASCADE, index `user_id`.
+- **Validation logic:** với provider `LOCAL`, `password_hash` bắt buộc có giá trị. Với các bên thứ ba (Google OAuth), `password_hash` có thể để trống và dùng `provider_user_id`.
+
+| Field | Kiểu | Ràng buộc chính | Ý nghĩa |
+| --- | --- | --- | --- |
+| `id` | UUID | PK, default `gen_random_uuid()` | Định danh credential. |
+| `user_id` | UUID | FK `users.id` ON DELETE CASCADE, NOT NULL, index | User sở hữu phương thức xác thực này. |
+| `password_hash` | TEXT | Bắt buộc với `LOCAL`, nullable với OAuth | Mật khẩu đã hash (BCrypt). |
+| `provider` | `user_provider` | NOT NULL | Nhà cung cấp danh tính (`LOCAL`, `GOOGLE`). |
+| `provider_user_id` | TEXT | NOT NULL | Định danh user từ provider (email hoặc Google Sub ID). |
+| `created_at` | TIMESTAMP | NOT NULL | Thời điểm liên kết / tạo. |
+| `updated_at` | TIMESTAMP | NOT NULL, auto update | Thời điểm cập nhật. |
+| `deleted_at` | TIMESTAMP | nullable | Soft-delete / gỡ liên kết phương thức. |
+
+Provider hợp lệ:
+
+```text
+LOCAL, GOOGLE
+```
+
+Quy tắc nghiệp vụ:
+- Khi user đăng ký truyền thống: tạo 1 record `users` kèm 1 record `user_accounts` với `provider = LOCAL` và lưu mật khẩu đã hash.
+- Khi user liên kết mạng xã hội (Google): tạo/gắn thêm 1 record `user_accounts` với `provider = GOOGLE` và lưu `provider_user_id` (Google Subject ID).
+- Khi `users` bị soft-delete (`deleted_at != null`) hoặc suspend, toàn bộ các kênh đăng nhập trong `user_accounts` đều bị vô hiệu hóa tương ứng.
 
 ### 5.2 Concert & Seat Zone
 
@@ -460,8 +500,9 @@ Tất cả `CREATE TYPE ... AS ENUM` cần khai trong Flyway `V1__init_schema.sq
 
 | Enum type | Giá trị | Ghi chú |
 | --- | --- | --- |
-| `user_role` | `AUDIENCE`, `ORGANIZER`, `ADMIN` | 4 nhóm người dùng. |
-| `user_status` | `ACTIVE`, `LOCKED`, `DISABLED` | `LOCKED` tạm khóa, `DISABLED` vô hiệu/ban; cả hai đều chặn đăng nhập (spec 08 §5). |
+| `user_role` | `AUDIENCE`, `ORGANIZER`, `CHECKER`, `ADMIN` | 4 nhóm người dùng. |
+| `user_status` | `PENDING`, `ACTIVE`, `SUSPENDED`, `DELETED` | `PENDING` chờ xác thực email/OTP, `ACTIVE` hoạt động bình thường, `SUSPENDED` tạm dừng/cấm vi phạm, `DELETED` đã xóa/hủy tài khoản. |
+| `user_provider` | `LOCAL`, `GOOGLE` | Nhà cung cấp danh tính/xác thực cho `user_accounts`. |
 | `concert_status` | `DRAFT`, `PUBLISHED`, `CANCELLED`, `COMPLETED` | Vòng đời concert. |
 | `ticket_type_status` | `DRAFT`, `ON_SALE`, `CLOSED` | `CLOSED` để admin đóng bán thủ công; hết vé tính bằng computed quantity, không cần status. |
 | `order_status` | `HELD`, `CONFIRMED`, `CANCELLED`, `EXPIRED` | |
@@ -483,6 +524,7 @@ Tất cả `CREATE TYPE ... AS ENUM` cần khai trong Flyway `V1__init_schema.sq
 ## 6. Quan hệ chính giữa các bảng
 
 ```text
+users -> user_accounts (1:N credential/identity providers)
 users -> concerts (organizer)
 venues -> concerts
 concerts -> seat_zones -> ticket_types
@@ -503,6 +545,7 @@ users -> audit_logs
 
 | Nhu cầu | Constraint/index |
 | --- | --- |
+| User account lookup | FK `user_accounts(user_id)` ON DELETE CASCADE, index `user_accounts(user_id)`. |
 | Concert listing | `concerts(status, starts_at)`, `venues(city)`. |
 | Ticket availability | `ticket_types(concert_id, status)`, partial index supplement cho ticket type còn vé. |
 | Chống oversell | row lock trên `ticket_types`, check `total_quantity >= held_quantity + sold_quantity`. |

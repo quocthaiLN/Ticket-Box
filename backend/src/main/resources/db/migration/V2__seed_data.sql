@@ -83,7 +83,7 @@ INSERT INTO ticket_types (id, concert_id, seat_zone_id, name, description, price
     'Vé SVIP kèm thẻ cứng & quà tặng độc quyền',
     4500000.00, 'VND', 500, 0, 0, 4,
     NOW() - INTERVAL '1 day', NOW() + INTERVAL '25 days',
-    'ACTIVE', NOW(), NOW()
+    'ON_SALE', NOW(), NOW()
 ),
 (
     'c2222222-2222-2222-2222-222222222222',
@@ -93,7 +93,7 @@ INSERT INTO ticket_types (id, concert_id, seat_zone_id, name, description, price
     'Vé sàn VIP đứng',
     2500000.00, 'VND', 1500, 0, 0, 4,
     NOW() - INTERVAL '1 day', NOW() + INTERVAL '25 days',
-    'ACTIVE', NOW(), NOW()
+    'ON_SALE', NOW(), NOW()
 ),
 (
     'c3333333-3333-3333-3333-333333333333',
@@ -103,7 +103,7 @@ INSERT INTO ticket_types (id, concert_id, seat_zone_id, name, description, price
     'Vé khán đài tự do',
     1200000.00, 'VND', 5000, 0, 0, 6,
     NOW() - INTERVAL '1 day', NOW() + INTERVAL '25 days',
-    'ACTIVE', NOW(), NOW()
+    'ON_SALE', NOW(), NOW()
 ),
 (
     'c4444444-4444-4444-4444-444444444444',
@@ -113,7 +113,7 @@ INSERT INTO ticket_types (id, concert_id, seat_zone_id, name, description, price
     'Vé VIP Sky Tour 2026',
     3000000.00, 'VND', 1000, 0, 0, 4,
     NOW() - INTERVAL '1 day', NOW() + INTERVAL '40 days',
-    'ACTIVE', NOW(), NOW()
+    'ON_SALE', NOW(), NOW()
 ),
 (
     'c5555555-5555-5555-5555-555555555555',
@@ -123,7 +123,7 @@ INSERT INTO ticket_types (id, concert_id, seat_zone_id, name, description, price
     'Vé phổ thông Sky Tour 2026',
     1500000.00, 'VND', 4000, 0, 0, 4,
     NOW() - INTERVAL '1 day', NOW() + INTERVAL '40 days',
-    'ACTIVE', NOW(), NOW()
+    'ON_SALE', NOW(), NOW()
 );
 
 -- =============================================================================

@@ -22,7 +22,7 @@ CREATE TABLE users (
     CONSTRAINT uk_users_phone UNIQUE (phone),
     CONSTRAINT chk_users_email CHECK (email LIKE '%@%'),
     CONSTRAINT chk_users_role CHECK (role IN ('AUDIENCE', 'ORGANIZER', 'CHECKER', 'ADMIN')),
-    CONSTRAINT chk_users_status CHECK (status IN ('ACTIVE', 'PENDING', 'INACTIVE', 'BLOCKED', 'LOCKED', 'DISABLED'))
+    CONSTRAINT chk_users_status CHECK (status IN ('ACTIVE', 'PENDING', 'SUSPENDED', 'DELETED'))
 );
 
 CREATE INDEX idx_users_email ON users(email);

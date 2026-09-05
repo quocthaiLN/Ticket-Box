@@ -32,11 +32,17 @@ public class UserAccount {
     private User user;
 
     @NotBlank(message = "Password cannot be blank")
-    @Column(name = "password_hash", nullable = false, columnDefinition = "TEXT")
+    @Column(name = "password_hash", nullable = true, columnDefinition = "TEXT")
     private String passwordHash;
 
-    @Column(name = "provider", nullable = false, columnDefinition = "TEXT")
-    private String provider;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "user_account_status", nullable = false)
+    @Builder.Default
+    private UserAccountStatus userAccountStatus = UserAccountStatus.ACTIVE;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "provider", nullable = false)
+    private UserProvider provider;
 
     @Column(name = "provider_user_id", nullable = false, columnDefinition = "TEXT")
     private String providerUserId;
@@ -55,13 +61,8 @@ public class UserAccount {
     @PrePersist
     @PreUpdate
     public void validate() {
-        if ("LOCAL".equals(provider) && (passwordHash == null || passwordHash.isBlank())) {
+        if (provider.equals(UserProvider.LOCAL) && (passwordHash == null || passwordHash.isBlank())) {
             throw new IllegalArgumentException("Password hash is required for LOCAL provider");
         }
-    }
-
-    public enum UserProvider {
-        LOCAL,
-        GOOGLE
     }
 }

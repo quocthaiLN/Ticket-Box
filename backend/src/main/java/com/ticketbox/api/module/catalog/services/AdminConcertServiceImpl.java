@@ -176,7 +176,7 @@ public class AdminConcertServiceImpl implements AdminConcertService {
                         "Ticket type '" + tt.getName() + "' has invalid sale window (saleEndAt must be after saleStartAt)");
             }
             if (tt.getStatus() == TicketType.TicketTypeStatus.DRAFT) {
-                tt.setStatus(TicketType.TicketTypeStatus.ACTIVE);
+                tt.setStatus(TicketType.TicketTypeStatus.ON_SALE);
                 ticketTypeRepository.save(tt);
             }
         }

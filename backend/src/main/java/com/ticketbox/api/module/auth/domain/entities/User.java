@@ -58,7 +58,7 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
-    private UserStatus status = UserStatus.ACTIVE;
+    private UserStatus status = UserStatus.PENDING;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -74,20 +74,4 @@ public class User {
     @Builder.Default
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<UserAccount> accounts = new HashSet<>();
-
-    public enum UserRole {
-        AUDIENCE,
-        ORGANIZER,
-        CHECKER,
-        ADMIN
-    }
-
-    public enum UserStatus {
-        ACTIVE,
-        PENDING,
-        INACTIVE,
-        BLOCKED,
-        LOCKED,
-        DISABLED
-    }
 }

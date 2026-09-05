@@ -13,7 +13,6 @@ public class SingleFlight {
 
     private final ConcurrentHashMap<String, CompletableFuture<Object>> inFlight = new ConcurrentHashMap<>();
 
-    @SuppressWarnings("unchecked")
     public <T> T execute(String key, Supplier<T> supplier) {
         CompletableFuture<Object> future = new CompletableFuture<>();
         CompletableFuture<Object> existing = inFlight.putIfAbsent(key, future);
