@@ -4,8 +4,10 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.catalog.domain.dtos.*;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
+import com.ticketbox.api.module.catalog.domain.entities.ConcertStatus;
 import com.ticketbox.api.module.catalog.domain.entities.SeatZone;
 import com.ticketbox.api.module.catalog.domain.entities.TicketType;
+import com.ticketbox.api.module.catalog.domain.entities.TicketTypeStatus;
 import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.SeatZoneRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
@@ -59,7 +61,7 @@ public class PublicConcertServiceImpl implements PublicConcertService {
             Specification<Concert> spec = (root, query, cb) -> {
                 List<Predicate> predicates = new ArrayList<>();
 
-                predicates.add(cb.equal(root.get("status"), Concert.ConcertStatus.PUBLISHED));
+                predicates.add(cb.equal(root.get("status"), ConcertStatus.PUBLISHED));
 
                 if (q != null && !q.trim().isEmpty()) {
                     String pattern = "%" + q.trim().toLowerCase() + "%";
@@ -96,7 +98,7 @@ public class PublicConcertServiceImpl implements PublicConcertService {
         String cacheKey = "concerts:" + concertId;
         return cacheService.getOrFetch(cacheKey, Duration.ofMinutes(30), ConcertDetailResponse.class, () -> {
             Concert concert = concertRepository.findById(concertId)
-                    .filter(c -> c.getStatus() == Concert.ConcertStatus.PUBLISHED)
+                    .filter(c -> c.getStatus() == ConcertStatus.PUBLISHED)
                     .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "CONCERT_NOT_FOUND", "Concert not found or not published with ID: " + concertId));
 
             return mapToConcertDetailResponse(concert);
@@ -108,7 +110,7 @@ public class PublicConcertServiceImpl implements PublicConcertService {
         String cacheKey = "concerts:" + concertId + ":metadata";
         return cacheService.getOrFetch(cacheKey, Duration.ofHours(24), ConcertMetadataResponse.class, () -> {
             Concert concert = concertRepository.findById(concertId)
-                    .filter(c -> c.getStatus() == Concert.ConcertStatus.PUBLISHED)
+                    .filter(c -> c.getStatus() == ConcertStatus.PUBLISHED)
                     .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "CONCERT_NOT_FOUND", "Concert not found with ID: " + concertId));
 
             List<SeatZone> seatZones = seatZoneRepository.findByConcertIdOrderBySortOrderAsc(concertId);
@@ -137,7 +139,7 @@ public class PublicConcertServiceImpl implements PublicConcertService {
         String cacheKey = "concerts:" + concertId + ":seatmap";
         return cacheService.getOrFetch(cacheKey, Duration.ofHours(1), SeatMapResponse.class, () -> {
             Concert concert = concertRepository.findById(concertId)
-                    .filter(c -> c.getStatus() == Concert.ConcertStatus.PUBLISHED)
+                    .filter(c -> c.getStatus() == ConcertStatus.PUBLISHED)
                     .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "CONCERT_NOT_FOUND", "Concert not found with ID: " + concertId));
 
             List<SeatZone> seatZones = seatZoneRepository.findByConcertIdOrderBySortOrderAsc(concertId);
@@ -159,14 +161,14 @@ public class PublicConcertServiceImpl implements PublicConcertService {
 
         return cacheService.getOrFetch(cacheKey, Duration.ofMinutes(30), typeRef, () -> {
             Concert concert = concertRepository.findById(concertId)
-                    .filter(c -> c.getStatus() == Concert.ConcertStatus.PUBLISHED)
+                    .filter(c -> c.getStatus() == ConcertStatus.PUBLISHED)
                     .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "CONCERT_NOT_FOUND", "Concert not found with ID: " + concertId));
 
             List<TicketType> ticketTypes = ticketTypeRepository.findByConcertId(concert.getId());
 
             if (!includeClosed) {
                 ticketTypes = ticketTypes.stream()
-                        .filter(t -> t.getStatus() != TicketType.TicketTypeStatus.SUSPENDED && t.getStatus() != TicketType.TicketTypeStatus.DRAFT)
+                        .filter(t -> t.getStatus() != TicketTypeStatus.SUSPENDED && t.getStatus() != TicketTypeStatus.DRAFT)
                         .collect(Collectors.toList());
             }
 
@@ -179,7 +181,7 @@ public class PublicConcertServiceImpl implements PublicConcertService {
         String cacheKey = "concerts:" + concertId + ":inventory";
         return cacheService.getOrFetch(cacheKey, Duration.ofMinutes(5), InventoryResponse.class, () -> {
             Concert concert = concertRepository.findById(concertId)
-                    .filter(c -> c.getStatus() == Concert.ConcertStatus.PUBLISHED)
+                    .filter(c -> c.getStatus() == ConcertStatus.PUBLISHED)
                     .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "CONCERT_NOT_FOUND", "Concert not found with ID: " + concertId));
 
             List<TicketType> ticketTypes = ticketTypeRepository.findByConcertId(concert.getId());
@@ -190,9 +192,9 @@ public class PublicConcertServiceImpl implements PublicConcertService {
                 String statusStr = tt.getStatus().name();
                 String displayStatus;
 
-                if (tt.getStatus() == TicketType.TicketTypeStatus.CLOSED || tt.getStatus() == TicketType.TicketTypeStatus.SUSPENDED) {
+                if (tt.getStatus() == TicketTypeStatus.CLOSED || tt.getStatus() == TicketTypeStatus.SUSPENDED) {
                     displayStatus = "CLOSED";
-                } else if (available <= 0 || tt.getStatus() == TicketType.TicketTypeStatus.SOLD_OUT) {
+                } else if (available <= 0 || tt.getStatus() == TicketTypeStatus.SOLD_OUT) {
                     displayStatus = "SOLD_OUT";
                 } else if (available <= 10) {
                     displayStatus = "LOW_STOCK";

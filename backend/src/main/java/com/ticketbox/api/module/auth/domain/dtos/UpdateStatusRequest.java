@@ -1,6 +1,6 @@
 package com.ticketbox.api.module.auth.domain.dtos;
 
-import com.ticketbox.api.module.auth.domain.entities.User;
+import com.ticketbox.api.module.auth.domain.entities.UserStatus;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,5 +14,5 @@ import lombok.NoArgsConstructor;
 public class UpdateStatusRequest {
 
     @NotNull(message = "Status cannot be null")
-    private User.UserStatus status;
+    private UserStatus status;
 }

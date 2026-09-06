@@ -4,6 +4,7 @@ import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
 import com.ticketbox.api.module.catalog.domain.entities.TicketType;
+import com.ticketbox.api.module.catalog.domain.entities.TicketTypeStatus;
 import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
 import com.ticketbox.api.module.order.domain.dtos.CreateOrderItemRequest;
@@ -12,6 +13,7 @@ import com.ticketbox.api.module.order.domain.dtos.HeldOrderItemResponse;
 import com.ticketbox.api.module.order.domain.dtos.HeldOrderResponse;
 import com.ticketbox.api.module.order.domain.entities.Order;
 import com.ticketbox.api.module.order.domain.entities.OrderItem;
+import com.ticketbox.api.module.order.domain.entities.OrderStatus;
 import com.ticketbox.api.module.order.domain.entities.UserTicketTypeCounter;
 import com.ticketbox.api.module.order.domain.entities.UserTicketTypeCounterId;
 import com.ticketbox.api.module.order.repositories.OrderRepository;
@@ -68,7 +70,7 @@ public class OrderServiceImpl implements OrderService {
                 .user(currentUser)
                 .concert(concert)
                 .idempotencyKey(idempotencyKey)
-                .status(Order.OrderStatus.HELD)
+                .status(OrderStatus.HELD)
                 .currency(currency)
                 .holdExpiresAt(holdExpiresAt)
                 .totalAmount(BigDecimal.ZERO)
@@ -141,7 +143,7 @@ public class OrderServiceImpl implements OrderService {
             throw new AppException(HttpStatus.BAD_REQUEST, "INVALID_CHECKOUT_REQUEST",
                     "All ticket types must belong to the requested concert");
         }
-        if (ticketType.getStatus() != TicketType.TicketTypeStatus.ON_SALE) {
+        if (ticketType.getStatus() != TicketTypeStatus.ON_SALE) {
             throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "TICKET_TYPE_NOT_ON_SALE",
                     "Ticket type is not on sale");
         }

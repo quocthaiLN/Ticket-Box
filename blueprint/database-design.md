@@ -121,11 +121,22 @@ PENDING, ACTIVE, SUSPENDED, DELETED
 | `id` | UUID | PK, default `gen_random_uuid()` | Định danh credential. |
 | `user_id` | UUID | FK `users.id` ON DELETE CASCADE, NOT NULL, index | User sở hữu phương thức xác thực này. |
 | `password_hash` | TEXT | Bắt buộc với `LOCAL`, nullable với OAuth | Mật khẩu đã hash (BCrypt). |
+| `user_account_status` | `user_account_status` | NOT NULL, default `ACTIVE` | Trạng thái phương thức xác thực (`ACTIVE`, `SUSPENDED`, `DELETED`). |
 | `provider` | `user_provider` | NOT NULL | Nhà cung cấp danh tính (`LOCAL`, `GOOGLE`). |
 | `provider_user_id` | TEXT | NOT NULL | Định danh user từ provider (email hoặc Google Sub ID). |
 | `created_at` | TIMESTAMP | NOT NULL | Thời điểm liên kết / tạo. |
 | `updated_at` | TIMESTAMP | NOT NULL, auto update | Thời điểm cập nhật. |
 | `deleted_at` | TIMESTAMP | nullable | Soft-delete / gỡ liên kết phương thức. |
+
+Status hợp lệ của account:
+
+```text
+ACTIVE, SUSPENDED, DELETED
+```
+
+- `ACTIVE`: Phương thức xác thực đang dùng bình thường.
+- `SUSPENDED`: Tạm dừng / khóa riêng phương thức này.
+- `DELETED`: Đã hủy liên kết (soft-deleted).
 
 Provider hợp lệ:
 
@@ -503,6 +514,7 @@ Tất cả `CREATE TYPE ... AS ENUM` cần khai trong Flyway `V1__init_schema.sq
 | --- | --- | --- |
 | `user_role` | `AUDIENCE`, `ORGANIZER`, `CHECKER`, `ADMIN` | 4 nhóm người dùng. |
 | `user_status` | `PENDING`, `ACTIVE`, `SUSPENDED`, `DELETED` | `PENDING` chờ xác thực email/OTP, `ACTIVE` hoạt động bình thường, `SUSPENDED` tạm dừng/cấm vi phạm, `DELETED` đã xóa/hủy tài khoản. |
+| `user_account_status` | `ACTIVE`, `SUSPENDED`, `DELETED` | Trạng thái từng phương thức/kênh đăng nhập của user. |
 | `user_provider` | `LOCAL`, `GOOGLE` | Nhà cung cấp danh tính/xác thực cho `user_accounts`. |
 | `concert_status` | `DRAFT`, `PUBLISHED`, `CANCELED`, `COMPLETED` | `DRAFT` đang soạn thảo, `PUBLISHED` đã hiển thị/mở bán, `CANCELED` đã hủy, `COMPLETED` đã diễn ra xong. |
 | `ticket_type_status` | `DRAFT`, `ON_SALE`, `CLOSED` | `CLOSED` để admin đóng bán thủ công; hết vé tính bằng computed quantity, không cần status. |

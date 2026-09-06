@@ -36,10 +36,12 @@ CREATE TABLE user_accounts (
     password_hash TEXT NOT NULL,
     provider TEXT NOT NULL,
     provider_user_id TEXT NOT NULL,
+    user_account_status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMPTZ,
-    CONSTRAINT fk_user_accounts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_user_accounts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT chk_user_accounts_status CHECK (user_account_status IN ('ACTIVE', 'SUSPENDED', 'DELETED'))
 );
 
 CREATE INDEX idx_user_accounts_user_id ON user_accounts(user_id);

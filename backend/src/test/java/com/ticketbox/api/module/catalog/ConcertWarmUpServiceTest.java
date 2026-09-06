@@ -6,8 +6,10 @@ import com.ticketbox.api.module.catalog.domain.dtos.ConcertMetadataResponse;
 import com.ticketbox.api.module.catalog.domain.dtos.InventoryResponse;
 import com.ticketbox.api.module.catalog.domain.dtos.SeatMapResponse;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
+import com.ticketbox.api.module.catalog.domain.entities.ConcertStatus;
 import com.ticketbox.api.module.catalog.domain.entities.SeatZone;
 import com.ticketbox.api.module.catalog.domain.entities.TicketType;
+import com.ticketbox.api.module.catalog.domain.entities.TicketTypeStatus;
 import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.SeatZoneRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
@@ -75,7 +77,7 @@ class ConcertWarmUpServiceTest {
                 .artistName("Test Artist")
                 .startsAt(LocalDateTime.now().plusMinutes(2))
                 .endsAt(LocalDateTime.now().plusHours(2))
-                .status(Concert.ConcertStatus.PUBLISHED)
+                .status(ConcertStatus.PUBLISHED)
                 .build();
 
         seatZone = SeatZone.builder()
@@ -97,7 +99,7 @@ class ConcertWarmUpServiceTest {
                 .heldQuantity(0)
                 .soldQuantity(10)
                 .maxPerUser(4)
-                .status(TicketType.TicketTypeStatus.ACTIVE)
+                .status(TicketTypeStatus.ACTIVE)
                 .build();
     }
 

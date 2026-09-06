@@ -2,8 +2,10 @@ package com.ticketbox.api.module.catalog.services;
 
 import com.ticketbox.api.module.catalog.domain.dtos.*;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
+import com.ticketbox.api.module.catalog.domain.entities.ConcertStatus;
 import com.ticketbox.api.module.catalog.domain.entities.SeatZone;
 import com.ticketbox.api.module.catalog.domain.entities.TicketType;
+import com.ticketbox.api.module.catalog.domain.entities.TicketTypeStatus;
 import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.SeatZoneRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
@@ -39,7 +41,7 @@ public class ConcertWarmUpServiceImpl implements ConcertWarmUpService {
         log.info("Starting cache warm-up for concertId: {}", concertId);
 
         Concert concert = concertRepository.findById(concertId)
-                .filter(c -> c.getStatus() == Concert.ConcertStatus.PUBLISHED)
+                .filter(c -> c.getStatus() == ConcertStatus.PUBLISHED)
                 .orElse(null);
 
         if (concert == null) {
@@ -88,7 +90,7 @@ public class ConcertWarmUpServiceImpl implements ConcertWarmUpService {
 
         // 4. Warm-up Ticket Types (concerts:{concertId}:ticket-types includeClosed=false) - 30m TTL
         List<TicketTypeResponse> openTicketResponses = ticketTypes.stream()
-                .filter(t -> t.getStatus() != TicketType.TicketTypeStatus.SUSPENDED && t.getStatus() != TicketType.TicketTypeStatus.DRAFT)
+                .filter(t -> t.getStatus() != TicketTypeStatus.SUSPENDED && t.getStatus() != TicketTypeStatus.DRAFT)
                 .map(this::mapToTicketTypeResponse)
                 .collect(Collectors.toList());
 
@@ -102,9 +104,9 @@ public class ConcertWarmUpServiceImpl implements ConcertWarmUpService {
             String statusStr = tt.getStatus().name();
             String displayStatus;
 
-            if (tt.getStatus() == TicketType.TicketTypeStatus.CLOSED || tt.getStatus() == TicketType.TicketTypeStatus.SUSPENDED) {
+            if (tt.getStatus() == TicketTypeStatus.CLOSED || tt.getStatus() == TicketTypeStatus.SUSPENDED) {
                 displayStatus = "CLOSED";
-            } else if (available <= 0 || tt.getStatus() == TicketType.TicketTypeStatus.SOLD_OUT) {
+            } else if (available <= 0 || tt.getStatus() == TicketTypeStatus.SOLD_OUT) {
                 displayStatus = "SOLD_OUT";
             } else if (available <= 10) {
                 displayStatus = "LOW_STOCK";

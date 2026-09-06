@@ -2,10 +2,12 @@ package com.ticketbox.api.module.catalog.services;
 
 import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.auth.domain.entities.User;
+import com.ticketbox.api.module.auth.domain.entities.UserRole;
 import com.ticketbox.api.module.catalog.domain.dtos.ConcertDetailResponse;
 import com.ticketbox.api.module.catalog.domain.dtos.CreateConcertRequest;
 import com.ticketbox.api.module.catalog.domain.dtos.UpdateConcertRequest;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
+import com.ticketbox.api.module.catalog.domain.entities.ConcertStatus;
 import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.SeatZoneRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
@@ -55,19 +57,19 @@ class AdminConcertServiceTest {
         organizerUser = User.builder()
                 .id(UUID.fromString("22222222-2222-2222-2222-222222222222"))
                 .email("organizer@ticketbox.com")
-                .role(User.UserRole.ORGANIZER)
+                .role(UserRole.ORGANIZER)
                 .build();
 
         otherOrganizerUser = User.builder()
                 .id(UUID.fromString("99999999-9999-9999-9999-999999999999"))
                 .email("other@ticketbox.com")
-                .role(User.UserRole.ORGANIZER)
+                .role(UserRole.ORGANIZER)
                 .build();
 
         adminUser = User.builder()
                 .id(UUID.fromString("11111111-1111-1111-1111-111111111111"))
                 .email("admin@ticketbox.com")
-                .role(User.UserRole.ADMIN)
+                .role(UserRole.ADMIN)
                 .build();
 
         concertId = UUID.randomUUID();
@@ -79,7 +81,7 @@ class AdminConcertServiceTest {
                 .artistName("Test Artist")
                 .startsAt(LocalDateTime.now().plusDays(10))
                 .endsAt(LocalDateTime.now().plusDays(10).plusHours(3))
-                .status(Concert.ConcertStatus.DRAFT)
+                .status(ConcertStatus.DRAFT)
                 .organizer(organizerUser)
                 .build();
     }

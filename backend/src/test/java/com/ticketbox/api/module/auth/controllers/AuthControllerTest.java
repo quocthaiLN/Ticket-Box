@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketbox.api.module.auth.domain.dtos.LoginRequest;
 import com.ticketbox.api.module.auth.domain.dtos.LoginResponse;
 import com.ticketbox.api.module.auth.domain.dtos.UserResponse;
+import com.ticketbox.api.module.auth.domain.entities.UserRole;
+import com.ticketbox.api.module.auth.domain.entities.UserStatus;
 import com.ticketbox.api.module.auth.services.UserService;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,8 +56,8 @@ class AuthControllerTest {
                 .id(UUID.randomUUID())
                 .email("user@example.com")
                 .fullName("User Example")
-                .role(com.ticketbox.api.module.auth.domain.entities.User.UserRole.AUDIENCE)
-                .status(com.ticketbox.api.module.auth.domain.entities.User.UserStatus.ACTIVE)
+                .role(UserRole.AUDIENCE)
+                .status(UserStatus.ACTIVE)
                 .build();
 
         LoginResponse loginResponse = LoginResponse.builder()

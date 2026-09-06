@@ -3,6 +3,7 @@ package com.ticketbox.api.module.catalog.schedulers;
 import com.ticketbox.api.infrastructure.config.RabbitMqConstants;
 import com.ticketbox.api.module.catalog.domain.dtos.ConcertWarmUpMessage;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
+import com.ticketbox.api.module.catalog.domain.entities.ConcertStatus;
 import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,7 +45,7 @@ public class CatalogWarmUpScheduler {
             LocalDateTime windowEnd = now.plusMinutes(3);
 
             List<Concert> upcomingConcerts = concertRepository.findByStatusAndStartsAtBetween(
-                    Concert.ConcertStatus.PUBLISHED,
+                    ConcertStatus.PUBLISHED,
                     now,
                     windowEnd
             );

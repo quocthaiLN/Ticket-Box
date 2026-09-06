@@ -9,6 +9,10 @@ import com.ticketbox.api.module.auth.domain.dtos.RegisterRequest;
 import com.ticketbox.api.module.auth.domain.dtos.UserResponse;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.auth.domain.entities.UserAccount;
+import com.ticketbox.api.module.auth.domain.entities.UserAccountStatus;
+import com.ticketbox.api.module.auth.domain.entities.UserProvider;
+import com.ticketbox.api.module.auth.domain.entities.UserRole;
+import com.ticketbox.api.module.auth.domain.entities.UserStatus;
 import com.ticketbox.api.module.auth.repositories.UserAccountRepository;
 import com.ticketbox.api.module.auth.repositories.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,14 +73,15 @@ class UserServiceTest {
                 .id(userId)
                 .email("test@example.com")
                 .fullName("Test User")
-                .role(User.UserRole.AUDIENCE)
-                .status(User.UserStatus.ACTIVE)
+                .role(UserRole.AUDIENCE)
+                .status(UserStatus.ACTIVE)
                 .build();
 
         sampleAccount = UserAccount.builder()
                 .id(UUID.randomUUID())
                 .user(sampleUser)
-                .provider("LOCAL")
+                .provider(UserProvider.LOCAL)
+                .userAccountStatus(UserAccountStatus.ACTIVE)
                 .providerUserId("test@example.com")
                 .passwordHash("hashed_password")
                 .build();

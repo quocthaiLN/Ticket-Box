@@ -49,10 +49,15 @@ public class JwtFilter extends OncePerRequestFilter {
                     UUID id = jwtUtils.extractIdFromAccessToken(token);
                     UserDetails userDetails = userDetailsService.loadUserByUsername(id.toString());
 
-                    UsernamePasswordAuthenticationToken authToken =
-                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                    if (!userDetails.isEnabled() || !userDetails.isAccountNonLocked()) {
+                        log.warn("Access attempt by disabled or locked user id: {}", id);
+                        request.setAttribute("JWT_ERROR", "ACCOUNT_DISABLED_OR_LOCKED");
+                    } else {
+                        UsernamePasswordAuthenticationToken authToken =
+                                new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
 
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                        SecurityContextHolder.getContext().setAuthentication(authToken);
+                    }
                 } catch (Exception e) {
                     log.error("Failed to set user authentication in security context: {}", e.getMessage());
                 }

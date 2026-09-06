@@ -1,6 +1,7 @@
 package com.ticketbox.api.module.catalog.repositories;
 
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
+import com.ticketbox.api.module.catalog.domain.entities.ConcertStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -23,5 +24,5 @@ public interface ConcertRepository extends JpaRepository<Concert, UUID>, JpaSpec
 
     Optional<Concert> findByIdAndOrganizerId(UUID id, UUID organizerId);
 
-    List<Concert> findByStatusAndStartsAtBetween(Concert.ConcertStatus status, LocalDateTime start, LocalDateTime end);
+    List<Concert> findByStatusAndStartsAtBetween(ConcertStatus status, LocalDateTime start, LocalDateTime end);
 }

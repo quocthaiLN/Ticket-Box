@@ -3,6 +3,7 @@ package com.ticketbox.api.module.catalog;
 import com.ticketbox.api.infrastructure.config.RabbitMqConstants;
 import com.ticketbox.api.module.catalog.domain.dtos.ConcertWarmUpMessage;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
+import com.ticketbox.api.module.catalog.domain.entities.ConcertStatus;
 import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.schedulers.CatalogWarmUpScheduler;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,10 +70,10 @@ class CatalogWarmUpSchedulerTest {
         Concert concert = Concert.builder()
                 .id(concertId)
                 .startsAt(startsAt)
-                .status(Concert.ConcertStatus.PUBLISHED)
+                .status(ConcertStatus.PUBLISHED)
                 .build();
 
-        when(concertRepository.findByStatusAndStartsAtBetween(eq(Concert.ConcertStatus.PUBLISHED), any(), any()))
+        when(concertRepository.findByStatusAndStartsAtBetween(eq(ConcertStatus.PUBLISHED), any(), any()))
                 .thenReturn(List.of(concert));
         when(valueOperations.get("lock:catalog:cache-warmup")).thenReturn("lock-token");
 

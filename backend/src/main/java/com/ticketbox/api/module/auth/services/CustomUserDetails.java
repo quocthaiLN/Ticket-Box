@@ -1,7 +1,10 @@
 package com.ticketbox.api.module.auth.services;
 
 import com.ticketbox.api.module.auth.domain.entities.User;
+import com.ticketbox.api.module.auth.domain.entities.UserProvider;
+import com.ticketbox.api.module.auth.domain.entities.UserStatus;
 import com.ticketbox.api.module.auth.domain.entities.UserAccount;
+import com.ticketbox.api.module.auth.domain.entities.UserAccountStatus;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -26,8 +29,7 @@ public class CustomUserDetails implements UserDetails {
         String roleName = user.getRole().name();
         return List.of(
                 new SimpleGrantedAuthority(roleName),
-                new SimpleGrantedAuthority("ROLE_" + roleName)
-        );
+                new SimpleGrantedAuthority("ROLE_" + roleName));
     }
 
     @Override
@@ -36,7 +38,9 @@ public class CustomUserDetails implements UserDetails {
             return "";
         }
         return user.getAccounts().stream()
-                .filter(acc -> "LOCAL".equalsIgnoreCase(acc.getProvider()))
+                .filter(acc -> acc.getProvider().equals(UserProvider.LOCAL)
+                        && acc.getUserAccountStatus() == UserAccountStatus.ACTIVE
+                        && acc.getDeletedAt() == null)
                 .map(UserAccount::getPasswordHash)
                 .findFirst()
                 .orElse("");
@@ -54,7 +58,7 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return user.getStatus() != User.UserStatus.BLOCKED && user.getStatus() != User.UserStatus.LOCKED;
+        return user.getStatus() != UserStatus.SUSPENDED && user.getStatus() != UserStatus.DELETED;
     }
 
     @Override
@@ -64,6 +68,6 @@ public class CustomUserDetails implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return user.getStatus() == User.UserStatus.ACTIVE;
+        return user.getStatus() == UserStatus.ACTIVE && user.getDeletedAt() == null;
     }
 }

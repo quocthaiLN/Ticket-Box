@@ -2,10 +2,13 @@ package com.ticketbox.api.module.catalog.services;
 
 import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.auth.domain.entities.User;
+import com.ticketbox.api.module.auth.domain.entities.UserRole;
 import com.ticketbox.api.module.catalog.domain.dtos.*;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
+import com.ticketbox.api.module.catalog.domain.entities.ConcertStatus;
 import com.ticketbox.api.module.catalog.domain.entities.SeatZone;
 import com.ticketbox.api.module.catalog.domain.entities.TicketType;
+import com.ticketbox.api.module.catalog.domain.entities.TicketTypeStatus;
 import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.SeatZoneRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
@@ -44,13 +47,13 @@ public class AdminConcertServiceImpl implements AdminConcertService {
             List<Predicate> predicates = new ArrayList<>();
 
             // Role ownership check: ORGANIZER can only see their own concerts
-            if (currentUser.getRole() == User.UserRole.ORGANIZER) {
+            if (currentUser.getRole() == UserRole.ORGANIZER) {
                 predicates.add(cb.equal(root.get("organizer").get("id"), currentUser.getId()));
             }
 
             if (statusStr != null && !statusStr.trim().isEmpty()) {
                 try {
-                    Concert.ConcertStatus statusEnum = Concert.ConcertStatus.valueOf(statusStr.toUpperCase());
+                    ConcertStatus statusEnum = ConcertStatus.valueOf(statusStr.toUpperCase());
                     predicates.add(cb.equal(root.get("status"), statusEnum));
                 } catch (IllegalArgumentException e) {
                     throw new AppException(HttpStatus.BAD_REQUEST, "INVALID_STATUS", "Invalid concert status: " + statusStr);
@@ -93,7 +96,7 @@ public class AdminConcertServiceImpl implements AdminConcertService {
                 .coverImageUrl(request.getCoverImageUrl())
                 .seatMapUrl(request.getSeatMapUrl())
                 .organizer(currentUser)
-                .status(Concert.ConcertStatus.DRAFT)
+                .status(ConcertStatus.DRAFT)
                 .build();
 
         Concert savedConcert = concertRepository.save(concert);
@@ -175,13 +178,13 @@ public class AdminConcertServiceImpl implements AdminConcertService {
                 throw new AppException(HttpStatus.BAD_REQUEST, "PUBLISH_FAILED",
                         "Ticket type '" + tt.getName() + "' has invalid sale window (saleEndAt must be after saleStartAt)");
             }
-            if (tt.getStatus() == TicketType.TicketTypeStatus.DRAFT) {
-                tt.setStatus(TicketType.TicketTypeStatus.ON_SALE);
+            if (tt.getStatus() == TicketTypeStatus.DRAFT) {
+                tt.setStatus(TicketTypeStatus.ON_SALE);
                 ticketTypeRepository.save(tt);
             }
         }
 
-        concert.setStatus(Concert.ConcertStatus.PUBLISHED);
+        concert.setStatus(ConcertStatus.PUBLISHED);
         Concert publishedConcert = concertRepository.save(concert);
         log.info("Published concert {} by user {}", publishedConcert.getId(), currentUser.getEmail());
         cacheService.evictConcertCache(concertId);
@@ -193,7 +196,7 @@ public class AdminConcertServiceImpl implements AdminConcertService {
     public ConcertDetailResponse cancelConcert(User currentUser, UUID concertId, String reason) {
         Concert concert = getConcertAndCheckOwnership(currentUser, concertId);
 
-        concert.setStatus(Concert.ConcertStatus.CANCELED);
+        concert.setStatus(ConcertStatus.CANCELED);
         Concert cancelledConcert = concertRepository.save(concert);
         log.info("Cancelled concert {} by user {}. Reason: {}", cancelledConcert.getId(), currentUser.getEmail(), reason);
         cacheService.evictConcertCache(concertId);
@@ -283,7 +286,7 @@ public class AdminConcertServiceImpl implements AdminConcertService {
                 .maxPerUser(request.getMaxPerUser())
                 .saleStartAt(request.getSaleStartAt())
                 .saleEndAt(request.getSaleEndAt())
-                .status(TicketType.TicketTypeStatus.DRAFT)
+                .status(TicketTypeStatus.DRAFT)
                 .build();
 
         TicketType savedTicketType = ticketTypeRepository.save(ticketType);
@@ -328,7 +331,7 @@ public class AdminConcertServiceImpl implements AdminConcertService {
         }
         if (request.getStatus() != null) {
             try {
-                TicketType.TicketTypeStatus statusEnum = TicketType.TicketTypeStatus.valueOf(request.getStatus().toUpperCase());
+                TicketTypeStatus statusEnum = TicketTypeStatus.valueOf(request.getStatus().toUpperCase());
                 ticketType.setStatus(statusEnum);
             } catch (IllegalArgumentException e) {
                 throw new AppException(HttpStatus.BAD_REQUEST, "INVALID_STATUS", "Invalid ticket type status: " + request.getStatus());
@@ -348,7 +351,7 @@ public class AdminConcertServiceImpl implements AdminConcertService {
     }
 
     private void checkConcertOwnership(User currentUser, Concert concert) {
-        if (currentUser.getRole() == User.UserRole.ADMIN) {
+        if (currentUser.getRole() == UserRole.ADMIN) {
             return; // Admin has full access
         }
         if (concert.getOrganizer() == null || !concert.getOrganizer().getId().equals(currentUser.getId())) {

@@ -2,8 +2,10 @@ package com.ticketbox.api.module.order.services;
 
 import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.auth.domain.entities.User;
+import com.ticketbox.api.module.auth.domain.entities.UserRole;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
 import com.ticketbox.api.module.catalog.domain.entities.TicketType;
+import com.ticketbox.api.module.catalog.domain.entities.TicketTypeStatus;
 import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
 import com.ticketbox.api.module.order.domain.dtos.CreateOrderItemRequest;
@@ -67,7 +69,7 @@ class OrderServiceImplTest {
                 .id(UUID.fromString("44444444-4444-4444-8444-444444444444"))
                 .email("audience@example.com")
                 .fullName("Audience")
-                .role(User.UserRole.AUDIENCE)
+                .role(UserRole.AUDIENCE)
                 .build();
         concert = Concert.builder()
                 .id(UUID.fromString("11111111-1111-1111-8111-111111111111"))
@@ -190,7 +192,7 @@ class OrderServiceImplTest {
                 .maxPerUser(maxPerUser)
                 .saleStartAt(LocalDateTime.now().minusHours(1))
                 .saleEndAt(LocalDateTime.now().plusHours(1))
-                .status(TicketType.TicketTypeStatus.ON_SALE)
+                .status(TicketTypeStatus.ON_SALE)
                 .build();
     }
 

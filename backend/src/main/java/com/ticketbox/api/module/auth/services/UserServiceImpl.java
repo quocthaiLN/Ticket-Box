@@ -6,6 +6,10 @@ import com.ticketbox.api.infrastructure.security.TokenBlacklistService;
 import com.ticketbox.api.module.auth.domain.dtos.*;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.auth.domain.entities.UserAccount;
+import com.ticketbox.api.module.auth.domain.entities.UserRole;
+import com.ticketbox.api.module.auth.domain.entities.UserStatus;
+import com.ticketbox.api.module.auth.domain.entities.UserProvider;
+import com.ticketbox.api.module.auth.domain.entities.UserAccountStatus;
 import com.ticketbox.api.module.auth.producer.AuthProducer;
 import com.ticketbox.api.module.auth.repositories.UserAccountRepository;
 import com.ticketbox.api.module.auth.repositories.UserRepository;
@@ -42,7 +46,6 @@ public class UserServiceImpl implements UserService {
 
     private final SecureRandom secureRandom = new SecureRandom();
 
-
     @Override
     @Transactional
     public UserResponse register(RegisterRequest request) {
@@ -64,15 +67,15 @@ public class UserServiceImpl implements UserService {
                 .email(request.getEmail())
                 .fullName(request.getFullName())
                 .phone(request.getPhone())
-                .role(User.UserRole.AUDIENCE)
-                .status(User.UserStatus.PENDING)
+                .role(UserRole.AUDIENCE)
+                .status(UserStatus.PENDING)
                 .build();
 
         User savedUser = userRepository.save(user);
 
         UserAccount userAccount = UserAccount.builder()
                 .user(savedUser)
-                .provider("LOCAL")
+                .provider(UserProvider.LOCAL)
                 .providerUserId(savedUser.getEmail())
                 .passwordHash(bCryptPasswordEncoder.encode(request.getPassword()))
                 .build();
@@ -113,7 +116,11 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User not found"));
 
-        user.setStatus(User.UserStatus.ACTIVE);
+        if (user.getStatus() != UserStatus.PENDING) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "ALREADY_VERIFIED", "Account is already verified or not in pending state");
+        }
+
+        user.setStatus(UserStatus.ACTIVE);
         User updatedUser = userRepository.save(user);
 
         // Clear OTP from Redis upon successful verification
@@ -127,7 +134,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User not found"));
 
-        if (user.getStatus() != User.UserStatus.PENDING) {
+        if (user.getStatus() != UserStatus.PENDING) {
             throw new AppException(HttpStatus.BAD_REQUEST, "ALREADY_VERIFIED", "Account is already verified");
         }
 
@@ -146,7 +153,6 @@ public class UserServiceImpl implements UserService {
         authProducer.sendOtpMessage(otpMessage);
     }
 
-
     @Override
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
@@ -154,17 +160,19 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS",
                         "Invalid email or password"));
 
-        if (user.getStatus() == User.UserStatus.PENDING) {
-            throw new AppException(HttpStatus.UNAUTHORIZED, "ACCOUNT_NOT_VERIFIED", "Account has not been verified via OTP");
+        if (user.getStatus() == UserStatus.PENDING) {
+            throw new AppException(HttpStatus.UNAUTHORIZED, "ACCOUNT_NOT_VERIFIED",
+                    "Account has not been verified via OTP");
         }
 
-        if (user.getStatus() == User.UserStatus.LOCKED || user.getStatus() == User.UserStatus.DISABLED
-                || user.getStatus() == User.UserStatus.BLOCKED) {
+        if (user.getStatus() != UserStatus.ACTIVE || user.getDeletedAt() != null) {
             throw new AppException(HttpStatus.UNAUTHORIZED, "ACCOUNT_DISABLED", "Account is disabled or locked");
         }
 
         UserAccount localAccount = user.getAccounts().stream()
-                .filter(acc -> "LOCAL".equalsIgnoreCase(acc.getProvider()))
+                .filter(acc -> acc.getProvider().equals(UserProvider.LOCAL)
+                        && acc.getUserAccountStatus() == UserAccountStatus.ACTIVE
+                        && acc.getDeletedAt() == null)
                 .findFirst()
                 .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS",
                         "Invalid email or password"));
@@ -212,7 +220,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "User not found"));
 
-        if (user.getStatus() != User.UserStatus.ACTIVE) {
+        if (user.getStatus() != UserStatus.ACTIVE) {
             throw new AppException(HttpStatus.UNAUTHORIZED, "ACCOUNT_DISABLED", "Account is disabled or locked");
         }
 
@@ -234,4 +242,3 @@ public class UserServiceImpl implements UserService {
         return UserResponse.fromEntity(user);
     }
 }
-

@@ -2,6 +2,8 @@ package com.ticketbox.api.module.auth.domain.dtos;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.ticketbox.api.module.auth.domain.entities.UserStatus;
+import com.ticketbox.api.module.auth.domain.entities.UserRole;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -27,9 +29,9 @@ public class UserResponse {
 
     private String phone;
 
-    private User.UserRole role;
+    private UserRole role;
 
-    private User.UserStatus status;
+    private UserStatus status;
 
     @JsonProperty("created_at")
     private LocalDateTime createdAt;

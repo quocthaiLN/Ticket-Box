@@ -9,13 +9,13 @@ spring:
       client:
         registration:
           google:
-            client-id: ${GOOGLE_CLIENT_ID:611766124507-1u35lsu8ftr2270o0p5lg9np8vpuchdo.apps.googleusercontent.com}
-            client-secret: ${GOOGLE_CLIENT_SECRET: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}
+            client-id: ${GOOGLE_CLIENT_ID:your_google_client_id}
+            client-secret: ${GOOGLE_CLIENT_SECRET:your_google_client_secret}
 
   datasource:
-    url: jdbc:postgresql://ep-snowy-firefly-azpxmhww-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?user=neondb_owner&password=npg_xS7QFDkMXYC5&sslmode=require&channelBinding=require
-    username: ${DB_USER:neondb_owner}
-    password: ${DB_PASSWORD:npg_xS7QFDkMXYC5}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/ticketbox}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:password}
     driver-class-name: org.postgresql.Driver
   flyway:
     enabled: true
@@ -34,26 +34,26 @@ spring:
 
   data:
     redis:
-      host: ${REDIS_HOST:moving-roughy-76529.upstash.io}
+      host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:gQAAAAAAASrxAAIgcDI2M2QzMDRhMDA1Y2E0YmU2ODM1MDAxYWJmM2E3MTY2Mw}
+      password: ${REDIS_PASSWORD:}
       ssl:
-        enabled: ${REDIS_SSL:true}
+        enabled: ${REDIS_SSL:false}
 
   rabbitmq:
-    host: ${RABBITMQ_HOST:fuji.lmq.cloudamqp.com}
-    virtual-host: ${RABBITMQ_VHOST:ykxlsjhy}
-    port: ${RABBITMQ_PORT:5671}
-    username: ${RABBITMQ_USER:ykxlsjhy}
-    password: ${RABBITMQ_PASSWORD:N0LiNWaBQARTfuK-r-B4DsKYPazMalm7}
+    host: ${RABBITMQ_HOST:localhost}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
     ssl:
-      enabled: ${RABBITMQ_SSL:true}
+      enabled: ${RABBITMQ_SSL:false}
 
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:quocthailenguyen41@gmail.com}
-    password: ${MAIL_PASSWORD:krmaawatipuhtlio}
+    username: ${MAIL_USERNAME:your_mail_username@gmail.com}
+    password: ${MAIL_PASSWORD:your_mail_password}
     properties:
       mail:
         smtp:
@@ -62,13 +62,11 @@ spring:
             enable: true
 
 jwt:
-  access-token: 9fd9c265e56bf6ba2ac6f62f53a189eba9457b7bf3a0010a31649df22e0b942a
-  access-token-expiration: 900000 # 15 mins in ms
-  refresh-token: 004edc7d0d12e37e71f2229712d9fcb3b3db5a52c87ddacbfd39677565fafefe
-  refresh-token-expiration: 2592000000 # 30 days in ms
+  access-token: ${JWT_ACCESS_TOKEN:your_jwt_access_token}
+  access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:900000}
+  refresh-token: ${JWT_REFRESH_TOKEN:your_jwt_refresh_token}
+  refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:2592000000}
 
 app:
   otp:
     ttl-minutes: ${OTP_TTL_MINUTES:5}
-
-

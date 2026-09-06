@@ -5,6 +5,7 @@ import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.catalog.domain.dtos.ConcertDetailResponse;
 import com.ticketbox.api.module.catalog.domain.dtos.ConcertResponse;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
+import com.ticketbox.api.module.catalog.domain.entities.ConcertStatus;
 import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.SeatZoneRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
@@ -82,7 +83,7 @@ class PublicConcertServiceTest {
                 .artistName("Artist A")
                 .startsAt(LocalDateTime.now().plusDays(10))
                 .endsAt(LocalDateTime.now().plusDays(10).plusHours(3))
-                .status(Concert.ConcertStatus.PUBLISHED)
+                .status(ConcertStatus.PUBLISHED)
                 .build();
 
         draftConcertId = UUID.randomUUID();
@@ -94,7 +95,7 @@ class PublicConcertServiceTest {
                 .artistName("Artist B")
                 .startsAt(LocalDateTime.now().plusDays(15))
                 .endsAt(LocalDateTime.now().plusDays(15).plusHours(3))
-                .status(Concert.ConcertStatus.DRAFT)
+                .status(ConcertStatus.DRAFT)
                 .build();
     }
 
