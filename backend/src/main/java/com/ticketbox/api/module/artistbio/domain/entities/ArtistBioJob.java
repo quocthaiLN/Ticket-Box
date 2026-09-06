@@ -1,6 +1,5 @@
 package com.ticketbox.api.module.artistbio.domain.entities;
 
-
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
 import com.ticketbox.api.module.auth.domain.entities.User;
 
@@ -68,15 +67,4 @@ public class ArtistBioJob {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    public enum ArtistBioJobStatus {
-        PENDING,
-        PROCESSING,
-        DONE,
-        FAILED
-    }
 }
-
-
-
-
-

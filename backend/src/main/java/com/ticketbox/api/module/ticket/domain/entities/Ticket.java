@@ -119,14 +119,4 @@ public class Ticket {
             throw new IllegalStateException("Check-in time (checked_in_at) is required when status is CHECKED_IN.");
         }
     }
-
-    // --- Enums ---
-
-    public enum TicketStatus {
-        ISSUED,
-        CHECKED_IN,
-        REFUNDED,
-        INVALIDATED,
-        CANCELLED
-    }
 }

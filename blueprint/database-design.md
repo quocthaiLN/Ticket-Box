@@ -150,6 +150,7 @@ Quy tắc nghiệp vụ:
 | Field | Kiểu | Ràng buộc chính | Ý nghĩa |
 | --- | --- | --- | --- |
 | `id` | UUID | PK | Định danh concert. |
+| `organizer_id` | UUID | FK `users.id`, NOT NULL, index | Organizer sở hữu/quản lý concert. |
 | `venue` | VARCHAR(255) | NOT NULL | Địa điểm tổ chức. |
 | `title` | VARCHAR(255) | NOT NULL | Tên concert. |
 | `slug` | VARCHAR(255) | NOT NULL, UNIQUE | URL/public key dễ đọc. |
@@ -503,12 +504,12 @@ Tất cả `CREATE TYPE ... AS ENUM` cần khai trong Flyway `V1__init_schema.sq
 | `user_role` | `AUDIENCE`, `ORGANIZER`, `CHECKER`, `ADMIN` | 4 nhóm người dùng. |
 | `user_status` | `PENDING`, `ACTIVE`, `SUSPENDED`, `DELETED` | `PENDING` chờ xác thực email/OTP, `ACTIVE` hoạt động bình thường, `SUSPENDED` tạm dừng/cấm vi phạm, `DELETED` đã xóa/hủy tài khoản. |
 | `user_provider` | `LOCAL`, `GOOGLE` | Nhà cung cấp danh tính/xác thực cho `user_accounts`. |
-| `concert_status` | `DRAFT`, `PUBLISHED`, `CANCELLED`, `COMPLETED` | Vòng đời concert. |
+| `concert_status` | `DRAFT`, `PUBLISHED`, `CANCELED`, `COMPLETED` | `DRAFT` đang soạn thảo, `PUBLISHED` đã hiển thị/mở bán, `CANCELED` đã hủy, `COMPLETED` đã diễn ra xong. |
 | `ticket_type_status` | `DRAFT`, `ON_SALE`, `CLOSED` | `CLOSED` để admin đóng bán thủ công; hết vé tính bằng computed quantity, không cần status. |
 | `order_status` | `HELD`, `CONFIRMED`, `CANCELLED`, `EXPIRED` | |
 | `payment_provider` | `VNPAY`, `MOMO` | |
 | `payment_status` | `PENDING`, `SUCCEEDED`, `FAILED`, `CANCELLED`, `REFUNDED` | |
-| `ticket_status` | `ISSUED`, `CHECKED_IN`, `CANCELLED`, `REFUNDED` | |
+| `ticket_status` | `ISSUED`, `CHECKED_IN`, `CANCELLED`, `EXPIRED` | `ISSUED` đã phát hành, `CHECKED_IN` đã sử dụng (check-in), `CANCELLED` đã hủy, `EXPIRED` đã hết hạn. |
 | `device_status` | `ACTIVE`, `INACTIVE` | |
 | `offline_batch_status` | `PENDING`, `DONE` | Batch sync xử lý nhanh phía server. |
 | `offline_item_status` | `PENDING`, `ACCEPTED`, `CONFLICT`, `WRONG_GATE`, `INVALID` | Kết quả xử lý item offline trên server (spec 04/13 §5); `CONFLICT` = vé đã CHECKED_IN. |
@@ -546,7 +547,7 @@ users -> audit_logs
 | Nhu cầu | Constraint/index |
 | --- | --- |
 | User account lookup | FK `user_accounts(user_id)` ON DELETE CASCADE, index `user_accounts(user_id)`. |
-| Concert listing | `concerts(status, starts_at)`, `venues(city)`. |
+| Concert listing & ownership | `concerts(status, starts_at)`, index `concerts(organizer_id)`. |
 | Ticket availability | `ticket_types(concert_id, status)`, partial index supplement cho ticket type còn vé. |
 | Chống oversell | row lock trên `ticket_types`, check `total_quantity >= held_quantity + sold_quantity`. |
 | Per-user limit | PK `user_ticket_type_counters(user_id, ticket_type_id)`. |

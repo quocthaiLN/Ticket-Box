@@ -1,6 +1,5 @@
 package com.ticketbox.api.module.guestlist.domain.entities;
 
-
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
 import com.ticketbox.api.module.auth.domain.entities.User;
 
@@ -100,17 +99,4 @@ public class GuestImportJob {
             throw new IllegalStateException("Error rows count cannot be negative.");
         }
     }
-
-    public enum ImportStatus {
-        PENDING,
-        PROCESSING,
-        DONE,
-        PARTIAL,
-        FAILED
-    }
 }
-
-
-
-
-

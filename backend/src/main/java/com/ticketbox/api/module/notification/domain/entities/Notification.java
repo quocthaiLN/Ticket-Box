@@ -103,32 +103,4 @@ public class Notification {
             throw new IllegalStateException("Sent timestamp (sent_at) is required when status is SENT.");
         }
     }
-
-    // --- Enums ---
-
-    public enum NotificationChannel {
-        APP,
-        EMAIL,
-        SMS,
-        ZALO
-    }
-
-    public enum NotificationType {
-        ORDER_HELD,
-        ORDER_CONFIRMED,
-        ORDER_CANCELLED,
-        TICKET_ISSUED,
-        CONCERT_REMINDER,
-        SYSTEM_ALERT
-    }
-
-    public enum NotificationStatus {
-        PENDING,
-        SENT,
-        FAILED
-    }
 }
-
-
-
-

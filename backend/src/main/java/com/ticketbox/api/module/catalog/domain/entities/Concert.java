@@ -36,6 +36,11 @@ public class Concert {
     @NotNull(message = "Id cannot be null")
     private UUID id;
 
+    @NotBlank(message = "Venue cannot be blank")
+    @Size(max = 255, message = "Venue must not exceed 255 characters")
+    @Column(name = "venue", nullable = false, length = 255)
+    private String venue;
+
     @NotNull(message = "Organizer cannot be null")
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "organizer_id", nullable = false, foreignKey = @ForeignKey(name = "fk_concerts_organizer"))
@@ -50,11 +55,6 @@ public class Concert {
     @Size(max = 255, message = "Slug must not exceed 255 characters")
     @Column(name = "slug", nullable = false, length = 255)
     private String slug;
-
-    @NotBlank(message = "Venue cannot be blank")
-    @Size(max = 255, message = "Venue must not exceed 255 characters")
-    @Column(name = "venue", nullable = false, length = 255)
-    private String venue;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
@@ -109,17 +109,4 @@ public class Concert {
             throw new IllegalStateException("Concert end date must be strictly after the start date.");
         }
     }
-
-    // --- Enums ---
-
-    public enum ConcertStatus {
-        DRAFT,
-        PUBLISHED,
-        CANCELED,
-        COMPLETED
-    }
 }
-
-
-
-

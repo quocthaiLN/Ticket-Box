@@ -119,21 +119,4 @@ public class Payment {
         }
     }
 
-    // --- Enums ---
-
-    public enum PaymentProvider {
-        VNPAY,
-        MOMO,
-        STRIPE,
-        ALIPAY
-    }
-
-    public enum PaymentStatus {
-        PENDING,
-        SUCCEEDED,
-        FAILED,
-        EXPIRED,
-        CANCELLED,
-        REFUNDED
-    }
 }

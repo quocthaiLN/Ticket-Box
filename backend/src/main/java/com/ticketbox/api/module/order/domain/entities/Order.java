@@ -131,13 +131,4 @@ public class Order {
             throw new IllegalStateException("Expiration time is required when order status is EXPIRED.");
         }
     }
-
-    // --- Enums ---
-
-    public enum OrderStatus {
-        HELD,
-        CONFIRMED,
-        CANCELLED,
-        EXPIRED
-    }
 }

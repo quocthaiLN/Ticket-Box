@@ -151,15 +151,4 @@ public class TicketType {
             }
         }
     }
-
-    // --- Enums ---
-
-    public enum TicketTypeStatus {
-        DRAFT,
-        ACTIVE,
-        ON_SALE,
-        SUSPENDED,
-        CLOSED,
-        SOLD_OUT
-    }
 }
