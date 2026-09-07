@@ -45,3 +45,10 @@ desktop.ini
 *.log
 logs/
 *.tmp
+
+# Agent
+skills-lock.json
+.agents/
+
+# Note
+tech-note/
