@@ -1,0 +1,9 @@
+$kind: http-request
+url: "{{base_url}}/auth/refresh"
+method: POST
+headers:
+  Cookie: refresh_token={{refresh_token}}
+auth:
+  type: noauth
+examples: ./.resources/Refresh Token.resources/examples
+order: 5000

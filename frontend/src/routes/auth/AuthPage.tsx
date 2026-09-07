@@ -11,13 +11,44 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { login, register, requestOtp } from "../../services/auth.service";
+import { ApiClientError } from "../../lib/api-client";
+import { login, register, resendOtp, verifyOtp } from "../../services/auth.service";
 import type { AuthUser } from "../../lib/auth-session";
 
 type AuthMode = "login" | "register";
 type RegisterStep = "form" | "otp";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function getFriendlyErrorMessage(err: unknown): string {
+  if (err instanceof ApiClientError) {
+    switch (err.code) {
+      case "INVALID_CREDENTIALS":
+        return "Email hoặc mật khẩu không chính xác.";
+      case "ACCOUNT_NOT_VERIFIED":
+        return "Tài khoản chưa được kích hoạt qua OTP. Vui lòng xác thực mã OTP.";
+      case "ACCOUNT_DISABLED":
+        return "Tài khoản của bạn đã bị khóa hoặc tạm dừng hoạt động.";
+      case "EMAIL_ALREADY_EXISTS":
+        return "Email này đã được đăng ký. Vui lòng đăng nhập.";
+      case "PHONE_ALREADY_EXISTS":
+        return "Số điện thoại này đã được sử dụng.";
+      case "PASSWORD_MISMATCH":
+        return "Mật khẩu xác nhận không khớp.";
+      case "INVALID_OTP":
+        return "Mã OTP không chính xác hoặc đã hết hạn.";
+      case "ALREADY_VERIFIED":
+        return "Tài khoản đã được xác minh trước đó. Vui lòng đăng nhập.";
+      case "USER_NOT_FOUND":
+        return "Không tìm thấy thông tin tài khoản.";
+      case "VALIDATION_ERROR":
+        return err.message || "Dữ liệu nhập vào không hợp lệ.";
+      default:
+        return err.message || "Đã xảy ra lỗi. Vui lòng thử lại.";
+    }
+  }
+  return err instanceof Error ? err.message : "Đã xảy ra lỗi. Vui lòng thử lại.";
+}
 
 export function AuthPage({ mode }: { mode: AuthMode }) {
   const [showPassword, setShowPassword] = useState(false);
@@ -46,7 +77,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     setOtpCooldown(0);
   }, [mode]);
 
-  async function handleSendCode() {
+  async function handleResendOtp() {
     if (!EMAIL_PATTERN.test(form.email)) {
       setError("Vui lòng nhập email hợp lệ trước khi lấy mã xác thực.");
       return;
@@ -54,10 +85,10 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     setOtpLoading(true);
     setError("");
     try {
-      await requestOtp(form.email);
+      await resendOtp(form.email);
       setOtpCooldown(60);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể gửi mã xác thực.");
+      setError(getFriendlyErrorMessage(err));
     } finally {
       setOtpLoading(false);
     }
@@ -78,8 +109,8 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
         return;
       }
 
-      if (form.password !== form.confirmPassword) {
-        setError("Mật khẩu xác nhận không khớp.");
+      if (!form.fullName.trim()) {
+        setError("Vui lòng nhập họ và tên.");
         return;
       }
 
@@ -88,11 +119,39 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
         return;
       }
 
-      await requestOtp(form.email);
+      if (form.password.length < 8) {
+        setError("Mật khẩu phải có độ dài từ 8 ký tự trở lên.");
+        return;
+      }
+
+      if (form.password !== form.confirmPassword) {
+        setError("Mật khẩu xác nhận không khớp.");
+        return;
+      }
+
+      // Bước 1: Gọi API đăng ký - Backend tạo user PENDING và gửi mã OTP qua email
+      await register({
+        email: form.email,
+        password: form.password,
+        confirmPassword: form.confirmPassword,
+        fullName: form.fullName,
+      });
+
       setOtpCooldown(60);
       setRegisterStep("otp");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Xác thực thất bại.");
+      if (err instanceof ApiClientError && err.code === "ACCOUNT_NOT_VERIFIED") {
+        try {
+          await resendOtp(form.email);
+          setOtpCooldown(60);
+          setRegisterStep("otp");
+          setError("Tài khoản chưa được kích hoạt. Mã OTP mới đã được gửi tới email của bạn.");
+          return;
+        } catch {
+          // Bỏ qua lỗi gửi lại nếu có
+        }
+      }
+      setError(getFriendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -103,16 +162,24 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     setError("");
 
     try {
-      const auth = await register({
+      // Bước 2: Xác thực mã OTP 6 số để kích hoạt tài khoản
+      await verifyOtp({
         email: form.email,
-        password: form.password,
-        confirmPassword: form.confirmPassword,
-        full_name: form.fullName,
         otp,
       });
-      redirectAuthenticatedUser(auth);
+
+      // Bước 3: Tự động đăng nhập và lưu phiên phiên làm việc
+      if (form.password) {
+        const auth = await login({
+          email: form.email,
+          password: form.password,
+        });
+        redirectAuthenticatedUser(auth);
+      } else {
+        navigate("/login", { replace: true });
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể hoàn tất đăng ký.");
+      setError(getFriendlyErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -211,7 +278,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 setRegisterStep("form");
                 setError("");
               }}
-              onResend={handleSendCode}
+              onResend={handleResendOtp}
               onVerify={handleVerifyRegister}
             />
           ) : (

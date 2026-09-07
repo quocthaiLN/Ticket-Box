@@ -1,0 +1,27 @@
+$kind: http-example
+request:
+  url: "{{base_url}}/auth/resend-otp"
+  method: POST
+  headers:
+    Content-Type: application/json
+  body:
+    type: json
+    content: |-
+      {
+        "email": "user@example.com"
+      }
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json
+  body:
+    type: json
+    content: |-
+      {
+        "data": "OTP has been resent to your email",
+        "meta": {
+          "request_id": "req_12345678"
+        }
+      }
+order: 1000

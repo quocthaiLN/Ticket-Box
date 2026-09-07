@@ -1,0 +1,9 @@
+$kind: http-request
+url: "{{base_url}}/auth/me"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+examples: ./.resources/Get Current User.resources/examples
+order: 7000

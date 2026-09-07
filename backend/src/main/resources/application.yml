@@ -1,6 +1,9 @@
 spring:
   application:
     name: ticketbox
+  config:
+    import:
+      - file:.env[.properties]
   profiles:
     active: api
 
@@ -60,13 +63,22 @@ spring:
           auth: true
           starttls:
             enable: true
+  minio: 
+    host: ${MINIO_HOST:localhost}
+    port: ${MINIO_PORT:9000}
+    username: ${MINIO_USER:admin}
+    password: ${MINIO_PASSWORD:admin123456}
+    bucket: ${MINIO_BUCKET:ticket-box-storage}
+    secure: ${MINIO_SECURE:false}
 
 jwt:
-  access-token: ${JWT_ACCESS_TOKEN:your_jwt_access_token}
+  access-token: ${JWT_ACCESS_TOKEN:test5709e9900945c4f72186cf92b6ae9ddb30eb3f3906ef92e4e3ffa2dc986f}
   access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:900000}
-  refresh-token: ${JWT_REFRESH_TOKEN:your_jwt_refresh_token}
+  refresh-token: ${JWT_REFRESH_TOKEN:test040b0e64779e5a44a69ab64c59d761a13d82de8b3bf5d5a1ba5bd3012e99}
   refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:2592000000}
 
 app:
   otp:
     ttl-minutes: ${OTP_TTL_MINUTES:5}
+  storage:
+    base-url: ${STORAGE_BASE_URL:http://localhost:9000/ticket-box-storage}

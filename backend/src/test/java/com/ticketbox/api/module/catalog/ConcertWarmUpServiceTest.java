@@ -15,6 +15,8 @@ import com.ticketbox.api.module.catalog.repositories.SeatZoneRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
 import com.ticketbox.api.module.catalog.services.ConcertWarmUpServiceImpl;
 import com.ticketbox.api.module.shared.cache.CacheService;
+import com.ticketbox.api.module.shared.storage.StorageService;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,6 +56,9 @@ class ConcertWarmUpServiceTest {
 
     @Mock
     private HashOperations<String, Object, Object> hashOperations;
+
+    @Mock
+    private StorageService storageService;
 
     @InjectMocks
     private ConcertWarmUpServiceImpl warmUpService;

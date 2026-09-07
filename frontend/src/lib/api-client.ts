@@ -1,4 +1,9 @@
-import { getAccessToken } from "./auth-session";
+import {
+  clearAuthSession,
+  getAccessToken,
+  storeAuthSession,
+  type AuthUser,
+} from "./auth-session";
 
 export type ApiResponse<TData> = {
   data: TData;
@@ -138,7 +143,7 @@ export type ConcertMetadata = {
 };
 
 const apiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/v1";
+  import.meta.env.VITE_API_BASE_URL ?? "";
 
 // Sends a GET request to the TicketBox API and parses the JSON response.
 export async function apiGet<TData>(
@@ -292,6 +297,57 @@ export function createTicketType(
   );
 }
 
+let refreshPromise: Promise<string | null> | null = null;
+
+async function tryRefreshToken(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        clearAuthSession();
+        return null;
+      }
+
+      const body = (await res.json()) as {
+        data: {
+          access_token: string;
+          expires_in: number;
+          user: AuthUser;
+        };
+      };
+
+      if (body?.data?.access_token) {
+        storeAuthSession({
+          accessToken: body.data.access_token,
+          expiresIn: body.data.expires_in,
+          user: body.data.user,
+        });
+        return body.data.access_token;
+      }
+
+      clearAuthSession();
+      return null;
+    } catch {
+      clearAuthSession();
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
 async function apiRequest<TData>(
   path: string,
   init: RequestInit,
@@ -308,6 +364,25 @@ async function apiRequest<TData>(
     credentials: init.credentials ?? "same-origin",
     headers,
   });
+
+  if (response.status === 401 && !path.startsWith("/auth/")) {
+    const newToken = await tryRefreshToken();
+    if (newToken) {
+      headers.set("Authorization", `Bearer ${newToken}`);
+      const retryResponse = await fetch(`${apiBaseUrl}${path}`, {
+        ...init,
+        credentials: init.credentials ?? "same-origin",
+        headers,
+      });
+
+      if (retryResponse.ok) {
+        if (retryResponse.status === 204) {
+          return undefined as TData;
+        }
+        return retryResponse.json() as Promise<TData>;
+      }
+    }
+  }
 
   if (!response.ok) {
     const { message, code } = await parseErrorResponse(response);
@@ -378,13 +453,35 @@ async function parseErrorResponse(response: Response): Promise<{ message: string
 
   try {
     const problem = JSON.parse(text) as {
+      error?: {
+        code?: string;
+        message?: string;
+        details?: unknown;
+      };
       detail?: string;
       title?: string;
       code?: string;
-      errors?: Array<{ field?: string; message?: string }>;
+      message?: string;
+      errors?: Array<{ field?: string; message?: string }> | Record<string, string>;
     };
-    const firstFieldError = problem.errors?.find((item) => item.message);
-    const message = firstFieldError?.message ?? problem.detail ?? problem.title ?? fallback;
+
+    // 1. Check Spring Boot ErrorResponse { error: { code, message, details } }
+    if (problem.error) {
+      let detailMsg: string | undefined;
+      if (problem.error.details && typeof problem.error.details === "object") {
+        const firstVal = Object.values(problem.error.details as Record<string, unknown>)[0];
+        if (typeof firstVal === "string") {
+          detailMsg = firstVal;
+        }
+      }
+      const message = detailMsg ?? problem.error.message ?? fallback;
+      return { message, code: problem.error.code };
+    }
+
+    // 2. Check ProblemDetails RFC 7807 / standard array errors
+    const arrayErrors = Array.isArray(problem.errors) ? problem.errors : undefined;
+    const firstFieldError = arrayErrors?.find((item) => item.message);
+    const message = firstFieldError?.message ?? problem.message ?? problem.detail ?? problem.title ?? fallback;
     return { message, code: problem.code };
   } catch {
     return { message: text };

@@ -24,9 +24,10 @@ INSERT INTO user_accounts (id, user_id, password_hash, provider, provider_user_i
 -- 2. CONCERTS SEED
 -- =============================================================================
 
-INSERT INTO concerts (id, title, slug, venue, description, artist_name, artist_bio, starts_at, ends_at, status, cover_image_url, seat_map_url, created_at, updated_at) VALUES
+INSERT INTO concerts (id, organizer_id, title, slug, venue, description, artist_name, artist_bio, starts_at, ends_at, status, cover_image_url, seat_map_url, created_at, updated_at) VALUES
 (
     'a1111111-1111-1111-1111-111111111111',
+    '22222222-2222-2222-2222-222222222222',
     'Anh Trai Say Hi Live Concert 2026',
     'anh-trai-say-hi-2026',
     'Sân vận động Quốc gia Mỹ Đình, Hà Nội',
@@ -36,13 +37,14 @@ INSERT INTO concerts (id, title, slug, venue, description, artist_name, artist_b
     NOW() + INTERVAL '30 days',
     NOW() + INTERVAL '30 days 4 hours',
     'PUBLISHED',
-    'https://storage.ticketbox.vn/concerts/ats-2026-cover.jpg',
-    'https://storage.ticketbox.vn/concerts/ats-2026-seatmap.svg',
+    'concerts/ats-2026-cover.jpg',
+    'concerts/ats-2026-seatmap.svg',
     NOW(),
     NOW()
 ),
 (
     'a2222222-2222-2222-2222-222222222222',
+    '22222222-2222-2222-2222-222222222222',
     'Sơn Tùng M-TP Sky Tour 2026',
     'son-tung-mtp-sky-tour-2026',
     'Nhà thi đấu Phú Thọ, TP. Hồ Chí Minh',
@@ -52,8 +54,8 @@ INSERT INTO concerts (id, title, slug, venue, description, artist_name, artist_b
     NOW() + INTERVAL '45 days',
     NOW() + INTERVAL '45 days 3 hours',
     'PUBLISHED',
-    'https://storage.ticketbox.vn/concerts/sky-tour-2026-cover.jpg',
-    'https://storage.ticketbox.vn/concerts/sky-tour-2026-seatmap.svg',
+    'concerts/sky-tour-2026-cover.jpg',
+    'concerts/sky-tour-2026-seatmap.svg',
     NOW(),
     NOW()
 );

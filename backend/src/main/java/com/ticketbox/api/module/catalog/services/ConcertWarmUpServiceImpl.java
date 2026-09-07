@@ -10,6 +10,8 @@ import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.SeatZoneRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
 import com.ticketbox.api.module.shared.cache.CacheService;
+import com.ticketbox.api.module.shared.storage.StorageService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -35,6 +37,7 @@ public class ConcertWarmUpServiceImpl implements ConcertWarmUpService {
     private final TicketTypeRepository ticketTypeRepository;
     private final CacheService cacheService;
     private final StringRedisTemplate stringRedisTemplate;
+    private final StorageService storageService;
 
     @Override
     public void warmUpConcertCache(UUID concertId) {
@@ -66,8 +69,8 @@ public class ConcertWarmUpServiceImpl implements ConcertWarmUpService {
 
         // 2. Warm-up Concert Metadata (concerts:{concertId}:metadata) - 24h TTL
         ConcertMetadataResponse.SeatMapInfo seatMapInfo = ConcertMetadataResponse.SeatMapInfo.builder()
-                .svgUrl(concert.getSeatMapUrl())
-                .fallbackImageUrl(concert.getCoverImageUrl())
+                .svgUrl(storageService.buildPublicUrl(concert.getSeatMapUrl()))
+                .fallbackImageUrl(storageService.buildPublicUrl(concert.getCoverImageUrl()))
                 .build();
 
         ConcertMetadataResponse metadataResponse = ConcertMetadataResponse.builder()
@@ -82,8 +85,8 @@ public class ConcertWarmUpServiceImpl implements ConcertWarmUpService {
         // 3. Warm-up Concert SeatMap (concerts:{concertId}:seatmap) - 1h TTL
         SeatMapResponse seatMapResponse = SeatMapResponse.builder()
                 .concertId(concert.getId())
-                .svgUrl(concert.getSeatMapUrl())
-                .fallbackImageUrl(concert.getCoverImageUrl())
+                .svgUrl(storageService.buildPublicUrl(concert.getSeatMapUrl()))
+                .fallbackImageUrl(storageService.buildPublicUrl(concert.getCoverImageUrl()))
                 .zones(zoneResponses)
                 .build();
         cacheService.set("concerts:" + concertId + ":seatmap", seatMapResponse, Duration.ofHours(1));
@@ -156,8 +159,8 @@ public class ConcertWarmUpServiceImpl implements ConcertWarmUpService {
                 .startsAt(concert.getStartsAt())
                 .endsAt(concert.getEndsAt())
                 .status(concert.getStatus().name())
-                .coverImageUrl(concert.getCoverImageUrl())
-                .seatMapUrl(concert.getSeatMapUrl())
+                .coverImageUrl(storageService.buildPublicUrl(concert.getCoverImageUrl()))
+                .seatMapUrl(storageService.buildPublicUrl(concert.getSeatMapUrl()))
                 .organizerId(concert.getOrganizer() != null ? concert.getOrganizer().getId() : null)
                 .organizerName(concert.getOrganizer() != null ? concert.getOrganizer().getFullName() : null)
                 .createdAt(concert.getCreatedAt())

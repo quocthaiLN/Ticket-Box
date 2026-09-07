@@ -6,7 +6,8 @@ export type AuthUser = {
   full_name: string;
   phone: string | null;
   role: AuthRole;
-  status: "ACTIVE" | "LOCKED" | "DISABLED";
+  status: "PENDING" | "ACTIVE" | "LOCKED" | "DISABLED";
+  created_at?: string;
 };
 
 export type AuthSession = {

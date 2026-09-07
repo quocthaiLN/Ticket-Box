@@ -13,6 +13,7 @@ import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.SeatZoneRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
 import com.ticketbox.api.module.shared.cache.CacheService;
+import com.ticketbox.api.module.shared.storage.StorageService;
 
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,7 @@ public class AdminConcertServiceImpl implements AdminConcertService {
     private final SeatZoneRepository seatZoneRepository;
     private final TicketTypeRepository ticketTypeRepository;
     private final CacheService cacheService;
+    private final StorageService storageService;
 
     @Override
     @Transactional(readOnly = true)
@@ -371,8 +373,8 @@ public class AdminConcertServiceImpl implements AdminConcertService {
                 .startsAt(concert.getStartsAt())
                 .endsAt(concert.getEndsAt())
                 .status(concert.getStatus().name())
-                .coverImageUrl(concert.getCoverImageUrl())
-                .seatMapUrl(concert.getSeatMapUrl())
+                .coverImageUrl(storageService.buildPublicUrl(concert.getCoverImageUrl()))
+                .seatMapUrl(storageService.buildPublicUrl(concert.getSeatMapUrl()))
                 .organizerId(concert.getOrganizer() != null ? concert.getOrganizer().getId() : null)
                 .organizerName(concert.getOrganizer() != null ? concert.getOrganizer().getFullName() : null)
                 .createdAt(concert.getCreatedAt())

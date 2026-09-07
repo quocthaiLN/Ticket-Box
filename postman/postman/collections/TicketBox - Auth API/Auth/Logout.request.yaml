@@ -1,0 +1,11 @@
+$kind: http-request
+url: "{{base_url}}/auth/logout"
+method: POST
+headers:
+  Cookie: refresh_token={{refresh_token}}
+auth:
+  type: bearer
+  credentials:
+    token: "{{access_token}}"
+examples: ./.resources/Logout.resources/examples
+order: 6000

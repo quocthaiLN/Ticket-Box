@@ -12,6 +12,7 @@ import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.SeatZoneRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
 import com.ticketbox.api.module.shared.cache.CachedPage;
+import com.ticketbox.api.module.shared.storage.StorageService;
 import com.ticketbox.api.module.shared.cache.CacheService;
 
 import jakarta.persistence.criteria.Predicate;
@@ -42,6 +43,7 @@ public class PublicConcertServiceImpl implements PublicConcertService {
     private final TicketTypeRepository ticketTypeRepository;
     private final StringRedisTemplate stringRedisTemplate;
     private final CacheService cacheService;
+    private final StorageService storageService;
 
     @Override
     public Page<ConcertResponse> getPublishedConcerts(String q, String city, LocalDateTime from, LocalDateTime to, Pageable pageable) {
@@ -120,8 +122,8 @@ public class PublicConcertServiceImpl implements PublicConcertService {
             List<TicketTypeResponse> ticketResponses = ticketTypes.stream().map(this::mapToTicketTypeResponse).collect(Collectors.toList());
 
             ConcertMetadataResponse.SeatMapInfo seatMapInfo = ConcertMetadataResponse.SeatMapInfo.builder()
-                    .svgUrl(concert.getSeatMapUrl())
-                    .fallbackImageUrl(concert.getCoverImageUrl())
+                    .svgUrl(storageService.buildPublicUrl(concert.getSeatMapUrl()))
+                    .fallbackImageUrl(storageService.buildPublicUrl(concert.getCoverImageUrl()))
                     .build();
 
             return ConcertMetadataResponse.builder()
@@ -147,8 +149,8 @@ public class PublicConcertServiceImpl implements PublicConcertService {
 
             return SeatMapResponse.builder()
                     .concertId(concert.getId())
-                    .svgUrl(concert.getSeatMapUrl())
-                    .fallbackImageUrl(concert.getCoverImageUrl())
+                    .svgUrl(storageService.buildPublicUrl(concert.getSeatMapUrl()))
+                    .fallbackImageUrl(storageService.buildPublicUrl(concert.getCoverImageUrl()))
                     .zones(zoneResponses)
                     .build();
         });
@@ -245,7 +247,7 @@ public class PublicConcertServiceImpl implements PublicConcertService {
                 .startsAt(concert.getStartsAt())
                 .endsAt(concert.getEndsAt())
                 .status(concert.getStatus().name())
-                .coverImageUrl(concert.getCoverImageUrl())
+                .coverImageUrl(storageService.buildPublicUrl(concert.getCoverImageUrl()))
                 .organizerId(concert.getOrganizer() != null ? concert.getOrganizer().getId() : null)
                 .organizerName(concert.getOrganizer() != null ? concert.getOrganizer().getFullName() : null)
                 .ticketPriceRange(ConcertResponse.TicketPriceRange.builder()
@@ -268,8 +270,8 @@ public class PublicConcertServiceImpl implements PublicConcertService {
                 .startsAt(concert.getStartsAt())
                 .endsAt(concert.getEndsAt())
                 .status(concert.getStatus().name())
-                .coverImageUrl(concert.getCoverImageUrl())
-                .seatMapUrl(concert.getSeatMapUrl())
+                .coverImageUrl(storageService.buildPublicUrl(concert.getCoverImageUrl()))
+                .seatMapUrl(storageService.buildPublicUrl(concert.getSeatMapUrl()))
                 .organizerId(concert.getOrganizer() != null ? concert.getOrganizer().getId() : null)
                 .organizerName(concert.getOrganizer() != null ? concert.getOrganizer().getFullName() : null)
                 .createdAt(concert.getCreatedAt())

@@ -1,0 +1,2 @@
+$kind: collection
+description: Collection for testing Auth module endpoints (AuthController) in TicketBox project.

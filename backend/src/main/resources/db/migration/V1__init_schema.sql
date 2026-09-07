@@ -52,6 +52,7 @@ CREATE INDEX idx_user_accounts_user_id ON user_accounts(user_id);
 
 CREATE TABLE concerts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organizer_id UUID NOT NULL,
     title VARCHAR(255) NOT NULL,
     slug VARCHAR(255) NOT NULL,
     venue VARCHAR(255) NOT NULL,
@@ -66,6 +67,7 @@ CREATE TABLE concerts (
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_concerts_slug UNIQUE (slug),
+    CONSTRAINT fk_concerts_organizer FOREIGN KEY (organizer_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT chk_concerts_dates CHECK (ends_at > starts_at),
     CONSTRAINT chk_concerts_status CHECK (status IN ('DRAFT', 'PUBLISHED', 'CANCELED', 'CANCELLED', 'COMPLETED'))
 );
@@ -73,6 +75,7 @@ CREATE TABLE concerts (
 CREATE INDEX idx_concerts_title ON concerts(title);
 CREATE INDEX idx_concerts_slug ON concerts(slug);
 CREATE INDEX idx_concerts_status_starts ON concerts(status, starts_at);
+CREATE INDEX idx_concerts_organizer_id ON concerts(organizer_id);
 
 CREATE TABLE seat_zones (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

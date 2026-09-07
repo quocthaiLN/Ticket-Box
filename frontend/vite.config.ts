@@ -8,12 +8,24 @@ export default defineConfig({
     port: 3001,
     allowedHosts: [".ngrok-free.dev", ".ngrok-free.app"],
     proxy: {
-      "/v1": {
-        target: "http://localhost:3000",
+      "/auth": {
+        target: "http://localhost:8080",
+        changeOrigin: true
+      },
+      "/concerts": {
+        target: "http://localhost:8080",
+        changeOrigin: true
+      },
+      "/orders": {
+        target: "http://localhost:8080",
+        changeOrigin: true
+      },
+      "/admin": {
+        target: "http://localhost:8080",
         changeOrigin: true
       },
       "/uploads": {
-        target: "http://localhost:3000",
+        target: "http://localhost:8080",
         changeOrigin: true
       }
     }

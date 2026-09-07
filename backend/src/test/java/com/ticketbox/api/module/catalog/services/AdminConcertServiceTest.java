@@ -11,6 +11,8 @@ import com.ticketbox.api.module.catalog.domain.entities.ConcertStatus;
 import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.SeatZoneRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
+import com.ticketbox.api.module.shared.storage.StorageService;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,6 +44,9 @@ class AdminConcertServiceTest {
 
     @Mock
     private com.ticketbox.api.module.shared.cache.CacheService cacheService;
+
+    @Mock
+    private StorageService storageService;
 
     @InjectMocks
     private AdminConcertServiceImpl adminConcertService;

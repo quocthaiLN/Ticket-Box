@@ -1,0 +1,15 @@
+$kind: http-example
+request:
+  url: "{{base_url}}/auth/logout"
+  method: POST
+  headers:
+    Cookie: refresh_token={{refresh_token}}
+response:
+  statusCode: 204
+  statusText: No Content
+  headers:
+    Set-Cookie: refresh_token=; Path=/auth/refresh; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax
+  body:
+    type: text
+    content: ""
+order: 1000

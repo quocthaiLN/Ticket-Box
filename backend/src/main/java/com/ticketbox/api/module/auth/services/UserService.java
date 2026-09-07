@@ -17,7 +17,6 @@ public interface UserService {
 
     LoginResponse login(LoginRequest request);
 
-
     void logout(String accessToken);
 
     LoginResponse refreshToken(String refreshToken);

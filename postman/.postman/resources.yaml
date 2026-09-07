@@ -1,0 +1,13 @@
+# Use this workspace to collaborate
+workspace:
+  id: 7b3b991c-2ece-4f4f-9c6f-fc21b7254f8d
+
+localResources:
+  collections:
+    - ../auth/auth.json
+  environments:
+    - ../environments/local/local.json
+
+cloudResources:
+  collections:
+    ../postman/collections/TicketBox - Auth API: a5a5d23f-298c-41aa-9a6a-fda8c2a99583

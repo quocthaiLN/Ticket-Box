@@ -1,0 +1,42 @@
+$kind: http-example
+request:
+  url: "{{base_url}}/auth/login"
+  method: POST
+  headers:
+    Content-Type: application/json
+  body:
+    type: json
+    content: |-
+      {
+        "email": "user@example.com",
+        "password": "Password123@"
+      }
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json
+    Set-Cookie: refresh_token=...; Path=/auth/refresh; Max-Age=604800; Expires=Sun, 13 Sep 2026 12:00:00 GMT; HttpOnly; SameSite=Lax
+  body:
+    type: json
+    content: |-
+      {
+        "data": {
+          "access_token": "...",
+          "refresh_token": "...",
+          "expires_in": 900,
+          "user": {
+            "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "email": "user@example.com",
+            "full_name": "Nguyen Van A",
+            "phone": "+84987654321",
+            "role": "AUDIENCE",
+            "status": "ACTIVE",
+            "created_at": "2026-09-06T12:00:00"
+          }
+        },
+        "meta": {
+          "request_id": "req_12345678"
+        }
+      }
+order: 1000
