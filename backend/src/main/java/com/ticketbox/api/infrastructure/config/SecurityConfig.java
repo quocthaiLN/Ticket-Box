@@ -49,7 +49,9 @@ public class SecurityConfig {
                         .accessDeniedHandler(customAccessDeniedHandler()))
                 .authorizeHttpRequests((authorize) -> authorize
                         .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/verify-otp", "/auth/resend-otp",
-                                "/auth/login", "/auth/refresh", "/concerts/**")
+                                "/auth/login", "/auth/refresh")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/concerts/**")
                         .permitAll()
                         .requestMatchers("/admin/**").hasAnyRole("ADMIN")
                         .anyRequest().authenticated())
