@@ -2,7 +2,7 @@
 
 ```
 cd backend
-docker-compose up
+docker-compose up -d
 ```
 
 ### Build
@@ -15,12 +15,18 @@ cd backend
 
 - Tự động chạy khi Run nhờ `flywaydb`
 
-
 ### Run
 
+#### Backend
 ```
 cd backend
-./mvnw spring-boot:run "-Dspring-boot.run.profiles=api"
-./mvnw spring-boot:run "-Dspring-boot.run.profiles=worker"
-./mvnw spring-boot:run "-Dspring-boot.run.profiles=api,worker"
+./mvnw spring-boot:run
+```
+
+#### Frontend
+```
+cd frontend
+npm install
+npm run build
+npm run dev
 ```

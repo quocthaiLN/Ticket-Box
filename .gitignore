@@ -1,4 +1,4 @@
-# Secrets & Local Configuration Files
+# Secrets & local configuration files
 application-local.yml
 application-secret.yml
 application-secrets.yml
@@ -7,6 +7,8 @@ application-secrets.yml
 .env
 .env.*
 .env.local
+**/.env
+**/.env.*
 
 # Allow tracked base application configs
 !backend/src/main/resources/application.yml
@@ -15,14 +17,62 @@ application-secrets.yml
 !docker-compose.yml
 !docker-compose.*.yml
 
-# Build & Compilation Output
+# Backend / Java / Spring Boot
+backend/target/
+backend/build/
+backend/out/
+backend/bin/
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/**/target/
+backend/**/build/
+backend/**/out/
+backend/**/bin/
+backend/.apt_generated
+backend/.classpath
+backend/.factorypath
+backend/.project
+backend/.settings
+backend/.springBeans
+backend/.sts4-cache
+backend/.idea/
+backend/*.iws
+backend/*.iml
+backend/*.ipr
+backend/nbproject/private/
+backend/nbbuild/
+backend/dist/
+backend/nbdist/
+backend/.nb-gradle/
+backend/.vscode/
+
+# Frontend / Node.js
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+frontend/.cache/
+frontend/.parcel-cache/
+frontend/.eslintcache/
+frontend/coverage/
+frontend/.next/
+frontend/.nuxt/
+frontend/.turbo/
+frontend/*.tsbuildinfo
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/.DS_Store
+frontend/Thumbs.db
+
+# General build & compilation output
 target/
 build/
 out/
 bin/
 node_modules/
 
-# IDE & Editor Files
+# IDE & editor files
 .idea/
 .vscode/
 *.iml
@@ -35,20 +85,22 @@ node_modules/
 .factorypath
 .apt_generated
 
-# Operating System Files
+# Operating system files
 .DS_Store
 Thumbs.db
 ehthumbs.db
 desktop.ini
 
-# Logs & Temporary Files
+# Logs & temporary files
 *.log
 logs/
 *.tmp
+*.swp
+*.swo
 
-# Agent
+# Agent / project metadata
 skills-lock.json
 .agents/
 
-# Note
+# Notes
 tech-note/

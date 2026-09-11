@@ -80,5 +80,7 @@ jwt:
 app:
   otp:
     ttl-minutes: ${OTP_TTL_MINUTES:5}
+  hold-duration:
+    hold-minutes: ${HOLD_DURATION_MINUTE:15}
   storage:
-    base-url: ${STORAGE_BASE_URL:http://localhost:9000/ticket-box-storage}
+    base-url: ${STORAGE_BASE_URL:http://localhost:9000/ticket-box-storage}

@@ -76,7 +76,7 @@ export function SeatSelectionPage() {
           concertTitle: data.title,
           artistName: data.artistName,
           coverImageUrl: data.coverImageUrl,
-          venueName: data.venue.name,
+          venueName: data.venue,
           startsAt: data.startsAt,
         };
         setCheckoutDraft(nextPending);
@@ -137,7 +137,7 @@ export function SeatSelectionPage() {
       concertTitle: concert.title,
       artistName: concert.artistName,
       coverImageUrl: concert.coverImageUrl,
-      venueName: concert.venue.name,
+      venueName: concert.venue,
       startsAt: concert.startsAt,
       items: selectedItems,
       totalPrice,
@@ -176,7 +176,7 @@ export function SeatSelectionPage() {
               <ImageWithFallback src={concert.coverImageUrl} alt={concert.title} className="h-full w-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#111118] to-transparent" />
               <div className="absolute bottom-4 left-4 right-4">
-                <p className="text-xs text-[#F5C842]">{formatDate(concert.startsAt)} - {concert.venue.name}</p>
+                <p className="text-xs text-[#F5C842]">{formatDate(concert.startsAt)} - {concert.venue}</p>
                 <h1 className="mt-1 text-2xl font-bold" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>{concert.title}</h1>
               </div>
             </div>

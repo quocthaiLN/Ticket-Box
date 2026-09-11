@@ -5,7 +5,7 @@ import com.ticketbox.api.infrastructure.response.ApiResponse;
 import com.ticketbox.api.module.auth.services.CustomUserDetails;
 import com.ticketbox.api.module.order.domain.dtos.CreateOrderRequest;
 import com.ticketbox.api.module.order.domain.dtos.HeldOrderResponse;
-import com.ticketbox.api.module.order.services.OrderIdempotencyService;
+import com.ticketbox.api.module.order.services.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,7 +25,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OrderController {
 
-    private final OrderIdempotencyService orderIdempotencyService;
+    private final OrderService orderService;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('AUDIENCE', 'ADMIN')")
@@ -34,9 +34,9 @@ public class OrderController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKeyHeader,
             @Valid @RequestBody CreateOrderRequest request) {
         UUID idempotencyKey = parseIdempotencyKey(idempotencyKeyHeader);
-        ApiResponse<HeldOrderResponse> response = orderIdempotencyService.createOrReplay(
-                userDetails.getUser(), idempotencyKey, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        HeldOrderResponse response = orderService.createHeldOrder(
+                userDetails.getUser(), idempotencyKey.toString(), request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
     private UUID parseIdempotencyKey(String header) {

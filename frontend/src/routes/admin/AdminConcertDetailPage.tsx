@@ -190,7 +190,14 @@ export function AdminConcertDetailPage() {
 }
 
 function InfoTab({ metadata }: { metadata: ConcertMetadata }) {
-  const { concert, venue, seat_zones: zones, ticket_types: ticketTypes } = metadata;
+  const { concert, seat_zones: zones, ticket_types: ticketTypes } = metadata;
+  const venueLabel =
+    typeof concert.venue === "string"
+      ? concert.venue
+      : metadata.venue
+        ? `${metadata.venue.name}, ${metadata.venue.city}`
+        : "Chưa có địa điểm";
+
   return (
     <div className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-3">
@@ -200,7 +207,7 @@ function InfoTab({ metadata }: { metadata: ConcertMetadata }) {
           label="Giờ diễn"
           value={`${formatTime(concert.starts_at)} - ${formatTime(concert.ends_at)}`}
         />
-        <InfoCard icon={<MapPin className="h-4 w-4 text-[#F5C842]" />} label="Địa điểm" value={`${venue.name}, ${venue.city}`} />
+        <InfoCard icon={<MapPin className="h-4 w-4 text-[#F5C842]" />} label="Địa điểm" value={venueLabel} />
       </div>
 
       <div className="rounded-2xl border border-white/[0.07] bg-[#111118] p-5">
@@ -236,15 +243,22 @@ function InfoTab({ metadata }: { metadata: ConcertMetadata }) {
                 </tr>
               </thead>
               <tbody>
-                {ticketTypes.map((ticketType) => (
-                  <tr key={ticketType.id} className="border-t border-white/[0.06]">
-                    <td className="px-2 py-2">{ticketType.name}</td>
-                    <td className="px-2 py-2 text-[#8585A0]">{ticketType.zone_code ?? "—"}</td>
-                    <td className="px-2 py-2 text-[#F5C842]">{formatCurrency(ticketType.price.amount)}</td>
-                    <td className="px-2 py-2 text-[#8585A0]">{ticketType.max_per_user}</td>
-                    <td className="px-2 py-2 text-[#8585A0]">{ticketType.status}</td>
-                  </tr>
-                ))}
+                {ticketTypes.map((ticketType) => {
+                  const priceAmount =
+                    typeof ticketType.price === "number"
+                      ? ticketType.price
+                      : ticketType.price.amount;
+
+                  return (
+                    <tr key={ticketType.id} className="border-t border-white/[0.06]">
+                      <td className="px-2 py-2">{ticketType.name}</td>
+                      <td className="px-2 py-2 text-[#8585A0]">{ticketType.zone_code ?? "—"}</td>
+                      <td className="px-2 py-2 text-[#F5C842]">{formatCurrency(priceAmount)}</td>
+                      <td className="px-2 py-2 text-[#8585A0]">{ticketType.max_per_user}</td>
+                      <td className="px-2 py-2 text-[#8585A0]">{ticketType.status}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

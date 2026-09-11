@@ -14,6 +14,7 @@ import com.ticketbox.api.module.order.domain.dtos.HeldOrderResponse;
 import com.ticketbox.api.module.order.domain.entities.Order;
 import com.ticketbox.api.module.order.repositories.OrderRepository;
 import com.ticketbox.api.module.order.repositories.UserTicketTypeCounterRepository;
+import com.ticketbox.api.module.shared.idempotency.IdempotencyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,17 +23,22 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -54,6 +60,12 @@ class OrderServiceImplTest {
 
     @Mock
     private OrderRepository orderRepository;
+
+    @Mock
+    private IdempotencyService idempotencyService;
+
+    @Mock
+    private TransactionTemplate transactionTemplate;
 
     @InjectMocks
     private OrderServiceImpl orderService;
@@ -83,6 +95,16 @@ class OrderServiceImplTest {
                 .build();
         firstTicketType = ticketType("00000000-0000-4000-8000-000000000001", 5, 4, new BigDecimal("100000"));
         secondTicketType = ticketType("ffffffff-ffff-4fff-8fff-ffffffffffff", 10, 4, new BigDecimal("200000"));
+
+        when(idempotencyService.execute(anyString(), anyString(), any(Duration.class), any(Class.class), any(), any()))
+                .thenAnswer(invocation -> {
+                    Supplier<?> action = invocation.getArgument(5);
+                    return action.get();
+                });
+        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
     }
 
     @Test
@@ -120,6 +142,9 @@ class OrderServiceImplTest {
         locks.verify(ticketTypeRepository).findByIdForUpdate(secondTicketType.getId());
         verify(counterRepository, times(2)).save(any());
         verify(orderRepository).save(any(Order.class));
+        verify(idempotencyService).execute(eq("idempotency:hold:c41e9a00-1111-4111-8111-111111111111"), anyString(),
+                eq(orderService.getHoldTtl()), eq(HeldOrderResponse.class), any(), any());
+        verify(transactionTemplate).execute(any());
     }
 
     @Test

@@ -74,14 +74,14 @@ export function ConcertDetailPage() {
 
     // Chưa tạo checkout trong browser ở bước này. Draft chỉ được chuyển sang
     // trang checkout sau khi user chọn vé; order chỉ được lưu sau khi API tạo thành công.
-    navigate(`/concerts/${currentConcert.slug}/seats`);
+    navigate(`/concerts/${currentConcert.id}/seats`);
   }
 
   return (
     <>
       <ConcertDetailView concert={concert} onBuyTickets={handleBuyTickets} />
       {showLoginPrompt && (
-        <LoginPrompt concertSlug={concert.slug} onClose={() => setShowLoginPrompt(false)} />
+        <LoginPrompt concertSlug={concert.id} onClose={() => setShowLoginPrompt(false)} />
       )}
     </>
   );
@@ -162,7 +162,7 @@ export function ConcertDetailView({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <InfoBlock icon={<Calendar className="h-5 w-5 text-[#F5C842]" />} label="Ngày diễn" value={formatDate(concert.startsAt)} />
             <InfoBlock icon={<Clock className="h-5 w-5 text-[#F5C842]" />} label="Giờ diễn" value={`${formatTime(concert.startsAt)} - ${formatTime(concert.endsAt)}`} />
-            <InfoBlock icon={<MapPin className="h-5 w-5 text-[#F5C842]" />} label="Địa điểm" value={`${concert.venue.name}, ${concert.venue.city}`} />
+            <InfoBlock icon={<MapPin className="h-5 w-5 text-[#F5C842]" />} label="Địa điểm" value={concert.venue} />
           </div>
 
           <div>
@@ -200,10 +200,13 @@ export function ConcertDetailView({
                     <DetailRow label="Mở cửa đón khách" value={formatTime(doorOpenTime.toISOString())} />
                     <DetailRow label="Bắt đầu chương trình" value={formatTime(concert.startsAt)} />
                     <DetailRow label="Dự kiến kết thúc" value={formatTime(concert.endsAt)} />
-                    <DetailRow label="Địa điểm" value={concert.venue.name} />
-                    <DetailRow label="Thành phố" value={concert.venue.city} />
-                    <DetailRow label="Địa chỉ" value={concert.venue.address || "Đang cập nhật"} />
-                    <DetailRow label="Sức chứa" value={`${concert.venue.capacity.toLocaleString("vi-VN")} khán giả`} />
+                    <DetailRow label="Địa điểm" value={concert.venue} />
+                    {concert.seatZones.length > 0 && (
+                      <DetailRow
+                        label="Sức chứa"
+                        value={`${concert.seatZones.reduce((sum, z) => sum + z.capacity, 0).toLocaleString("vi-VN")} khán giả`}
+                      />
+                    )}
                   </div>
                 </Panel>
 

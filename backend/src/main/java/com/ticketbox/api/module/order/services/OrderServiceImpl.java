@@ -18,16 +18,24 @@ import com.ticketbox.api.module.order.domain.entities.UserTicketTypeCounter;
 import com.ticketbox.api.module.order.domain.entities.UserTicketTypeCounterId;
 import com.ticketbox.api.module.order.repositories.OrderRepository;
 import com.ticketbox.api.module.order.repositories.UserTicketTypeCounterRepository;
+import com.ticketbox.api.module.shared.idempotency.IdempotencyService;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -36,16 +44,39 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
 
-    public static final Duration HOLD_TTL = Duration.ofSeconds(900);
+    @Value("${app.hold-duration.hold-minutes:15}")
+    private long holdMinutes = 15;
+
+    private static final String IDEMPOTENCY_KEY_PREFIX = "idempotency:hold:";
 
     private final ConcertRepository concertRepository;
     private final TicketTypeRepository ticketTypeRepository;
     private final UserTicketTypeCounterRepository counterRepository;
     private final OrderRepository orderRepository;
+    private final IdempotencyService idempotencyService;
+    private final TransactionTemplate transactionTemplate;
+
+    public Duration getHoldTtl() {
+        return Duration.ofMinutes(holdMinutes);
+    }
 
     @Override
-    @Transactional
     public HeldOrderResponse createHeldOrder(User currentUser, String idempotencyKey, CreateOrderRequest request) {
+        String fingerprint = fingerprint(currentUser, request);
+        String redisKey = IDEMPOTENCY_KEY_PREFIX + idempotencyKey;
+
+        return idempotencyService.execute(
+                redisKey,
+                fingerprint,
+                getHoldTtl(),
+                HeldOrderResponse.class,
+                () -> findExistingOrder(currentUser, idempotencyKey, request),
+                () -> transactionTemplate
+                        .execute(status -> executeCreateHeldOrder(currentUser, idempotencyKey, request)));
+    }
+
+    private HeldOrderResponse executeCreateHeldOrder(User currentUser, String idempotencyKey,
+            CreateOrderRequest request) {
         List<CreateOrderItemRequest> sortedItems = validateAndSortItems(request);
         Concert concert = concertRepository.findById(request.getConcertId())
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "CONCERT_NOT_FOUND", "Concert not found"));
@@ -65,7 +96,7 @@ public class OrderServiceImpl implements OrderService {
             reserveInventoryAndQuota(currentUser, item.ticketType(), item.request().getQuantity());
         }
 
-        LocalDateTime holdExpiresAt = now.plus(HOLD_TTL);
+        LocalDateTime holdExpiresAt = now.plus(getHoldTtl());
         Order order = Order.builder()
                 .user(currentUser)
                 .concert(concert)
@@ -78,7 +109,8 @@ public class OrderServiceImpl implements OrderService {
 
         BigDecimal totalAmount = BigDecimal.ZERO;
         for (LockedItem item : lockedItems) {
-            BigDecimal lineTotal = item.ticketType().getPrice().multiply(BigDecimal.valueOf(item.request().getQuantity()));
+            BigDecimal lineTotal = item.ticketType().getPrice()
+                    .multiply(BigDecimal.valueOf(item.request().getQuantity()));
             OrderItem orderItem = OrderItem.builder()
                     .order(order)
                     .ticketType(item.ticketType())
@@ -98,7 +130,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public java.util.Optional<HeldOrderResponse> findExistingOrder(User currentUser, String idempotencyKey,
-                                                                    CreateOrderRequest request) {
+            CreateOrderRequest request) {
         return orderRepository.findByIdempotencyKey(idempotencyKey)
                 .map(order -> {
                     if (!matchesExistingOrder(order, currentUser, request)) {
@@ -130,14 +162,15 @@ public class OrderServiceImpl implements OrderService {
         }
 
         return order.getOrderItems().stream()
-                .allMatch(orderItem -> request.getItems().stream().anyMatch(requestItem ->
-                        requestItem.getTicketTypeId().equals(orderItem.getTicketType().getId())
+                .allMatch(orderItem -> request.getItems().stream()
+                        .anyMatch(requestItem -> requestItem.getTicketTypeId().equals(orderItem.getTicketType().getId())
                                 && requestItem.getQuantity().equals(orderItem.getQuantity())));
     }
 
     private TicketType lockAndValidateTicketType(CreateOrderItemRequest request, Concert concert, LocalDateTime now) {
         TicketType ticketType = ticketTypeRepository.findByIdForUpdate(request.getTicketTypeId())
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "TICKET_TYPE_NOT_FOUND", "Ticket type not found"));
+                .orElseThrow(
+                        () -> new AppException(HttpStatus.NOT_FOUND, "TICKET_TYPE_NOT_FOUND", "Ticket type not found"));
 
         if (!ticketType.getConcert().getId().equals(concert.getId())) {
             throw new AppException(HttpStatus.BAD_REQUEST, "INVALID_CHECKOUT_REQUEST",
@@ -198,6 +231,20 @@ public class OrderServiceImpl implements OrderService {
                 .holdExpiresAt(order.getHoldExpiresAt())
                 .createdAt(order.getCreatedAt())
                 .build();
+    }
+
+    private String fingerprint(User currentUser, CreateOrderRequest request) {
+        String payload = currentUser.getId() + "|" + request.getConcertId() + "|"
+                + request.getItems().stream()
+                        .sorted(Comparator.comparing(item -> item.getTicketTypeId().toString()))
+                        .map(item -> item.getTicketTypeId() + ":" + item.getQuantity())
+                        .reduce("", (left, right) -> left + "|" + right);
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(payload.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 must be available", exception);
+        }
     }
 
     private record LockedItem(CreateOrderItemRequest request, TicketType ticketType) {

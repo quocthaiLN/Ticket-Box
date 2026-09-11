@@ -18,10 +18,12 @@ import {
 export type LoadEventsInput = {
   search?: string;
   city?: string;
+  page?: number;
+  size?: number;
 };
 
 export async function getHomeCatalogConcerts(): Promise<UiConcert[]> {
-  const concerts = await listConcerts({ sort: "starts_at" });
+  const concerts = await listConcerts({ sortBy: "startsAt", sortOrder: "asc", size: 20 });
   return concerts.map(mapSummaryConcert);
 }
 
@@ -29,7 +31,10 @@ export async function getEventsCatalog(input: LoadEventsInput = {}): Promise<UiC
   const concerts = await listConcerts({
     q: input.search ?? "",
     city: input.city === "all" ? "" : input.city ?? "",
-    sort: "starts_at",
+    sortBy: "startsAt",
+    sortOrder: "asc",
+    page: input.page ?? 0,
+    size: input.size ?? 50,
   });
 
   return concerts.map(mapSummaryConcert);
@@ -60,7 +65,6 @@ export async function getCatalogTicketQuota(concertId: string): Promise<TicketQu
 function emptyMetadata(concert: ConcertDetail): ConcertMetadata {
   return {
     concert,
-    venue: concert.venue,
     seat_zones: [],
     ticket_types: [],
     seat_map: {
@@ -78,8 +82,19 @@ function emptyInventory(concertId: string): Inventory {
   };
 }
 
+const POPULAR_CITIES = ["Hà Nội", "TP. Hồ Chí Minh", "Đà Nẵng"];
+
 export function getCityFilters(concerts: UiConcert[], allLabel = "All") {
-  return [allLabel, ...Array.from(new Set(concerts.map((concert) => concert.venue.city))).sort()];
+  const found = new Set<string>();
+  for (const concert of concerts) {
+    for (const city of POPULAR_CITIES) {
+      if (concert.venue.toLowerCase().includes(city.toLowerCase())) {
+        found.add(city);
+      }
+    }
+  }
+  const list = found.size > 0 ? Array.from(found) : POPULAR_CITIES;
+  return [allLabel, ...list];
 }
 
 export function filterHomeConcerts(
@@ -94,8 +109,10 @@ export function filterHomeConcerts(
       !query ||
       concert.title.toLowerCase().includes(query) ||
       concert.artistName.toLowerCase().includes(query) ||
-      concert.venue.city.toLowerCase().includes(query);
-    const matchesFilter = input.activeFilter === allLabel || concert.venue.city === input.activeFilter;
+      concert.venue.toLowerCase().includes(query);
+    const matchesFilter =
+      input.activeFilter === allLabel ||
+      concert.venue.toLowerCase().includes(input.activeFilter.toLowerCase());
 
     return matchesSearch && matchesFilter;
   });

@@ -5,8 +5,19 @@ import {
   type AuthUser,
 } from "./auth-session";
 
+export type PaginationMeta = {
+  page?: number;
+  page_size?: number;
+  total_items?: number;
+  total_pages?: number;
+  has_more?: boolean;
+  next_cursor?: string | null;
+  limit?: number;
+};
+
 export type ApiResponse<TData> = {
   data: TData;
+  pagination?: PaginationMeta;
   meta: {
     request_id: string;
     [key: string]: unknown;
@@ -14,11 +25,7 @@ export type ApiResponse<TData> = {
 };
 
 export type ApiCollectionResponse<TData> = ApiResponse<TData[]> & {
-  pagination: {
-    next_cursor: string | null;
-    has_more: boolean;
-    limit: number;
-  };
+  pagination: PaginationMeta;
 };
 
 export type Venue = {
@@ -43,11 +50,13 @@ export type ConcertSummary = {
   status: ConcertStatus;
   cover_image_url?: string;
   guest_drive_folder_id?: string;
-  venue: Pick<Venue, "id" | "name" | "city">;
+  venue: string | Pick<Venue, "id" | "name" | "city">;
+  organizer_id?: string;
+  organizer_name?: string;
   ticket_price_range?: {
     min_amount: number;
     max_amount: number;
-    currency: "VND";
+    currency: string;
   };
 };
 
@@ -58,20 +67,31 @@ export type ConcertArtist = {
   image_url: string | null;
 };
 
-export type ConcertDetail = ConcertSummary & {
+export type ConcertDetail = {
+  id: string;
+  title: string;
+  slug: string;
+  venue: string | Venue;
   description?: string;
+  artist_name: string;
   artist_bio?: string;
   artist_bio_image_url?: string;
   artists?: ConcertArtist[];
-  // SVG tương tác — chỉ dùng ở trang mua vé.
+  starts_at: string;
+  ends_at: string;
+  status: ConcertStatus;
+  cover_image_url?: string;
   seat_map_url?: string;
-  // Ảnh PNG/JPEG — trang thông tin concert.
   seat_map_image_url?: string;
-  venue: Venue;
+  organizer_id?: string;
+  organizer_name?: string;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export type SeatZone = {
   id: string;
+  concert_id?: string;
   code: string;
   name: string;
   description?: string;
@@ -87,14 +107,26 @@ export type TicketType = {
   zone_code?: string;
   name: string;
   description?: string;
-  price: {
+  price: number | {
     amount: number;
     currency: "VND";
   };
+  currency?: string;
+  total_quantity?: number;
+  held_quantity?: number;
+  sold_quantity?: number;
+  available_quantity?: number;
   max_per_user: number;
-  sale_start_at: string;
-  sale_end_at: string;
-  status: "DRAFT" | "ON_SALE" | "SOLD_OUT" | "CLOSED";
+  sale_start_at?: string;
+  sale_end_at?: string;
+  status: "DRAFT" | "ON_SALE" | "SOLD_OUT" | "CLOSED" | string;
+};
+
+export type SeatMapResponse = {
+  concert_id: string;
+  svg_url?: string;
+  fallback_image_url?: string;
+  zones: SeatZone[];
 };
 
 export type Inventory = {
@@ -105,13 +137,14 @@ export type Inventory = {
     seat_zone_id: string;
     zone_code: string;
     available_quantity: number;
-    status: "ON_SALE" | "SOLD_OUT" | "CLOSED";
+    status: "ON_SALE" | "SOLD_OUT" | "CLOSED" | string;
     display_status:
       | "AVAILABLE"
       | "LOW_STOCK"
       | "SOLD_OUT"
       | "CLOSED"
-      | "UPDATING";
+      | "UPDATING"
+      | string;
   }>;
 };
 
@@ -130,7 +163,7 @@ export type TicketQuota = {
 
 export type ConcertMetadata = {
   concert: ConcertDetail;
-  venue: Venue;
+  venue?: Venue;
   seat_zones: SeatZone[];
   ticket_types: TicketType[];
   seat_map: {
@@ -198,9 +231,27 @@ export async function apiUploadFile<TData>(
   });
 }
 
-export async function listConcerts(params: Record<string, string> = {}) {
-  const response = await apiGet<ApiCollectionResponse<ConcertSummary>>(
-    `/concerts${queryString(params)}`,
+export type ListConcertsParams = {
+  q?: string;
+  city?: string;
+  from?: string;
+  to?: string;
+  page?: number | string;
+  size?: number | string;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc" | string;
+  [key: string]: unknown;
+};
+
+export async function listConcerts(params: ListConcertsParams = {}) {
+  const queryParams: Record<string, string> = {};
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && String(value).trim().length > 0) {
+      queryParams[key] = String(value);
+    }
+  }
+  const response = await apiGet<ApiResponse<ConcertSummary[]>>(
+    `/concerts${queryString(queryParams)}`,
   );
   return response.data;
 }
@@ -219,12 +270,19 @@ export async function getConcertMetadata(concertId: string) {
   return response.data;
 }
 
+export async function getConcertSeatMap(concertId: string) {
+  const response = await apiGet<ApiResponse<SeatMapResponse>>(
+    `/concerts/${concertId}/seat-map`,
+  );
+  return response.data;
+}
+
 export async function listTicketTypes(
   concertId: string,
   includeClosed = false,
 ) {
   const response = await apiGet<ApiResponse<TicketType[]>>(
-    `/concerts/${concertId}/ticket-types${includeClosed ? "?include_closed=true" : ""}`,
+    `/concerts/${concertId}/ticket-types${includeClosed ? "?includeClosed=true" : ""}`,
   );
   return response.data;
 }

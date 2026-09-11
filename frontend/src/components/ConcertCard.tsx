@@ -20,7 +20,7 @@ export function ConcertCard({ concert, featured = false }: ConcertCardProps) {
 
   return (
     <Link
-      to={`/concerts/${concert.slug}`}
+      to={`/concerts/${concert.id}`}
       className="group block overflow-hidden rounded-2xl bg-[#111118] transition-all duration-300 hover:-translate-y-1 hover:border-amber-300/30 hover:shadow-2xl hover:shadow-black/40"
       style={{ border: "1px solid rgba(255,255,255,0.07)" }}
     >
@@ -72,7 +72,7 @@ export function ConcertCard({ concert, featured = false }: ConcertCardProps) {
           <div className="flex items-center gap-1.5 text-xs text-[#8585A0]">
             <MapPin className="h-3.5 w-3.5 shrink-0 text-[#F5C842]" />
             <span className="min-w-0 break-words">
-              {concert.venue.name}, {concert.venue.city}
+              {concert.venue}
             </span>
           </div>
         </div>

@@ -67,7 +67,7 @@ export type UiConcert = {
   seatMapImageUrl?: string;
   genre: string;
   tags: string[];
-  venue: UiVenue;
+  venue: string;
   ticketTypes: UiTicketType[];
   seatZones: UiSeatZone[];
   minPrice: number | null;
@@ -75,8 +75,22 @@ export type UiConcert = {
 
 const zoneColors = ["#F5C842", "#E8315B", "#7B61FF", "#2DBE6C", "#26A7DE", "#F97316"];
 
+export function formatVenue(venue: unknown): string {
+  if (typeof venue === "string") return venue;
+  if (venue && typeof venue === "object") {
+    const v = venue as Record<string, unknown>;
+    if (typeof v.name === "string" && typeof v.city === "string") {
+      return `${v.name}, ${v.city}`;
+    }
+    if (typeof v.name === "string") return v.name;
+    if (typeof v.city === "string") return v.city;
+  }
+  return "";
+}
+
 export function mapSummaryConcert(concert: ConcertSummary): UiConcert {
   const minPrice = concert.ticket_price_range?.min_amount ?? null;
+  const venueStr = formatVenue(concert.venue);
 
   return {
     id: concert.id,
@@ -92,14 +106,8 @@ export function mapSummaryConcert(concert: ConcertSummary): UiConcert {
     status: concert.status,
     coverImageUrl: resolveCatalogImageUrl(concert.cover_image_url),
     genre: "Live Music",
-    tags: [concert.venue.city],
-    venue: {
-      id: concert.venue.id,
-      name: concert.venue.name,
-      address: "",
-      city: concert.venue.city,
-      capacity: 0,
-    },
+    tags: venueStr ? [venueStr] : [],
+    venue: venueStr,
     ticketTypes:
       minPrice === null
         ? []
@@ -136,17 +144,21 @@ export function mapDetailConcert(
     const item = inventoryByTicketType.get(ticketType.id);
     const availableQuantity = item?.available_quantity ?? null;
     const color = zoneById.get(ticketType.seat_zone_id)?.color ?? zoneColors[index % zoneColors.length];
+    const priceNum =
+      typeof ticketType.price === "number"
+        ? ticketType.price
+        : (ticketType.price as { amount?: number })?.amount ?? 0;
 
     return {
       id: ticketType.id,
       seatZoneId: ticketType.seat_zone_id,
       zoneCode: ticketType.zone_code ?? item?.zone_code ?? "",
       name: ticketType.name,
-      price: ticketType.price.amount,
+      price: priceNum,
       maxPerUser: ticketType.max_per_user,
-      status: ticketType.status,
+      status: ticketType.status as TicketType["status"],
       availableQuantity,
-      soldPercent: estimateSoldPercent(availableQuantity, ticketType.status),
+      soldPercent: estimateSoldPercent(availableQuantity, ticketType.status as TicketType["status"]),
       color,
       saleStartAt: ticketType.sale_start_at,
       saleEndAt: ticketType.sale_end_at,
@@ -166,6 +178,8 @@ export function mapDetailConcert(
         }))
       : [{ name: concert.artist_name, bio: artistBio, imageUrl: artistBioImageUrl }];
 
+  const venueStr = formatVenue(concert.venue);
+
   return {
     id: concert.id,
     slug: concert.slug || concert.id,
@@ -179,17 +193,11 @@ export function mapDetailConcert(
     endsAt: concert.ends_at,
     status: concert.status,
     coverImageUrl: resolveCatalogImageUrl(concert.cover_image_url),
-    seatMapUrl: concert.seat_map_url ?? metadata.seat_map.svg_url,
-    seatMapImageUrl: concert.seat_map_image_url ?? metadata.seat_map.fallback_image_url,
+    seatMapUrl: concert.seat_map_url ?? metadata.seat_map?.svg_url,
+    seatMapImageUrl: concert.seat_map_image_url ?? metadata.seat_map?.fallback_image_url,
     genre: "Live Music",
-    tags: [concert.venue.city],
-    venue: {
-      id: concert.venue.id,
-      name: concert.venue.name,
-      address: concert.venue.address,
-      city: concert.venue.city,
-      capacity: concert.venue.capacity ?? zones.reduce((sum, zone) => sum + zone.capacity, 0),
-    },
+    tags: venueStr ? [venueStr] : [],
+    venue: venueStr,
     ticketTypes,
     seatZones: zones,
     minPrice:

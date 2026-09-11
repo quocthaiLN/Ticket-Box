@@ -1,0 +1,206 @@
+{
+  "info": {
+    "_postman_id": "e493d5a5-2f23-454f-a5f7-7c1a65e028c3",
+    "name": "TicketBox - Public Catalog API",
+    "description": "Collection for testing public Catalog module endpoints (PublicConcertController).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Public Catalog",
+      "item": [
+        {
+          "name": "List Published Concerts",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/concerts?page=0&size=20&sortBy=startsAt&sortOrder=asc",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "concerts"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "startsAt"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "asc"
+                },
+                {
+                  "key": "q",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Searches title and artist name."
+                },
+                {
+                  "key": "city",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Matches text in the venue."
+                },
+                {
+                  "key": "from",
+                  "value": "2026-10-01T00:00:00",
+                  "disabled": true,
+                  "description": "ISO-8601 start-time lower bound."
+                },
+                {
+                  "key": "to",
+                  "value": "2026-12-31T23:59:59",
+                  "disabled": true,
+                  "description": "ISO-8601 start-time upper bound."
+                }
+              ]
+            },
+            "description": "Returns a paginated list of PUBLISHED concerts. Enable optional query parameters as needed."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Concert Detail",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/concerts/{{concert_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "concerts",
+                "{{concert_id}}"
+              ]
+            },
+            "description": "Returns the detail for a PUBLISHED concert."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Concert Metadata",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/concerts/{{concert_id}}/metadata",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "concerts",
+                "{{concert_id}}",
+                "metadata"
+              ]
+            },
+            "description": "Returns concert detail, seat zones, ticket types and public seat-map URLs."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Concert Seat Map",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/concerts/{{concert_id}}/seat-map",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "concerts",
+                "{{concert_id}}",
+                "seat-map"
+              ]
+            },
+            "description": "Returns seat-map asset URLs and ordered seat zones."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Concert Ticket Types",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/concerts/{{concert_id}}/ticket-types?includeClosed=false",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "concerts",
+                "{{concert_id}}",
+                "ticket-types"
+              ],
+              "query": [
+                {
+                  "key": "includeClosed",
+                  "value": "false",
+                  "description": "Set true to include DRAFT and SUSPENDED ticket types."
+                }
+              ]
+            },
+            "description": "Returns the ticket types for a PUBLISHED concert."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Concert Inventory",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/concerts/{{concert_id}}/inventory",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "concerts",
+                "{{concert_id}}",
+                "inventory"
+              ]
+            },
+            "description": "Returns the current inventory snapshot and display status for each ticket type."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "concert_id",
+      "value": "a1111111-1111-1111-1111-111111111111",
+      "type": "string"
+    }
+  ]
+}

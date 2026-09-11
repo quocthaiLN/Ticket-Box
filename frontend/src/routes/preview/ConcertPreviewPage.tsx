@@ -7,6 +7,7 @@ import {
   type ConcertDetail,
   type ConcertMetadata,
   type Inventory,
+  type Venue,
 } from "../../lib/api-client";
 import { mapDetailConcert, type UiConcert } from "../../lib/catalog-ui";
 import {
@@ -105,7 +106,7 @@ async function loadAdminPreview(concertId: string): Promise<UiConcert> {
     artist_bio_image_url: metadata.artist_bio_image_url,
     seat_map_url: metadata.seat_map.svg_url,
     seat_map_image_url: metadata.seat_map.fallback_image_url,
-    venue: metadata.venue,
+    venue: metadata.venue ?? metadata.concert.venue ?? "",
   };
 
   return mapDetailConcert(detail, metadata, emptyInventory(detail.id));
@@ -136,7 +137,7 @@ async function loadOrganizerPreview(concertId: string): Promise<UiConcert> {
   };
   const metadata: ConcertMetadata = {
     concert: detail,
-    venue: detail.venue,
+    venue: typeof detail.venue === "object" && detail.venue !== null && "city" in detail.venue ? (detail.venue as Venue) : undefined,
     seat_zones: concert.seat_zones,
     ticket_types: concert.ticket_types.map((ticketType) => ({
       id: ticketType.id,
