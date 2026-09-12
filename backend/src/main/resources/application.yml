@@ -14,6 +14,7 @@ spring:
           google:
             client-id: ${GOOGLE_CLIENT_ID:your_google_client_id}
             client-secret: ${GOOGLE_CLIENT_SECRET:your_google_client_secret}
+            scope: openid, profile, email
 
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/ticketbox}
@@ -78,6 +79,9 @@ jwt:
   refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:2592000000}
 
 app:
+  oauth2:
+    success-redirect-uri: ${OAUTH2_SUCCESS_REDIRECT_URI:http://localhost:3001/oauth2/callback}
+    failure-redirect-uri: ${OAUTH2_FAILURE_REDIRECT_URI:http://localhost:3001/login?error=oauth2}
   otp:
     ttl-minutes: ${OTP_TTL_MINUTES:5}
   hold-duration:

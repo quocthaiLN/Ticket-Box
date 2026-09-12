@@ -9,6 +9,7 @@ import { AdminConcertDetailPage } from "./routes/admin/AdminConcertDetailPage";
 import { AdminHomePage } from "./routes/admin/AdminHomePage";
 import { AdminOrganizerRequestReviewPage, AdminOrganizerRequestsPage } from "./routes/admin/AdminOrganizerRequestsPage";
 import { AuthPage } from "./routes/auth/AuthPage";
+import { OAuth2CallbackPage } from "./routes/auth/OAuth2CallbackPage";
 import { AudienceHomePage } from "./routes/audience/AudienceHomePage";
 import { ConcertDetailPage } from "./routes/audience/ConcertDetailPage";
 import { CheckoutPage } from "./routes/audience/CheckoutPage";
@@ -57,6 +58,10 @@ const router = createBrowserRouter([
       {
         path: "register",
         element: <AuthPage mode="register" />
+      },
+      {
+        path: "oauth2/callback",
+        element: <OAuth2CallbackPage />
       },
       {
         path: "admin",

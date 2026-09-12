@@ -12,6 +12,10 @@ export default defineConfig({
         target: "http://localhost:8080",
         changeOrigin: true
       },
+      "/oauth2/authorization": {
+        target: "http://localhost:8080",
+        changeOrigin: true
+      },
       "/concerts": {
         target: "http://localhost:8080",
         changeOrigin: true

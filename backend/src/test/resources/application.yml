@@ -1,4 +1,13 @@
 spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: test-google-client-id
+            client-secret: test-google-client-secret
+            scope: openid, profile, email
+
   datasource:
     url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL;CASE_INSENSITIVE_IDENTIFIERS=TRUE
     username: sa
@@ -24,3 +33,8 @@ jwt:
   access-token-expiration: 900000
   refresh-token: ccd0c7a7b168a1fe1a719e0afa3ad66b0a2afb6fba8bf0f877faa1e855349a66
   refresh-token-expiration: 2592000000
+
+app:
+  oauth2:
+    success-redirect-uri: http://localhost:3001/oauth2/callback
+    failure-redirect-uri: http://localhost:3001/login?error=oauth2

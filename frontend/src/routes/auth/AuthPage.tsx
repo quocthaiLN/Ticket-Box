@@ -10,7 +10,7 @@ import {
   User,
 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiClientError } from "../../lib/api-client";
 import { login, register, resendOtp, verifyOtp } from "../../services/auth.service";
 import type { AuthUser } from "../../lib/auth-session";
@@ -64,6 +64,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const [otpLoading, setOtpLoading] = useState(false);
   const [registerStep, setRegisterStep] = useState<RegisterStep>("form");
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     if (otpCooldown <= 0) return;
@@ -76,6 +77,12 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     setError("");
     setOtpCooldown(0);
   }, [mode]);
+
+  useEffect(() => {
+    if (searchParams.get("error") === "oauth2") {
+      setError("Đăng nhập Google không thành công. Vui lòng thử lại.");
+    }
+  }, [searchParams]);
 
   async function handleResendOtp() {
     if (!EMAIL_PATTERN.test(form.email)) {
@@ -193,6 +200,11 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     } else {
       navigate(auth.redirect_to ?? nextPathForUser(auth.user), { replace: true });
     }
+  }
+
+  function handleGoogleLogin() {
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
+    window.location.assign(`${apiBaseUrl}/oauth2/authorization/google`);
   }
 
   const isLogin = mode === "login";
@@ -376,7 +388,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             className="mb-6 grid gap-2"
             style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)" }}
           >
-            <SocialButton icon="G" label="Google" />
+            <SocialButton icon={<GoogleIcon />} label="Google" onClick={handleGoogleLogin} />
             <SocialButton icon="F" label="Facebook" />
           </div>
 
@@ -676,10 +688,11 @@ function PasswordField({
   );
 }
 
-function SocialButton({ icon, label }: { icon: string; label: string }) {
+function SocialButton({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick?: () => void }) {
   return (
     <button
       type="button"
+      onClick={onClick}
       className="auth-social-button flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm transition-colors"
       style={{
         background: "rgba(255,255,255,0.05)",
@@ -697,6 +710,17 @@ function SocialButton({ icon, label }: { icon: string; label: string }) {
       </span>
       {label}
     </button>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
+      <path fill="#4285F4" d="M21.8 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.5a4.7 4.7 0 0 1-2 3.1v2.5h3.2c1.9-1.8 3.1-4.3 3.1-7.4Z" />
+      <path fill="#34A853" d="M12 22c2.7 0 5-.9 6.7-2.4l-3.2-2.5c-.9.6-2 .9-3.5.9-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22Z" />
+      <path fill="#FBBC05" d="M6.4 13.9a6 6 0 0 1 0-3.8V7.5H3.1a10 10 0 0 0 0 9l3.3-2.6Z" />
+      <path fill="#EA4335" d="M12 6c1.5 0 2.9.5 3.9 1.5l2.9-2.9C17 2.9 14.7 2 12 2a10 10 0 0 0-8.9 5.5l3.3 2.6C7.2 7.8 9.4 6 12 6Z" />
+    </svg>
   );
 }
 

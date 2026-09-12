@@ -160,6 +160,42 @@ class UserServiceTest {
     }
 
     @Test
+    void loginWithGoogle_createsActiveUserAndGoogleAccount() {
+        String googleSubject = "google-subject";
+        when(userAccountRepository.findByProviderAndProviderUserId(UserProvider.GOOGLE, googleSubject))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByEmail("google@example.com")).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenReturn(sampleUser);
+        when(jwtUtils.generateAccessToken(sampleUser.getId(), "AUDIENCE")).thenReturn("google_access_token");
+        when(jwtUtils.generateRefreshToken(sampleUser.getId(), "AUDIENCE")).thenReturn("google_refresh_token");
+        when(jwtUtils.getAccessTokenExpirationMillis()).thenReturn(900000L);
+
+        LoginResponse response = userService.loginWithGoogle(googleSubject, "google@example.com", "Google User");
+
+        assertEquals("google_access_token", response.getAccessToken());
+        verify(userRepository).save(any(User.class));
+        verify(userAccountRepository).save(argThat(account ->
+                account.getProvider() == UserProvider.GOOGLE
+                        && googleSubject.equals(account.getProviderUserId())
+                        && account.getPasswordHash() == null));
+    }
+
+    @Test
+    void loginWithGoogle_rejectsDisabledAccount() {
+        sampleUser.setStatus(UserStatus.SUSPENDED);
+        sampleAccount.setProvider(UserProvider.GOOGLE);
+        sampleAccount.setProviderUserId("google-subject");
+        when(userAccountRepository.findByProviderAndProviderUserId(UserProvider.GOOGLE, "google-subject"))
+                .thenReturn(Optional.of(sampleAccount));
+
+        AppException ex = assertThrows(AppException.class,
+                () -> userService.loginWithGoogle("google-subject", "test@example.com", "Test User"));
+
+        assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatus());
+        assertEquals("ACCOUNT_DISABLED", ex.getErrorCode());
+    }
+
+    @Test
     void logout_blacklistsRefreshToken() {
         String refreshToken = "valid_refresh_token";
         when(jwtUtils.validateRefreshToken(refreshToken)).thenReturn(true);

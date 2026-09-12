@@ -3,6 +3,9 @@ package com.ticketbox.api.infrastructure.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketbox.api.infrastructure.response.ErrorResponse;
 import com.ticketbox.api.infrastructure.security.JwtFilter;
+import com.ticketbox.api.infrastructure.security.OidcFailureHandler;
+import com.ticketbox.api.infrastructure.security.OidcSuccessHandler;
+
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,9 +31,14 @@ public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
     private final ObjectMapper objectMapper;
+    private final OidcFailureHandler oidcFailureHandler;
+    private final OidcSuccessHandler oidcSuccessHandler;
 
-    public SecurityConfig(JwtFilter jwtFilter) {
+    public SecurityConfig(JwtFilter jwtFilter, OidcSuccessHandler oidcSuccessHandler,
+                          OidcFailureHandler oidcFailureHandler) {
         this.jwtFilter = jwtFilter;
+        this.oidcSuccessHandler = oidcSuccessHandler;
+        this.oidcFailureHandler = oidcFailureHandler;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -51,10 +59,15 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/verify-otp", "/auth/resend-otp",
                                 "/auth/login", "/auth/refresh")
                         .permitAll()
+                        .requestMatchers("/oauth2/**", "/login/oauth2/**")
+                        .permitAll()
                         .requestMatchers(HttpMethod.GET, "/concerts/**")
                         .permitAll()
                         .requestMatchers("/admin/**").hasAnyRole("ADMIN")
                         .anyRequest().authenticated())
+                .oauth2Login(oauth2 -> oauth2
+                        .successHandler(oidcSuccessHandler)
+                        .failureHandler(oidcFailureHandler))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

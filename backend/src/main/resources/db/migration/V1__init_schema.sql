@@ -33,7 +33,7 @@ CREATE INDEX idx_users_status ON users(status);
 CREATE TABLE user_accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
-    password_hash TEXT NOT NULL,
+    password_hash TEXT,
     provider TEXT NOT NULL,
     provider_user_id TEXT NOT NULL,
     user_account_status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
@@ -41,6 +41,9 @@ CREATE TABLE user_accounts (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMPTZ,
     CONSTRAINT fk_user_accounts_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT uk_user_accounts_provider_provider_user_id UNIQUE (provider, provider_user_id),
+    CONSTRAINT chk_user_accounts_local_password_hash
+        CHECK (provider <> 'LOCAL' OR (password_hash IS NOT NULL AND BTRIM(password_hash) <> '')),
     CONSTRAINT chk_user_accounts_status CHECK (user_account_status IN ('ACTIVE', 'SUSPENDED', 'DELETED'))
 );
 

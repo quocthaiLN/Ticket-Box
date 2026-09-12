@@ -31,7 +31,6 @@ public class UserAccount {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @NotBlank(message = "Password cannot be blank")
     @Column(name = "password_hash", nullable = true, columnDefinition = "TEXT")
     private String passwordHash;
 

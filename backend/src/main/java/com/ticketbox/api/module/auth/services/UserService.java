@@ -17,6 +17,8 @@ public interface UserService {
 
     LoginResponse login(LoginRequest request);
 
+    LoginResponse loginWithGoogle(String providerUserId, String email, String fullName);
+
     void logout(String accessToken);
 
     LoginResponse refreshToken(String refreshToken);

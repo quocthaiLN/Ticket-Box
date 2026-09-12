@@ -181,16 +181,21 @@ public class UserServiceImpl implements UserService {
             throw new AppException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Invalid email or password");
         }
 
-        String accessToken = jwtUtils.generateAccessToken(user.getId(), user.getRole().name());
-        String refreshToken = jwtUtils.generateRefreshToken(user.getId(), user.getRole().name());
-        long expiresIn = jwtUtils.getAccessTokenExpirationMillis() / 1000;
+        return createLoginResponse(user);
+    }
 
-        return LoginResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .expiresIn(expiresIn)
-                .user(UserResponse.fromEntity(user))
-                .build();
+    @Override
+    @Transactional
+    public LoginResponse loginWithGoogle(String providerUserId, String email, String fullName) {
+        User user = userAccountRepository.findByProviderAndProviderUserId(UserProvider.GOOGLE, providerUserId)
+                .map(UserAccount::getUser)
+                .orElseGet(() -> findOrCreateGoogleUser(providerUserId, email, fullName));
+
+        if (user.getStatus() != UserStatus.ACTIVE || user.getDeletedAt() != null) {
+            throw new AppException(HttpStatus.UNAUTHORIZED, "ACCOUNT_DISABLED", "Account is disabled or locked");
+        }
+
+        return createLoginResponse(user);
     }
 
     @Override
@@ -240,5 +245,36 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User not found"));
         return UserResponse.fromEntity(user);
+    }
+
+    private User findOrCreateGoogleUser(String providerUserId, String email, String fullName) {
+        User user = userRepository.findByEmail(email)
+                .orElseGet(() -> userRepository.save(User.builder()
+                        .email(email)
+                        .fullName(fullName)
+                        .role(UserRole.AUDIENCE)
+                        .status(UserStatus.ACTIVE)
+                        .build()));
+
+        UserAccount googleAccount = UserAccount.builder()
+                .user(user)
+                .provider(UserProvider.GOOGLE)
+                .providerUserId(providerUserId)
+                .build();
+        userAccountRepository.save(googleAccount);
+        return user;
+    }
+
+    private LoginResponse createLoginResponse(User user) {
+        String accessToken = jwtUtils.generateAccessToken(user.getId(), user.getRole().name());
+        String refreshToken = jwtUtils.generateRefreshToken(user.getId(), user.getRole().name());
+        long expiresIn = jwtUtils.getAccessTokenExpirationMillis() / 1000;
+
+        return LoginResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .expiresIn(expiresIn)
+                .user(UserResponse.fromEntity(user))
+                .build();
     }
 }
