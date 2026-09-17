@@ -2,9 +2,11 @@ package com.ticketbox.api.module.payment.gateways;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ticketbox.api.module.payment.domain.dtos.CallbackHandlingResult;
+import com.ticketbox.api.module.payment.domain.dtos.GatewayCallback;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentGatewayRequest;
-import com.ticketbox.api.module.payment.domain.dtos.PaymentVerificationResult;
 import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
+import com.ticketbox.api.module.payment.domain.entities.PaymentStatus;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -71,16 +73,18 @@ class VnpayGatewayTest {
         VnpayGateway gateway = gateway();
         Map<String, String> callbackParams = signedCallbackParams();
 
-        PaymentVerificationResult result = gateway.verifyCallback(callbackParams);
+        GatewayCallback result = gateway.verifyCallback(callbackParams);
 
         assertThat(result.signatureValid()).isTrue();
-        assertThat(result.successful()).isTrue();
-        assertThat(result.transactionReference()).isEqualTo("txn-123");
+        assertThat(result.targetStatus()).contains(PaymentStatus.SUCCEEDED);
+        assertThat(result.paymentId()).contains(UUID.fromString("11111111-1111-4111-8111-111111111111"));
         assertThat(result.providerTransactionId()).isEqualTo("vnp-456");
-        assertThat(result.responseCode()).isEqualTo("00");
-        assertThat(result.transactionStatus()).isEqualTo("00");
-        assertThat(result.amount()).isEqualTo("123450");
+        assertThat(result.amount()).contains(new BigDecimal("1234.50"));
         assertThat(gateway.getProvider()).isEqualTo(PaymentProvider.VNPAY);
+        assertThat(gateway.transactionReference(UUID.fromString("11111111-1111-4111-8111-111111111111")))
+                .isEqualTo("11111111111141118111111111111111");
+        assertThat(gateway.responseFor(CallbackHandlingResult.INVALID_SIGNATURE))
+                .hasValueSatisfying(response -> assertThat(response.responseCode()).isEqualTo("97"));
     }
 
     @Test
@@ -88,10 +92,10 @@ class VnpayGatewayTest {
         Map<String, String> callbackParams = signedCallbackParams();
         callbackParams.put("vnp_Amount", "999900");
 
-        PaymentVerificationResult result = gateway().verifyCallback(callbackParams);
+        GatewayCallback result = gateway().verifyCallback(callbackParams);
 
         assertThat(result.signatureValid()).isFalse();
-        assertThat(result.successful()).isFalse();
+        assertThat(result.targetStatus()).contains(PaymentStatus.SUCCEEDED);
     }
 
     private Map<String, String> parseQuery(String rawQuery) {
@@ -118,7 +122,7 @@ class VnpayGatewayTest {
                 "vnp_TransactionNo", "vnp-456",
                 "vnp_TransactionStatus", "00",
                 "vnp_TmnCode", "TEST_CODE",
-                "vnp_TxnRef", "txn-123"));
+                "vnp_TxnRef", "11111111111141118111111111111111"));
         params.put("vnp_SecureHash", secureHash(params));
         params.put("vnp_SecureHashType", "HmacSHA512");
         return params;

@@ -8,9 +8,11 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.ticketbox.api.module.payment.domain.dtos.CallbackHandlingResult;
+import com.ticketbox.api.module.payment.domain.dtos.GatewayCallback;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentGatewayRequest;
-import com.ticketbox.api.module.payment.domain.dtos.PaymentVerificationResult;
 import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
+import com.ticketbox.api.module.payment.domain.entities.PaymentStatus;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
@@ -70,13 +72,17 @@ class MomoGatewayTest {
         MomoGateway gateway = gateway(RestClient.create());
         Map<String, String> ipn = signedIpn();
 
-        PaymentVerificationResult valid = gateway.verifyCallback(ipn);
+        GatewayCallback valid = gateway.verifyCallback(ipn);
         assertThat(valid.signatureValid()).isTrue();
-        assertThat(valid.transactionReference()).isEqualTo("11111111-1111-4111-8111-111111111111");
+        assertThat(valid.paymentId()).contains(UUID.fromString("11111111-1111-4111-8111-111111111111"));
         assertThat(valid.providerTransactionId()).isEqualTo("4088878653");
-        assertThat(valid.responseCode()).isEqualTo("0");
-        assertThat(valid.amount()).isEqualTo("1000");
+        assertThat(valid.targetStatus()).contains(PaymentStatus.SUCCEEDED);
+        assertThat(valid.amount()).contains(new BigDecimal("1000"));
+        assertThat(valid.sanitizedPayload()).doesNotContainKey("signature");
         assertThat(gateway.getProvider()).isEqualTo(PaymentProvider.MOMO);
+        assertThat(gateway.transactionReference(UUID.fromString("11111111-1111-4111-8111-111111111111")))
+                .isEqualTo("11111111-1111-4111-8111-111111111111");
+        assertThat(gateway.responseFor(CallbackHandlingResult.PROCESSED)).isEmpty();
 
         ipn.put("amount", "2000");
         assertThat(gateway.verifyCallback(ipn).signatureValid()).isFalse();

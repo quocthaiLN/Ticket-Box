@@ -9,9 +9,9 @@ import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentRequest;
 import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentResponse;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentGatewayRequest;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentCallbackResponse;
-import com.ticketbox.api.module.payment.domain.dtos.PaymentVerificationResult;
+import com.ticketbox.api.module.payment.domain.dtos.CallbackHandlingResult;
+import com.ticketbox.api.module.payment.domain.dtos.GatewayCallback;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentResponse;
-import com.ticketbox.api.module.payment.domain.dtos.MomoIpnRequest;
 import com.ticketbox.api.module.payment.domain.entities.Payment;
 import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
 import com.ticketbox.api.module.payment.domain.entities.PaymentStatus;
@@ -26,7 +26,6 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -80,36 +79,22 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    public PaymentCallbackResponse handleVnpayIpn(Map<String, String> parameters) {
-        PaymentGatewayStrategy gateway = resolveGateway(PaymentProvider.VNPAY);
-        PaymentVerificationResult verification = gateway.verifyCallback(parameters);
-        if (!verification.signatureValid()) {
-            return PaymentCallbackResponse.of("97", "Invalid checksum");
+    public Optional<PaymentCallbackResponse> handleCallback(PaymentProvider provider, Map<String, String> parameters) {
+        PaymentGatewayStrategy gateway = resolveGateway(provider);
+        GatewayCallback callback = gateway.verifyCallback(parameters);
+        CallbackHandlingResult result;
+
+        if (!callback.signatureValid()) {
+            result = CallbackHandlingResult.INVALID_SIGNATURE;
+        } else if (callback.paymentId().isEmpty()) {
+            result = CallbackHandlingResult.PAYMENT_NOT_FOUND;
+        } else {
+            result = transactionTemplate.execute(status -> applyCallback(callback.paymentId().orElseThrow(), provider, callback));
+            if (result == null) {
+                throw new IllegalStateException("Payment callback transaction returned no result");
+            }
         }
-
-        UUID paymentId = paymentIdFromTransactionReference(verification.transactionReference());
-        if (paymentId == null) {
-            return PaymentCallbackResponse.of("01", "Order not found");
-        }
-
-        return transactionTemplate.execute(status -> completeVnpayPayment(paymentId, verification, parameters));
-    }
-
-    @Override
-    public void handleMomoIpn(MomoIpnRequest request) {
-        PaymentGatewayStrategy gateway = resolveGateway(PaymentProvider.MOMO);
-        Map<String, String> parameters = request.toParameters();
-        PaymentVerificationResult verification = gateway.verifyCallback(parameters);
-        if (!verification.signatureValid()) {
-            return;
-        }
-
-        UUID paymentId = paymentIdFromMomoOrderId(verification.transactionReference());
-        if (paymentId == null) {
-            return;
-        }
-
-        transactionTemplate.executeWithoutResult(status -> completeMomoPayment(paymentId, verification, parameters));
+        return gateway.responseFor(result);
     }
 
     private CreatePaymentResponse createNewPayment(User currentUser, String idempotencyKey,
@@ -120,7 +105,7 @@ public class PaymentServiceImpl implements PaymentService {
             throw new IllegalStateException("Payment initialization transaction returned no payment");
         }
 
-        String checkoutUrl = gateway.createPaymentUrl(gatewayRequest(payment, request, clientIp));
+        String checkoutUrl = gateway.createPaymentUrl(gatewayRequest(payment, request, clientIp, gateway));
 
         return transactionTemplate.execute(status -> saveCheckoutUrl(payment.getId(), checkoutUrl));
     }
@@ -186,144 +171,60 @@ public class PaymentServiceImpl implements PaymentService {
                         "PAYMENT_PROVIDER_UNAVAILABLE", "Payment provider is not available"));
     }
 
-    private PaymentCallbackResponse completeVnpayPayment(UUID paymentId, PaymentVerificationResult verification,
-            Map<String, String> parameters) {
+    private CallbackHandlingResult applyCallback(UUID paymentId, PaymentProvider provider, GatewayCallback callback) {
         Payment payment = paymentRepository.findByIdForUpdate(paymentId)
                 .orElse(null);
-        if (payment == null || payment.getProvider() != PaymentProvider.VNPAY) {
-            return PaymentCallbackResponse.of("01", "Order not found");
+        if (payment == null || payment.getProvider() != provider) {
+            return CallbackHandlingResult.PAYMENT_NOT_FOUND;
         }
         if (payment.getStatus() != PaymentStatus.PENDING) {
-            return PaymentCallbackResponse.of("02", "Order already confirmed");
+            return CallbackHandlingResult.ALREADY_PROCESSED;
         }
-        if (!amountMatches(payment, verification.amount())) {
-            return PaymentCallbackResponse.of("04", "Invalid amount");
+        if (callback.amount().isEmpty() || payment.getAmount().compareTo(callback.amount().orElseThrow()) != 0) {
+            return CallbackHandlingResult.AMOUNT_MISMATCH;
         }
 
-        payment.setWebhookPayload(writePayload(parameters));
+        payment.setWebhookPayload(writePayload(callback.sanitizedPayload()));
         payment.setWebhookReceivedAt(LocalDateTime.now());
         payment.setWebhookSignatureValid(true);
-        payment.setProviderTransactionId(verification.providerTransactionId());
+        payment.setProviderTransactionId(callback.providerTransactionId());
 
-        if (verification.successful()) {
-            payment.setStatus(PaymentStatus.SUCCEEDED);
+        PaymentStatus targetStatus = callback.targetStatus()
+                .orElseThrow(() -> new IllegalStateException("Verified callback has no target payment status"));
+        if (targetStatus == PaymentStatus.SUCCEEDED) {
+            payment.setStatus(targetStatus);
             payment.setPaidAt(LocalDateTime.now());
-        } else {
-            payment.setStatus(PaymentStatus.FAILED);
-            payment.setFailureReason("VNPAY response=" + verification.responseCode()
-                    + ", transactionStatus=" + verification.transactionStatus());
-        }
-        Payment savedPayment = paymentRepository.saveAndFlush(payment);
-        eventPublisher.publishEvent(new PaymentCompletedEvent(
-                savedPayment.getId(),
-                savedPayment.getOrder().getId(),
-                savedPayment.getOrder().getUser().getId(),
-                savedPayment.getProvider(),
-                savedPayment.getStatus(),
-                savedPayment.getAmount(),
-                savedPayment.getCurrency(),
-                savedPayment.getProviderTransactionId()));
-        return PaymentCallbackResponse.of("00", "Confirm Success");
-    }
-
-    private void completeMomoPayment(UUID paymentId, PaymentVerificationResult verification,
-            Map<String, String> parameters) {
-        Payment payment = paymentRepository.findByIdForUpdate(paymentId).orElse(null);
-        if (payment == null || payment.getProvider() != PaymentProvider.MOMO || payment.getStatus() != PaymentStatus.PENDING) {
-            return;
-        }
-        if (!momoAmountMatches(payment, verification.amount())) {
-            return;
-        }
-
-        payment.setWebhookPayload(writePayload(withoutSignature(parameters)));
-        payment.setWebhookReceivedAt(LocalDateTime.now());
-        payment.setWebhookSignatureValid(true);
-        payment.setProviderTransactionId(verification.providerTransactionId());
-
-        if ("0".equals(verification.responseCode())) {
-            payment.setStatus(PaymentStatus.SUCCEEDED);
-            payment.setPaidAt(LocalDateTime.now());
-        } else if (isMomoPending(verification.responseCode())) {
-            paymentRepository.saveAndFlush(payment);
-            return;
-        } else {
-            payment.setStatus(PaymentStatus.FAILED);
-            payment.setFailureReason("MOMO resultCode=" + verification.responseCode());
+        } else if (targetStatus == PaymentStatus.FAILED) {
+            payment.setStatus(targetStatus);
+            payment.setFailureReason(callback.failureReason().orElse("Payment provider rejected payment"));
         }
 
         Payment savedPayment = paymentRepository.saveAndFlush(payment);
-        eventPublisher.publishEvent(new PaymentCompletedEvent(
-                savedPayment.getId(),
-                savedPayment.getOrder().getId(),
-                savedPayment.getOrder().getUser().getId(),
-                savedPayment.getProvider(),
-                savedPayment.getStatus(),
-                savedPayment.getAmount(),
-                savedPayment.getCurrency(),
-                savedPayment.getProviderTransactionId()));
-    }
-
-    private boolean amountMatches(Payment payment, String providerAmount) {
-        try {
-            return payment.getAmount().movePointRight(2).toBigIntegerExact()
-                    .equals(new java.math.BigInteger(providerAmount));
-        } catch (ArithmeticException | NumberFormatException exception) {
-            return false;
+        if (targetStatus != PaymentStatus.PENDING) {
+            eventPublisher.publishEvent(new PaymentCompletedEvent(
+                    savedPayment.getId(),
+                    savedPayment.getOrder().getId(),
+                    savedPayment.getOrder().getUser().getId(),
+                    savedPayment.getProvider(),
+                    savedPayment.getStatus(),
+                    savedPayment.getAmount(),
+                    savedPayment.getCurrency(),
+                    savedPayment.getProviderTransactionId()));
         }
-    }
-
-    private boolean momoAmountMatches(Payment payment, String providerAmount) {
-        try {
-            return payment.getAmount().toBigIntegerExact().equals(new java.math.BigInteger(providerAmount));
-        } catch (ArithmeticException | NumberFormatException exception) {
-            return false;
-        }
-    }
-
-    private boolean isMomoPending(String resultCode) {
-        return "1000".equals(resultCode) || "7000".equals(resultCode) || "7002".equals(resultCode);
-    }
-
-    private UUID paymentIdFromTransactionReference(String transactionReference) {
-        if (transactionReference == null || !transactionReference.matches("[0-9a-fA-F]{32}")) {
-            return null;
-        }
-        String hyphenated = transactionReference.replaceFirst(
-                "(.{8})(.{4})(.{4})(.{4})(.{12})", "$1-$2-$3-$4-$5");
-        try {
-            return UUID.fromString(hyphenated);
-        } catch (IllegalArgumentException exception) {
-            return null;
-        }
-    }
-
-    private UUID paymentIdFromMomoOrderId(String orderId) {
-        try {
-            return UUID.fromString(orderId);
-        } catch (IllegalArgumentException | NullPointerException exception) {
-            return null;
-        }
+        return CallbackHandlingResult.PROCESSED;
     }
 
     private String writePayload(Map<String, String> parameters) {
         try {
             return objectMapper.writeValueAsString(parameters);
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Cannot serialize VNPAY callback payload", exception);
+            throw new IllegalStateException("Cannot serialize payment callback payload", exception);
         }
     }
 
-    private Map<String, String> withoutSignature(Map<String, String> parameters) {
-        Map<String, String> sanitized = new LinkedHashMap<>(parameters);
-        sanitized.remove("signature");
-        return sanitized;
-    }
-
-    private PaymentGatewayRequest gatewayRequest(Payment payment, CreatePaymentRequest request, String clientIp) {
-        String transactionReference = request.getProvider() == PaymentProvider.MOMO
-                ? payment.getId().toString()
-                : payment.getId().toString().replace("-", "");
+    private PaymentGatewayRequest gatewayRequest(Payment payment, CreatePaymentRequest request, String clientIp,
+            PaymentGatewayStrategy gateway) {
+        String transactionReference = gateway.transactionReference(payment.getId());
         return PaymentGatewayRequest.builder()
                 .orderId(request.getOrderId())
                 .amount(payment.getAmount())

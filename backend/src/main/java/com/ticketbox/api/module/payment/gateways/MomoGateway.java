@@ -3,15 +3,20 @@ package com.ticketbox.api.module.payment.gateways;
 import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.payment.domain.dtos.MomoCreatePaymentRequest;
 import com.ticketbox.api.module.payment.domain.dtos.MomoCreatePaymentResponse;
+import com.ticketbox.api.module.payment.domain.dtos.CallbackHandlingResult;
+import com.ticketbox.api.module.payment.domain.dtos.GatewayCallback;
+import com.ticketbox.api.module.payment.domain.dtos.PaymentCallbackResponse;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentGatewayRequest;
-import com.ticketbox.api.module.payment.domain.dtos.PaymentVerificationResult;
 import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
+import com.ticketbox.api.module.payment.domain.entities.PaymentStatus;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -110,24 +115,74 @@ public class MomoGateway implements PaymentGatewayStrategy {
     }
 
     @Override
-    public PaymentVerificationResult verifyCallback(Map<String, String> params) {
+    public String transactionReference(UUID paymentId) {
+        return paymentId.toString();
+    }
+
+    @Override
+    public GatewayCallback verifyCallback(Map<String, String> params) {
         Map<String, String> callback = params == null ? Map.of() : params;
         String signature = callback.get("signature");
         boolean signatureValid = partnerCode.equals(callback.get("partnerCode"))
                 && isValidSignature(signature, callbackSignatureData(callback));
 
-        return new PaymentVerificationResult(
+        return new GatewayCallback(
                 signatureValid,
-                callback.get("orderId"),
+                paymentId(callback.get("orderId")),
+                amount(callback.get("amount")),
                 callback.get("transId"),
-                callback.get("resultCode"),
-                callback.get("resultCode"),
-                callback.get("amount"));
+                targetStatus(callback.get("resultCode")),
+                failureReason(callback.get("resultCode")),
+                withoutSignature(callback));
+    }
+
+    @Override
+    public Optional<PaymentCallbackResponse> responseFor(CallbackHandlingResult result) {
+        return Optional.empty();
     }
 
     @Override
     public PaymentProvider getProvider() {
         return PaymentProvider.MOMO;
+    }
+
+    private Optional<UUID> paymentId(String orderId) {
+        try {
+            return Optional.of(UUID.fromString(orderId));
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            return Optional.empty();
+        }
+    }
+
+    private Optional<BigDecimal> amount(String value) {
+        try {
+            return Optional.of(new BigDecimal(value).setScale(0));
+        } catch (NumberFormatException | NullPointerException | ArithmeticException exception) {
+            return Optional.empty();
+        }
+    }
+
+    private Optional<PaymentStatus> targetStatus(String resultCode) {
+        if ("0".equals(resultCode)) {
+            return Optional.of(PaymentStatus.SUCCEEDED);
+        }
+        if ("1000".equals(resultCode) || "7000".equals(resultCode) || "7002".equals(resultCode)) {
+            return Optional.of(PaymentStatus.PENDING);
+        }
+        return Optional.of(PaymentStatus.FAILED);
+    }
+
+    private Optional<String> failureReason(String resultCode) {
+        return "0".equals(resultCode) || "1000".equals(resultCode) || "7000".equals(resultCode)
+                || "7002".equals(resultCode)
+                        ? Optional.empty()
+                        : Optional.of("MOMO resultCode=" + resultCode);
+    }
+
+    private Map<String, String> withoutSignature(Map<String, String> parameters) {
+        Map<String, String> sanitized = new LinkedHashMap<>(parameters);
+        sanitized.remove("signature");
+        return Map.copyOf(sanitized);
     }
 
     private void validateRequest(PaymentGatewayRequest request) {

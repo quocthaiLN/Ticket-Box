@@ -8,6 +8,7 @@ import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentResponse;
 import com.ticketbox.api.module.payment.domain.dtos.MomoIpnRequest;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentCallbackResponse;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentResponse;
+import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
 import com.ticketbox.api.module.payment.services.PaymentService;
 import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
@@ -61,12 +62,14 @@ public class PaymentController {
 
     @GetMapping("/vnpay/ipn")
     public ResponseEntity<PaymentCallbackResponse> vnpayIpn(@RequestParam Map<String, String> parameters) {
-        return ResponseEntity.ok(paymentService.handleVnpayIpn(parameters));
+        PaymentCallbackResponse response = paymentService.handleCallback(PaymentProvider.VNPAY, parameters)
+                .orElseThrow(() -> new IllegalStateException("VNPAY gateway did not return an IPN response"));
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/momo/ipn")
     public ResponseEntity<Void> momoIpn(@Valid @RequestBody MomoIpnRequest request) {
-        paymentService.handleMomoIpn(request);
+        paymentService.handleCallback(PaymentProvider.MOMO, request.toParameters());
         return ResponseEntity.noContent().build();
     }
 

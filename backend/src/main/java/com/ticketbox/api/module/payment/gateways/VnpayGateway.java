@@ -1,8 +1,11 @@
 package com.ticketbox.api.module.payment.gateways;
 
+import com.ticketbox.api.module.payment.domain.dtos.CallbackHandlingResult;
+import com.ticketbox.api.module.payment.domain.dtos.GatewayCallback;
+import com.ticketbox.api.module.payment.domain.dtos.PaymentCallbackResponse;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentGatewayRequest;
-import com.ticketbox.api.module.payment.domain.dtos.PaymentVerificationResult;
 import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
+import com.ticketbox.api.module.payment.domain.entities.PaymentStatus;
 import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -13,6 +16,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -116,7 +120,12 @@ public class VnpayGateway implements PaymentGatewayStrategy {
     }
 
     @Override
-    public PaymentVerificationResult verifyCallback(Map<String, String> params) {
+    public String transactionReference(UUID paymentId) {
+        return paymentId.toString().replace("-", "");
+    }
+
+    @Override
+    public GatewayCallback verifyCallback(Map<String, String> params) {
         Map<String, String> callbackParams = params == null ? Map.of() : params;
         String providedSecureHash = callbackParams.get("vnp_SecureHash");
 
@@ -133,18 +142,55 @@ public class VnpayGateway implements PaymentGatewayStrategy {
         });
 
         boolean signatureValid = isValidSecureHash(providedSecureHash, buildHashData(signedParams));
-        return new PaymentVerificationResult(
+        String responseCode = callbackParams.get("vnp_ResponseCode");
+        String transactionStatus = callbackParams.get("vnp_TransactionStatus");
+        boolean successful = "00".equals(responseCode) && "00".equals(transactionStatus);
+        return new GatewayCallback(
                 signatureValid,
-                callbackParams.get("vnp_TxnRef"),
+                paymentId(callbackParams.get("vnp_TxnRef")),
+                amount(callbackParams.get("vnp_Amount")),
                 callbackParams.get("vnp_TransactionNo"),
-                callbackParams.get("vnp_ResponseCode"),
-                callbackParams.get("vnp_TransactionStatus"),
-                callbackParams.get("vnp_Amount"));
+                Optional.of(successful ? PaymentStatus.SUCCEEDED : PaymentStatus.FAILED),
+                successful ? Optional.empty()
+                        : Optional.of("VNPAY response=" + responseCode + ", transactionStatus=" + transactionStatus),
+                Map.copyOf(callbackParams));
+    }
+
+    @Override
+    public Optional<PaymentCallbackResponse> responseFor(CallbackHandlingResult result) {
+        return Optional.of(switch (result) {
+            case INVALID_SIGNATURE -> PaymentCallbackResponse.of("97", "Invalid checksum");
+            case PAYMENT_NOT_FOUND -> PaymentCallbackResponse.of("01", "Order not found");
+            case ALREADY_PROCESSED -> PaymentCallbackResponse.of("02", "Order already confirmed");
+            case AMOUNT_MISMATCH -> PaymentCallbackResponse.of("04", "Invalid amount");
+            case PROCESSED -> PaymentCallbackResponse.of("00", "Confirm Success");
+        });
     }
 
     @Override
     public PaymentProvider getProvider() {
         return PaymentProvider.VNPAY;
+    }
+
+    private Optional<UUID> paymentId(String transactionReference) {
+        if (transactionReference == null || !transactionReference.matches("[0-9a-fA-F]{32}")) {
+            return Optional.empty();
+        }
+        String hyphenated = transactionReference.replaceFirst(
+                "(.{8})(.{4})(.{4})(.{4})(.{12})", "$1-$2-$3-$4-$5");
+        try {
+            return Optional.of(UUID.fromString(hyphenated));
+        } catch (IllegalArgumentException exception) {
+            return Optional.empty();
+        }
+    }
+
+    private Optional<BigDecimal> amount(String value) {
+        try {
+            return Optional.of(new BigDecimal(value).movePointLeft(2));
+        } catch (NumberFormatException | NullPointerException exception) {
+            return Optional.empty();
+        }
     }
 
     private String buildHashData(Map<String, String> params) {
