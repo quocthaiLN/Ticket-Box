@@ -38,3 +38,16 @@ app:
   oauth2:
     success-redirect-uri: http://localhost:3001/oauth2/callback
     failure-redirect-uri: http://localhost:3001/login?error=oauth2
+  payment:
+    vnpay:
+      vnpay-url: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+      vnpay-tmn-code: TESTCODE
+      vnpay-hash-secret: test-vnpay-hash-secret
+      vnpay-return-url: http://localhost:3001/payment/return
+    momo:
+      momo-url: https://test-payment.momo.vn/v2/gateway/api/create
+      partner-code: MOMO_TEST
+      access-key: test-access-key
+      secret-key: test-secret-key
+      redirect-url: http://localhost:3001/payment/return
+      ipn-url: https://example.invalid/payments/momo/ipn

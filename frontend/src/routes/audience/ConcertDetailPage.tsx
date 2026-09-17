@@ -111,7 +111,7 @@ export function ConcertDetailView({
   const doorOpenTime = new Date(startTime.getTime() - 60 * 60 * 1000);
 
   return (
-    <div className="min-h-screen bg-[#08080E]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+    <div className="min-h-screen bg-[#080E]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       <div className="relative min-h-[380px]" style={{ height: "55vh" }}>
         <ImageWithFallback src={concert.coverImageUrl} alt={concert.title} className="h-full w-full object-cover" />
         <div
@@ -124,7 +124,7 @@ export function ConcertDetailView({
         <div className="absolute left-4 top-20">
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-[#08080E]/70 px-3 py-2 text-sm text-[#F0EDEB] backdrop-blur transition-colors hover:bg-white/10"
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-[#080E]/70 px-3 py-2 text-sm text-[#F0EDEB] backdrop-blur transition-colors hover:bg-white/10"
             type="button"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -388,7 +388,7 @@ export function ConcertDetailView({
 
 function CenteredState({ text, actionLabel }: { text: string; actionLabel?: string }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#08080E] px-4 pt-20 text-center text-[#F0EDEB]">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#080E] px-4 pt-20 text-center text-[#F0EDEB]">
       <h1 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2rem" }}>{text}</h1>
       {actionLabel && (
         <Link to="/" className="mt-4 text-sm text-[#F5C842]">

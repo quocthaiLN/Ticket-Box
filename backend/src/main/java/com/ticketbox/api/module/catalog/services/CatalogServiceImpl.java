@@ -2,6 +2,7 @@ package com.ticketbox.api.module.catalog.services;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.ticketbox.api.infrastructure.exception.AppException;
+import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.catalog.domain.dtos.*;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
 import com.ticketbox.api.module.catalog.domain.entities.ConcertStatus;
@@ -11,6 +12,8 @@ import com.ticketbox.api.module.catalog.domain.entities.TicketTypeStatus;
 import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.SeatZoneRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
+import com.ticketbox.api.module.order.domain.entities.UserTicketTypeCounter;
+import com.ticketbox.api.module.order.repositories.UserTicketTypeCounterRepository;
 import com.ticketbox.api.module.shared.cache.CachedPage;
 import com.ticketbox.api.module.shared.storage.StorageService;
 import com.ticketbox.api.module.shared.cache.CacheService;
@@ -21,7 +24,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,12 +38,12 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class PublicConcertServiceImpl implements PublicConcertService {
+public class CatalogServiceImpl implements CatalogService {
 
     private final ConcertRepository concertRepository;
     private final SeatZoneRepository seatZoneRepository;
     private final TicketTypeRepository ticketTypeRepository;
-    private final StringRedisTemplate stringRedisTemplate;
+    private final UserTicketTypeCounterRepository counterRepository;
     private final CacheService cacheService;
     private final StorageService storageService;
 
@@ -214,21 +216,33 @@ public class PublicConcertServiceImpl implements PublicConcertService {
                         .build());
             }
 
-            try {
-                String redisKey = "inventory:concert:" + concertId;
-                for (InventoryResponse.InventoryItem item : items) {
-                    stringRedisTemplate.opsForHash().put(redisKey, item.getTicketTypeId().toString(), String.valueOf(item.getAvailableQuantity()));
-                }
-            } catch (Exception e) {
-                log.warn("Failed to update Redis inventory hash snapshot for concert {}: {}", concertId, e.getMessage());
-            }
-
             return InventoryResponse.builder()
                     .concertId(concert.getId())
                     .asOf(LocalDateTime.now())
                     .items(items)
                     .build();
         });
+    }
+
+    @Override
+    public ConcertQuotaResponse getQuota(User currentUser, UUID concertId) {
+        Concert concert = concertRepository.findById(concertId)
+                .filter(c -> c.getStatus() == ConcertStatus.PUBLISHED)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "CONCERT_NOT_FOUND", "Concert not found with ID: " + concertId));
+
+        Map<UUID, UserTicketTypeCounter> countersByTicketTypeId = counterRepository
+                .findByUserIdAndConcertId(currentUser.getId(), concertId)
+                .stream()
+                .collect(Collectors.toMap(counter -> counter.getTicketType().getId(), counter -> counter));
+
+        List<TicketTypeQuotaResponse> items = ticketTypeRepository.findByConcertId(concert.getId()).stream()
+                .map(ticketType -> mapToTicketTypeQuotaResponse(ticketType, countersByTicketTypeId.get(ticketType.getId())))
+                .toList();
+
+        return ConcertQuotaResponse.builder()
+                .concertId(concert.getId())
+                .items(items)
+                .build();
     }
 
     private ConcertResponse mapToConcertResponse(Concert concert) {
@@ -310,6 +324,20 @@ public class PublicConcertServiceImpl implements PublicConcertService {
                 .saleStartAt(tt.getSaleStartAt())
                 .saleEndAt(tt.getSaleEndAt())
                 .status(tt.getStatus().name())
+                .build();
+    }
+
+    private TicketTypeQuotaResponse mapToTicketTypeQuotaResponse(TicketType ticketType, UserTicketTypeCounter counter) {
+        int heldQuantity = counter != null ? counter.getHeldQuantity() : 0;
+        int paidQuantity = counter != null ? counter.getPaidQuantity() : 0;
+        int remainingQuantity = Math.max(0, ticketType.getMaxPerUser() - heldQuantity - paidQuantity);
+
+        return TicketTypeQuotaResponse.builder()
+                .ticketTypeId(ticketType.getId())
+                .heldQuantity(heldQuantity)
+                .maxPerUser(ticketType.getMaxPerUser())
+                .paidQuantity(paidQuantity)
+                .remainingQuantity(remainingQuantity)
                 .build();
     }
 }

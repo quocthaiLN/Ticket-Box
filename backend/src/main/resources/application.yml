@@ -50,6 +50,8 @@ spring:
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USER:guest}
     password: ${RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
     ssl:
       enabled: ${RABBITMQ_SSL:false}
 
@@ -88,3 +90,16 @@ app:
     hold-minutes: ${HOLD_DURATION_MINUTE:15}
   storage:
     base-url: ${STORAGE_BASE_URL:http://localhost:9000/ticket-box-storage}
+  payment:
+    vnpay:
+      vnpay-url: ${VNPAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+      vnpay-tmn-code: ${VNPAY_TMN_CODE:TICKETBOX}
+      vnpay-hash-secret: ${VNPAY_HASH_SECRET:ticketbox_secret}
+      vnpay-return-url: ${VNPAY_RETURN_URL:http://localhost:3001/payment/result}
+    momo:
+      momo-url: ${MOMO_URL:https://test-payment.momo.vn/v2/gateway/api/create}
+      partner-code: ${MOMO_PARTNER_CODE:}
+      access-key: ${MOMO_ACCESS_KEY:}
+      secret-key: ${MOMO_SECRET_KEY:}
+      redirect-url: ${MOMO_REDIRECT_URL:http://localhost:3001/payment/return}
+      ipn-url: ${MOMO_IPN_URL:https://example.invalid/payments/momo/ipn}

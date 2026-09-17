@@ -395,7 +395,7 @@ sequenceDiagram
 ## Thiết kế cơ sở dữ liệu
 <!-- Loại database, lý do lựa chọn, schema các entity chính -->
 
-Để đáp ứng cả hai yêu cầu khắt khe là **tính nhất quán tuyệt đối (chống bán lố vé)** và **hiệu năng cực cao (đáp ứng 80.000 users/5 phút)**, TicketBox áp dụng chiến lược đa cơ sở dữ liệu (Polyglot Persistence).
+Để đáp ứng cả hai yêu cầu khắt khe là **tính nhất quán tuyệt đối (chống bán lố vé)** và **hiệu năng cực cao (đáp ứng 8080.000 users/5 phút)**, TicketBox áp dụng chiến lược đa cơ sở dữ liệu (Polyglot Persistence).
 
 ### 1. Phân tích đặc điểm dữ liệu và Lựa chọn Database
 
@@ -570,7 +570,7 @@ Hệ thống TicketBox sử dụng mô hình **Role-Based Access Control (RBAC)*
 ### Kiểm soát tải đột biến
 <!-- Giải pháp, thuật toán, ngưỡng, hành vi khi vượt ngưỡng -->
 
-Để giải quyết bài toán 80.000 khán giả truy cập trong 5 phút đầu (70% dồn vào phút đầu tiên), hệ thống cần triệt tiêu các request rác (do spam click hoặc bot đầu cơ) ngay từ vòng ngoài cùng.
+Để giải quyết bài toán 8080.000 khán giả truy cập trong 5 phút đầu (70% dồn vào phút đầu tiên), hệ thống cần triệt tiêu các request rác (do spam click hoặc bot đầu cơ) ngay từ vòng ngoài cùng.
 
 *   **Giải pháp:** Triển khai Rate Limiting **hai tầng** để vừa chặn DDoS/bot vừa kiểm soát nghiệp vụ per-user, không phụ thuộc vào Lua scripting:
 
@@ -633,7 +633,7 @@ Vấn đề phổ biến trong thanh toán là người dùng bấm nút "Xác n
      Chiến lược: Cache-aside, Write-through hay Write-back?
      TTL cho từng loại. Cách invalidate khi dữ liệu thay đổi (đặc biệt: số vé sau mỗi giao dịch). -->
 
-Trong thời điểm mở bán, 80.000 người dùng liên tục tải lại trang chủ và trang chi tiết Concert. Nếu toàn bộ lưu lượng này đi thẳng xuống PostgreSQL, cơ sở dữ liệu sẽ sập ngay lập tức do quá tải tác vụ đọc (Read-heavy). Redis được sử dụng với các chiến lược linh hoạt:
+Trong thời điểm mở bán, 8080.000 người dùng liên tục tải lại trang chủ và trang chi tiết Concert. Nếu toàn bộ lưu lượng này đi thẳng xuống PostgreSQL, cơ sở dữ liệu sẽ sập ngay lập tức do quá tải tác vụ đọc (Read-heavy). Redis được sử dụng với các chiến lược linh hoạt:
 
 *   **1. Dữ liệu tĩnh (Danh sách Concert, Chi tiết, Sơ đồ SVG):**
     *   **Chiến lược:** **Cache-aside (Lazy Loading)**. Request đọc sẽ tìm trong Redis trước; nếu Cache Miss (không có), hệ thống mới truy vấn Database lấy dữ liệu, sau đó ghi ngược lên Redis cho các request sau.

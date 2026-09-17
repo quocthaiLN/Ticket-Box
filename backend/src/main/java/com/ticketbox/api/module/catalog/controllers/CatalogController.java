@@ -1,8 +1,9 @@
 package com.ticketbox.api.module.catalog.controllers;
 
 import com.ticketbox.api.infrastructure.response.ApiResponse;
+import com.ticketbox.api.module.auth.services.CustomUserDetails;
 import com.ticketbox.api.module.catalog.domain.dtos.*;
-import com.ticketbox.api.module.catalog.services.PublicConcertService;
+import com.ticketbox.api.module.catalog.services.CatalogService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -10,6 +11,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.CacheControl;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -19,9 +22,9 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/concerts")
 @RequiredArgsConstructor
-public class PublicConcertController {
+public class CatalogController {
 
-    private final PublicConcertService publicConcertService;
+    private final CatalogService CatalogService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<ConcertResponse>>> getConcerts(
@@ -37,7 +40,7 @@ public class PublicConcertController {
         Sort.Direction direction = sortOrder.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
 
-        Page<ConcertResponse> result = publicConcertService.getPublishedConcerts(q, city, from, to, pageable);
+        Page<ConcertResponse> result = CatalogService.getPublishedConcerts(q, city, from, to, pageable);
 
         ApiResponse.PaginationMeta paginationMeta = ApiResponse.PaginationMeta.builder()
                 .page(result.getNumber())
@@ -52,19 +55,19 @@ public class PublicConcertController {
 
     @GetMapping("/{concertId}")
     public ResponseEntity<ApiResponse<ConcertDetailResponse>> getConcertDetail(@PathVariable UUID concertId) {
-        ConcertDetailResponse detail = publicConcertService.getConcertDetail(concertId);
+        ConcertDetailResponse detail = CatalogService.getConcertDetail(concertId);
         return ResponseEntity.ok(ApiResponse.success(detail));
     }
 
     @GetMapping("/{concertId}/metadata")
     public ResponseEntity<ApiResponse<ConcertMetadataResponse>> getConcertMetadata(@PathVariable UUID concertId) {
-        ConcertMetadataResponse metadata = publicConcertService.getConcertMetadata(concertId);
+        ConcertMetadataResponse metadata = CatalogService.getConcertMetadata(concertId);
         return ResponseEntity.ok(ApiResponse.success(metadata));
     }
 
     @GetMapping("/{concertId}/seat-map")
     public ResponseEntity<ApiResponse<SeatMapResponse>> getConcertSeatMap(@PathVariable UUID concertId) {
-        SeatMapResponse seatMap = publicConcertService.getConcertSeatMap(concertId);
+        SeatMapResponse seatMap = CatalogService.getConcertSeatMap(concertId);
         return ResponseEntity.ok(ApiResponse.success(seatMap));
     }
 
@@ -72,13 +75,24 @@ public class PublicConcertController {
     public ResponseEntity<ApiResponse<List<TicketTypeResponse>>> getTicketTypes(
             @PathVariable UUID concertId,
             @RequestParam(defaultValue = "false") boolean includeClosed) {
-        List<TicketTypeResponse> ticketTypes = publicConcertService.getTicketTypes(concertId, includeClosed);
+        List<TicketTypeResponse> ticketTypes = CatalogService.getTicketTypes(concertId, includeClosed);
         return ResponseEntity.ok(ApiResponse.success(ticketTypes));
     }
 
     @GetMapping("/{concertId}/inventory")
     public ResponseEntity<ApiResponse<InventoryResponse>> getInventory(@PathVariable UUID concertId) {
-        InventoryResponse inventory = publicConcertService.getInventory(concertId);
+        InventoryResponse inventory = CatalogService.getInventory(concertId);
         return ResponseEntity.ok(ApiResponse.success(inventory));
     }
+
+    @GetMapping("/{concertId}/quota")
+    public ResponseEntity<ApiResponse<ConcertQuotaResponse>> getQuota(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable UUID concertId) {
+        ConcertQuotaResponse quota = CatalogService.getQuota(userDetails.getUser(), concertId);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(ApiResponse.success(quota));
+    }
+
 }

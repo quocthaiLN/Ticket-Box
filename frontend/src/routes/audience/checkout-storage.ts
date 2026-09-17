@@ -22,6 +22,7 @@ export type PendingCheckout = {
   items: PendingCheckoutItem[];
   totalPrice: number;
   orderId?: string;
+  paymentId?: string;
   checkoutUrl?: string;
   paymentIdempotencyKey?: string;
 };

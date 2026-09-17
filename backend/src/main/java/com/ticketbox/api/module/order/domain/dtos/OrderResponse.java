@@ -15,7 +15,7 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HeldOrderResponse {
+public class OrderResponse {
 
     @JsonProperty("order_id")
     private UUID orderId;
@@ -24,7 +24,7 @@ public class HeldOrderResponse {
     private UUID concertId;
 
     private String status;
-    private List<HeldOrderItemResponse> items;
+    private List<OrderItemResponse> items;
 
     @JsonProperty("total_amount")
     private BigDecimal totalAmount;

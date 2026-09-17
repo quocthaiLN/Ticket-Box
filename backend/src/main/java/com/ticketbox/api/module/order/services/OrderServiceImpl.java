@@ -9,8 +9,8 @@ import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
 import com.ticketbox.api.module.order.domain.dtos.CreateOrderItemRequest;
 import com.ticketbox.api.module.order.domain.dtos.CreateOrderRequest;
-import com.ticketbox.api.module.order.domain.dtos.HeldOrderItemResponse;
-import com.ticketbox.api.module.order.domain.dtos.HeldOrderResponse;
+import com.ticketbox.api.module.order.domain.dtos.OrderItemResponse;
+import com.ticketbox.api.module.order.domain.dtos.OrderResponse;
 import com.ticketbox.api.module.order.domain.entities.Order;
 import com.ticketbox.api.module.order.domain.entities.OrderItem;
 import com.ticketbox.api.module.order.domain.entities.OrderStatus;
@@ -18,6 +18,7 @@ import com.ticketbox.api.module.order.domain.entities.UserTicketTypeCounter;
 import com.ticketbox.api.module.order.domain.entities.UserTicketTypeCounterId;
 import com.ticketbox.api.module.order.repositories.OrderRepository;
 import com.ticketbox.api.module.order.repositories.UserTicketTypeCounterRepository;
+import com.ticketbox.api.module.shared.cache.CacheService;
 import com.ticketbox.api.module.shared.idempotency.IdempotencyService;
 import lombok.RequiredArgsConstructor;
 
@@ -55,13 +56,14 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final IdempotencyService idempotencyService;
     private final TransactionTemplate transactionTemplate;
+    private final CacheService cacheService;
 
     public Duration getHoldTtl() {
         return Duration.ofMinutes(holdMinutes);
     }
 
     @Override
-    public HeldOrderResponse createHeldOrder(User currentUser, String idempotencyKey, CreateOrderRequest request) {
+    public OrderResponse createHeldOrder(User currentUser, String idempotencyKey, CreateOrderRequest request) {
         String fingerprint = fingerprint(currentUser, request);
         String redisKey = IDEMPOTENCY_KEY_PREFIX + idempotencyKey;
 
@@ -69,13 +71,17 @@ public class OrderServiceImpl implements OrderService {
                 redisKey,
                 fingerprint,
                 getHoldTtl(),
-                HeldOrderResponse.class,
+                OrderResponse.class,
                 () -> findExistingOrder(currentUser, idempotencyKey, request),
-                () -> transactionTemplate
-                        .execute(status -> executeCreateHeldOrder(currentUser, idempotencyKey, request)));
+                () -> {
+                    OrderResponse heldOrder = transactionTemplate
+                            .execute(status -> executeCreateHeldOrder(currentUser, idempotencyKey, request));
+                    cacheService.evictConcertCache(request.getConcertId());
+                    return heldOrder;
+                });
     }
 
-    private HeldOrderResponse executeCreateHeldOrder(User currentUser, String idempotencyKey,
+    private OrderResponse executeCreateHeldOrder(User currentUser, String idempotencyKey,
             CreateOrderRequest request) {
         List<CreateOrderItemRequest> sortedItems = validateAndSortItems(request);
         Concert concert = concertRepository.findById(request.getConcertId())
@@ -124,12 +130,22 @@ public class OrderServiceImpl implements OrderService {
         order.setTotalAmount(totalAmount);
 
         Order savedOrder = orderRepository.save(order);
-        return mapToHeldOrderResponse(savedOrder);
+        return mapToOrderResponse(savedOrder);
+    }
+
+    @Override
+    public OrderResponse getOrder(User currentUser, UUID orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "ORDER_NOT_FOUND", "Order not found"));
+        if (!order.getUser().getId().equals(currentUser.getId())) {
+            throw new AppException(HttpStatus.FORBIDDEN, "ORDER_ACCESS_DENIED", "You do not have access to this order");
+        }
+        return mapToOrderResponse(order);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public java.util.Optional<HeldOrderResponse> findExistingOrder(User currentUser, String idempotencyKey,
+    public java.util.Optional<OrderResponse> findExistingOrder(User currentUser, String idempotencyKey,
             CreateOrderRequest request) {
         return orderRepository.findByIdempotencyKey(idempotencyKey)
                 .map(order -> {
@@ -137,7 +153,7 @@ public class OrderServiceImpl implements OrderService {
                         throw new AppException(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REUSED",
                                 "Idempotency key was already used for a different request");
                     }
-                    return mapToHeldOrderResponse(order);
+                    return mapToOrderResponse(order);
                 });
     }
 
@@ -211,9 +227,9 @@ public class OrderServiceImpl implements OrderService {
         counterRepository.save(counter);
     }
 
-    private HeldOrderResponse mapToHeldOrderResponse(Order order) {
-        List<HeldOrderItemResponse> items = order.getOrderItems().stream()
-                .map(item -> HeldOrderItemResponse.builder()
+    private OrderResponse mapToOrderResponse(Order order) {
+        List<OrderItemResponse> items = order.getOrderItems().stream()
+                .map(item -> OrderItemResponse.builder()
                         .ticketTypeId(item.getTicketType().getId())
                         .quantity(item.getQuantity())
                         .unitPrice(item.getUnitPrice())
@@ -221,7 +237,7 @@ public class OrderServiceImpl implements OrderService {
                         .build())
                 .toList();
 
-        return HeldOrderResponse.builder()
+        return OrderResponse.builder()
                 .orderId(order.getId())
                 .concertId(order.getConcert().getId())
                 .status(order.getStatus().name())

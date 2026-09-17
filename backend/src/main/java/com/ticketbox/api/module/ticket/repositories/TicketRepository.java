@@ -8,6 +8,7 @@ import java.util.UUID;
 
 public interface TicketRepository extends JpaRepository<Ticket, UUID> {
 
+    boolean existsByOrderId(UUID orderId);
 }
 
 

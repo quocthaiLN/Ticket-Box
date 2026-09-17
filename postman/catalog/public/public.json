@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "e493d5a5-2f23-454f-a5f7-7c1a65e028c3",
     "name": "TicketBox - Public Catalog API",
-    "description": "Collection for testing public Catalog module endpoints (PublicConcertController).",
+    "description": "Collection for testing public Catalog module endpoints (CatalogController).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -190,6 +190,36 @@
               ]
             },
             "description": "Returns the current inventory snapshot and display status for each ticket type."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Concert Quota",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/concerts/{{concert_id}}/quota",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "concerts",
+                "{{concert_id}}",
+                "quota"
+              ]
+            },
+            "description": "Requires AUDIENCE or ADMIN authentication. Returns this user's held, paid, and remaining purchase quota for every ticket type in a published concert."
           },
           "response": []
         }

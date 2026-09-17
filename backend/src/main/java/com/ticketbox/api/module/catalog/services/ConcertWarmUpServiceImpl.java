@@ -14,7 +14,6 @@ import com.ticketbox.api.module.shared.storage.StorageService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +35,6 @@ public class ConcertWarmUpServiceImpl implements ConcertWarmUpService {
     private final SeatZoneRepository seatZoneRepository;
     private final TicketTypeRepository ticketTypeRepository;
     private final CacheService cacheService;
-    private final StringRedisTemplate stringRedisTemplate;
     private final StorageService storageService;
 
     @Override
@@ -100,7 +98,7 @@ public class ConcertWarmUpServiceImpl implements ConcertWarmUpService {
         String ticketTypesCacheKey = cacheService.generateHashKey("concerts:" + concertId + ":ticket-types", Map.of("includeClosed", false));
         cacheService.set(ticketTypesCacheKey, openTicketResponses, Duration.ofMinutes(30));
 
-        // 5. Warm-up Inventory Response (concerts:{concertId}:inventory) - 5m TTL & Redis Hash Snapshot
+        // 5. Warm-up Inventory Response (concerts:{concertId}:inventory) - 5m TTL
         List<InventoryResponse.InventoryItem> inventoryItems = new ArrayList<>();
         for (TicketType tt : ticketTypes) {
             int available = tt.getAvailableQuantity();
@@ -133,16 +131,6 @@ public class ConcertWarmUpServiceImpl implements ConcertWarmUpService {
                 .items(inventoryItems)
                 .build();
         cacheService.set("concerts:" + concertId + ":inventory", inventoryResponse, Duration.ofMinutes(5));
-
-        // Write inventory hash snapshot to Redis
-        try {
-            String redisHashKey = "inventory:concert:" + concertId;
-            for (InventoryResponse.InventoryItem item : inventoryItems) {
-                stringRedisTemplate.opsForHash().put(redisHashKey, item.getTicketTypeId().toString(), String.valueOf(item.getAvailableQuantity()));
-            }
-        } catch (Exception e) {
-            log.warn("Failed to write Redis inventory hash snapshot during warm-up for concertId {}: {}", concertId, e.getMessage());
-        }
 
         log.info("Finished cache warm-up successfully for concertId: {}", concertId);
     }

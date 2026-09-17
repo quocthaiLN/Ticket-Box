@@ -226,7 +226,7 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#08080E] pt-16 text-[#F0EDEB]">
+    <div className="flex min-h-screen bg-[#080E] pt-16 text-[#F0EDEB]">
       <aside className="fixed bottom-0 left-0 top-16 hidden w-56 flex-col border-r border-white/[0.07] bg-[#0D0D15] px-3 py-6 md:flex">
         <div className="mb-4 px-2 text-xs font-semibold uppercase tracking-widest text-[#8585A0]">Ban tổ chức</div>
         <nav className="flex-1 space-y-1">
@@ -851,45 +851,45 @@ function NewRequestForm({
         </div>
       </div>
       <div className="p-5">
-      <div className="grid gap-3 md:grid-cols-2">
-        <Field name="title" label="Tên concert" required />
-        <Field name="artist_name" label="Nghệ sĩ / lineup" required />
-        <SelectField name="venue_id" label="Địa điểm" required options={venues.map((venue) => ({ value: venue.id, label: `${venue.name} - ${venue.city}` }))} />
-        <Field name="press_kit_url" label="URL bộ tư liệu" />
-        <Field name="starts_at" label="Thời gian bắt đầu" type="datetime-local" required />
-        <Field name="ends_at" label="Thời gian kết thúc" type="datetime-local" required />
-        <Field name="planned_publish_at" label="Dự kiến publish" type="datetime-local" />
-        <Field name="gate_count" label="Số cổng check-in" type="number" min="1" defaultValue="2" required />
-        <Field name="checker_count" label="Số tài khoản soát vé" type="number" min="1" defaultValue="2" required />
-        <TextArea name="description" label="Mô tả" />
-      </div>
-
-      <div className="my-5 border-t border-white/10 pt-5">
-        <h3 className="mb-3 text-sm font-semibold">Loại vé đầu tiên</h3>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <Field name="zone_code" label="Mã khu vực" placeholder="GA" required />
-          <Field name="zone_name" label="Tên khu vực" placeholder="General Admission" required />
-          <Field name="zone_capacity" label="Sức chứa khu vực" type="number" min="1" required />
-          <Field name="ticket_name" label="Tên vé" placeholder="Standard" required />
-          <Field name="price" label="Giá vé VND" type="number" min="0" required />
-          <Field name="total_quantity" label="Số lượng" type="number" min="1" required />
-          <Field name="max_per_user" label="Tối đa mỗi người" type="number" min="1" defaultValue="4" required />
-          <Field name="sale_start_at" label="Mở bán" type="datetime-local" required />
-          <Field name="sale_end_at" label="Kết thúc bán" type="datetime-local" required />
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field name="title" label="Tên concert" required />
+          <Field name="artist_name" label="Nghệ sĩ / lineup" required />
+          <SelectField name="venue_id" label="Địa điểm" required options={venues.map((venue) => ({ value: venue.id, label: `${venue.name} - ${venue.city}` }))} />
+          <Field name="press_kit_url" label="URL bộ tư liệu" />
+          <Field name="starts_at" label="Thời gian bắt đầu" type="datetime-local" required />
+          <Field name="ends_at" label="Thời gian kết thúc" type="datetime-local" required />
+          <Field name="planned_publish_at" label="Dự kiến publish" type="datetime-local" />
+          <Field name="gate_count" label="Số cổng check-in" type="number" min="1" defaultValue="2" required />
+          <Field name="checker_count" label="Số tài khoản soát vé" type="number" min="1" defaultValue="2" required />
+          <TextArea name="description" label="Mô tả" />
         </div>
-      </div>
 
-      <div className="flex flex-wrap gap-3">
-        <button type="submit" disabled={submitting} className="inline-flex items-center gap-2 rounded-xl bg-[#7B61FF] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_6px_20px_rgba(123,97,255,0.3)] disabled:opacity-60">
-          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          Nộp hồ sơ
-        </button>
-        <button type="button" onClick={onClose} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-[#8585A0]">
-          Hủy
-        </button>
-      </div>
-      {/* Báo lỗi đặt ngay dưới nút nộp để thấy ngay khi submit thất bại. */}
-      {error && <div className="mt-4"><Message text={error} error /></div>}
+        <div className="my-5 border-t border-white/10 pt-5">
+          <h3 className="mb-3 text-sm font-semibold">Loại vé đầu tiên</h3>
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+            <Field name="zone_code" label="Mã khu vực" placeholder="GA" required />
+            <Field name="zone_name" label="Tên khu vực" placeholder="General Admission" required />
+            <Field name="zone_capacity" label="Sức chứa khu vực" type="number" min="1" required />
+            <Field name="ticket_name" label="Tên vé" placeholder="Standard" required />
+            <Field name="price" label="Giá vé VND" type="number" min="0" required />
+            <Field name="total_quantity" label="Số lượng" type="number" min="1" required />
+            <Field name="max_per_user" label="Tối đa mỗi người" type="number" min="1" defaultValue="4" required />
+            <Field name="sale_start_at" label="Mở bán" type="datetime-local" required />
+            <Field name="sale_end_at" label="Kết thúc bán" type="datetime-local" required />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <button type="submit" disabled={submitting} className="inline-flex items-center gap-2 rounded-xl bg-[#7B61FF] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_6px_20px_rgba(123,97,255,0.3)] disabled:opacity-60">
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            Nộp hồ sơ
+          </button>
+          <button type="button" onClick={onClose} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-[#8585A0]">
+            Hủy
+          </button>
+        </div>
+        {/* Báo lỗi đặt ngay dưới nút nộp để thấy ngay khi submit thất bại. */}
+        {error && <div className="mt-4"><Message text={error} error /></div>}
       </div>
     </form>
   );
@@ -1828,14 +1828,14 @@ function OrganizerConcertEditor({
         current.map((item) =>
           item.id === zone.id
             ? {
-                id: saved.id,
-                code: saved.code,
-                name: saved.name,
-                description: saved.description ?? "",
-                capacity: String(saved.capacity),
-                sortOrder: String(saved.sort_order),
-                isNew: false,
-              }
+              id: saved.id,
+              code: saved.code,
+              name: saved.name,
+              description: saved.description ?? "",
+              capacity: String(saved.capacity),
+              sortOrder: String(saved.sort_order),
+              isNew: false,
+            }
             : item,
         ),
       );
@@ -1893,19 +1893,19 @@ function OrganizerConcertEditor({
         current.map((item) =>
           item.id === ticket.id
             ? {
-                id: saved.id,
-                seatZoneId: saved.seat_zone_id,
-                name: saved.name,
-                description: saved.description ?? "",
-                price: String(saved.price.amount),
-                totalQuantity: String(saved.total_quantity),
-                maxPerUser: String(saved.max_per_user),
-                saleStartAt: toDateTimeLocal(saved.sale_start_at),
-                saleEndAt: toDateTimeLocal(saved.sale_end_at),
-                soldQuantity: String(saved.sold_quantity),
-                availableQuantity: String(saved.available_quantity),
-                isNew: false,
-              }
+              id: saved.id,
+              seatZoneId: saved.seat_zone_id,
+              name: saved.name,
+              description: saved.description ?? "",
+              price: String(saved.price.amount),
+              totalQuantity: String(saved.total_quantity),
+              maxPerUser: String(saved.max_per_user),
+              saleStartAt: toDateTimeLocal(saved.sale_start_at),
+              saleEndAt: toDateTimeLocal(saved.sale_end_at),
+              soldQuantity: String(saved.sold_quantity),
+              availableQuantity: String(saved.available_quantity),
+              isNew: false,
+            }
             : item,
         ),
       );
@@ -1965,306 +1965,306 @@ function OrganizerConcertEditor({
           </div>
         )}
         <fieldset disabled={readOnly} className="m-0 min-w-0 space-y-6 border-0 p-0">
-        {activeSection === "basic" && (
-          <EditorCard title="Thông tin cơ bản">
-            <div className="space-y-4">
-              <EditorRow label="Tên sự kiện *">
-                <input className={editorInputClass} style={editorInputStyle} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
-              </EditorRow>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <EditorRow label="Nghệ sĩ *">
-                  <input className={editorInputClass} style={editorInputStyle} value={form.artistName} onChange={(event) => setForm({ ...form, artistName: event.target.value })} />
+          {activeSection === "basic" && (
+            <EditorCard title="Thông tin cơ bản">
+              <div className="space-y-4">
+                <EditorRow label="Tên sự kiện *">
+                  <input className={editorInputClass} style={editorInputStyle} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
                 </EditorRow>
-                <EditorRow label="Thể loại">
-                  <input className={editorInputClass} style={editorInputStyle} placeholder="VD: Indie/R&B" value={form.genre} onChange={(event) => setForm({ ...form, genre: event.target.value })} />
-                </EditorRow>
-              </div>
-              <EditorRow label="Mô tả">
-                <textarea
-                  className={`${editorInputClass} min-h-24 resize-y`}
-                  style={editorInputStyle}
-                  placeholder="Mô tả ngắn về sự kiện..."
-                  value={form.description}
-                  onChange={(event) => setForm({ ...form, description: event.target.value })}
-                />
-              </EditorRow>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <EditorRow label="Thời gian bắt đầu *">
-                  <input type="datetime-local" className={editorInputClass} style={editorInputStyle} value={form.startsAt} onChange={(event) => setForm({ ...form, startsAt: event.target.value })} />
-                </EditorRow>
-                <EditorRow label="Thời gian kết thúc *">
-                  <input type="datetime-local" className={editorInputClass} style={editorInputStyle} value={form.endsAt} onChange={(event) => setForm({ ...form, endsAt: event.target.value })} />
-                </EditorRow>
-              </div>
-              <EditorRow label="Địa điểm">
-                <select className={editorInputClass} style={editorInputStyle} value={form.venueId} onChange={(event) => setForm({ ...form, venueId: event.target.value })}>
-                  <option value="">Chọn địa điểm</option>
-                  {venues.map((venue) => (
-                    <option key={venue.id} value={venue.id}>{venue.name} - {venue.city}</option>
-                  ))}
-                </select>
-              </EditorRow>
-              <EditorRow label="Ảnh bìa (URL)">
-                {/* Ảnh bìa lấy tự động từ press kit (ảnh trang 1); ô URL chỉ là phương án chữa cháy. */}
-                <input className={editorInputClass} style={editorInputStyle} placeholder="Tự tách từ press kit — chỉ nhập URL khi cần thay thế" value={form.coverImageUrl} onChange={(event) => setForm({ ...form, coverImageUrl: event.target.value })} />
-                {form.coverImageUrl && (
-                  <div className="mt-2 h-24 w-40 overflow-hidden rounded-lg bg-[#0D0D15]">
-                    <img src={form.coverImageUrl} alt="" className="h-full w-full object-cover" />
-                  </div>
-                )}
-              </EditorRow>
-              <div className="flex gap-3">
-                <button type="button" disabled={submitting} onClick={handleSave} className="rounded-xl bg-[#7B61FF] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
-                  {submitting ? "Đang lưu..." : "Lưu thay đổi"}
-                </button>
-                <button type="button" onClick={onBack} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-[#8585A0]">
-                  Hủy
-                </button>
-              </div>
-            </div>
-          </EditorCard>
-        )}
-
-        {activeSection === "zones" && (
-          <EditorCard title="Cấu hình zone">
-            <div className="mb-5 rounded-xl border border-white/[0.07] bg-[#0A0A12] p-4">
-              <div className="mb-1 flex items-center gap-2">
-                <h4 className="text-sm font-semibold text-[#F0EDEB]">Ảnh sơ đồ chỗ ngồi (trang thông tin concert)</h4>
-                {seatMapUploading && <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8585A0]" />}
-              </div>
-              <p className="mb-3 text-xs text-[#8585A0]">
-                Ảnh nên chú thích rõ màu và tên từng khu/hạng vé để khán giả đối chiếu với bảng giá. Ảnh được lưu ngay khi tải lên hoặc gỡ, và được đính kèm trong email mời khách.
-              </p>
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#7B61FF]/30 bg-[#7B61FF]/10 px-4 py-2 text-sm text-[#C9BCFF] transition-colors hover:bg-[#7B61FF]/20">
-                  <Upload className="h-4 w-4" />
-                  {seatMapUploading ? "Đang xử lý..." : form.seatMapImageUrl ? "Đổi ảnh sơ đồ" : "Chọn ảnh sơ đồ"}
-                  <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={seatMapUploading} onChange={handleSeatMapImageUpload} />
-                </label>
-                {form.seatMapImageUrl && (
-                  <button type="button" disabled={seatMapUploading} onClick={() => void handleSeatMapImageRemove()} className="text-xs text-[#8585A0] underline-offset-2 hover:text-[#E8315B] hover:underline disabled:opacity-50">
-                    Gỡ ảnh
-                  </button>
-                )}
-              </div>
-              {form.seatMapImageUrl && (
-                <div className="mt-3 max-w-md overflow-hidden rounded-lg bg-[#0D0D15]">
-                  <img src={form.seatMapImageUrl} alt="Sơ đồ hạng vé" className="w-full object-contain" />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <EditorRow label="Nghệ sĩ *">
+                    <input className={editorInputClass} style={editorInputStyle} value={form.artistName} onChange={(event) => setForm({ ...form, artistName: event.target.value })} />
+                  </EditorRow>
+                  <EditorRow label="Thể loại">
+                    <input className={editorInputClass} style={editorInputStyle} placeholder="VD: Indie/R&B" value={form.genre} onChange={(event) => setForm({ ...form, genre: event.target.value })} />
+                  </EditorRow>
                 </div>
-              )}
-              <div className="mt-4 border-t border-white/[0.06] pt-4">
-                <h4 className="mb-1 text-sm font-semibold text-[#F0EDEB]">Sơ đồ SVG tương tác (trang mua vé)</h4>
+                <EditorRow label="Mô tả">
+                  <textarea
+                    className={`${editorInputClass} min-h-24 resize-y`}
+                    style={editorInputStyle}
+                    placeholder="Mô tả ngắn về sự kiện..."
+                    value={form.description}
+                    onChange={(event) => setForm({ ...form, description: event.target.value })}
+                  />
+                </EditorRow>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <EditorRow label="Thời gian bắt đầu *">
+                    <input type="datetime-local" className={editorInputClass} style={editorInputStyle} value={form.startsAt} onChange={(event) => setForm({ ...form, startsAt: event.target.value })} />
+                  </EditorRow>
+                  <EditorRow label="Thời gian kết thúc *">
+                    <input type="datetime-local" className={editorInputClass} style={editorInputStyle} value={form.endsAt} onChange={(event) => setForm({ ...form, endsAt: event.target.value })} />
+                  </EditorRow>
+                </div>
+                <EditorRow label="Địa điểm">
+                  <select className={editorInputClass} style={editorInputStyle} value={form.venueId} onChange={(event) => setForm({ ...form, venueId: event.target.value })}>
+                    <option value="">Chọn địa điểm</option>
+                    {venues.map((venue) => (
+                      <option key={venue.id} value={venue.id}>{venue.name} - {venue.city}</option>
+                    ))}
+                  </select>
+                </EditorRow>
+                <EditorRow label="Ảnh bìa (URL)">
+                  {/* Ảnh bìa lấy tự động từ press kit (ảnh trang 1); ô URL chỉ là phương án chữa cháy. */}
+                  <input className={editorInputClass} style={editorInputStyle} placeholder="Tự tách từ press kit — chỉ nhập URL khi cần thay thế" value={form.coverImageUrl} onChange={(event) => setForm({ ...form, coverImageUrl: event.target.value })} />
+                  {form.coverImageUrl && (
+                    <div className="mt-2 h-24 w-40 overflow-hidden rounded-lg bg-[#0D0D15]">
+                      <img src={form.coverImageUrl} alt="" className="h-full w-full object-cover" />
+                    </div>
+                  )}
+                </EditorRow>
+                <div className="flex gap-3">
+                  <button type="button" disabled={submitting} onClick={handleSave} className="rounded-xl bg-[#7B61FF] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+                    {submitting ? "Đang lưu..." : "Lưu thay đổi"}
+                  </button>
+                  <button type="button" onClick={onBack} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-[#8585A0]">
+                    Hủy
+                  </button>
+                </div>
+              </div>
+            </EditorCard>
+          )}
+
+          {activeSection === "zones" && (
+            <EditorCard title="Cấu hình zone">
+              <div className="mb-5 rounded-xl border border-white/[0.07] bg-[#0A0A12] p-4">
+                <div className="mb-1 flex items-center gap-2">
+                  <h4 className="text-sm font-semibold text-[#F0EDEB]">Ảnh sơ đồ chỗ ngồi (trang thông tin concert)</h4>
+                  {seatMapUploading && <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8585A0]" />}
+                </div>
                 <p className="mb-3 text-xs text-[#8585A0]">
-                  SVG với id khu vực dạng <code>zone-&lt;mã zone&gt;</code>; khán giả bấm chọn khu trực tiếp trên sơ đồ ở trang mua vé.
+                  Ảnh nên chú thích rõ màu và tên từng khu/hạng vé để khán giả đối chiếu với bảng giá. Ảnh được lưu ngay khi tải lên hoặc gỡ, và được đính kèm trong email mời khách.
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
                   <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#7B61FF]/30 bg-[#7B61FF]/10 px-4 py-2 text-sm text-[#C9BCFF] transition-colors hover:bg-[#7B61FF]/20">
                     <Upload className="h-4 w-4" />
-                    {seatMapUploading ? "Đang xử lý..." : form.seatMapUrl ? "Đổi file SVG" : "Chọn file SVG"}
-                    <input type="file" accept="image/svg+xml,.svg" className="hidden" disabled={seatMapUploading} onChange={handleSeatMapSvgUpload} />
+                    {seatMapUploading ? "Đang xử lý..." : form.seatMapImageUrl ? "Đổi ảnh sơ đồ" : "Chọn ảnh sơ đồ"}
+                    <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={seatMapUploading} onChange={handleSeatMapImageUpload} />
                   </label>
-                  {form.seatMapUrl && (
-                    <button type="button" disabled={seatMapUploading} onClick={() => void handleSeatMapSvgRemove()} className="text-xs text-[#8585A0] underline-offset-2 hover:text-[#E8315B] hover:underline disabled:opacity-50">
-                      Gỡ file SVG
+                  {form.seatMapImageUrl && (
+                    <button type="button" disabled={seatMapUploading} onClick={() => void handleSeatMapImageRemove()} className="text-xs text-[#8585A0] underline-offset-2 hover:text-[#E8315B] hover:underline disabled:opacity-50">
+                      Gỡ ảnh
                     </button>
                   )}
                 </div>
+                {form.seatMapImageUrl && (
+                  <div className="mt-3 max-w-md overflow-hidden rounded-lg bg-[#0D0D15]">
+                    <img src={form.seatMapImageUrl} alt="Sơ đồ hạng vé" className="w-full object-contain" />
+                  </div>
+                )}
+                <div className="mt-4 border-t border-white/[0.06] pt-4">
+                  <h4 className="mb-1 text-sm font-semibold text-[#F0EDEB]">Sơ đồ SVG tương tác (trang mua vé)</h4>
+                  <p className="mb-3 text-xs text-[#8585A0]">
+                    SVG với id khu vực dạng <code>zone-&lt;mã zone&gt;</code>; khán giả bấm chọn khu trực tiếp trên sơ đồ ở trang mua vé.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#7B61FF]/30 bg-[#7B61FF]/10 px-4 py-2 text-sm text-[#C9BCFF] transition-colors hover:bg-[#7B61FF]/20">
+                      <Upload className="h-4 w-4" />
+                      {seatMapUploading ? "Đang xử lý..." : form.seatMapUrl ? "Đổi file SVG" : "Chọn file SVG"}
+                      <input type="file" accept="image/svg+xml,.svg" className="hidden" disabled={seatMapUploading} onChange={handleSeatMapSvgUpload} />
+                    </label>
+                    {form.seatMapUrl && (
+                      <button type="button" disabled={seatMapUploading} onClick={() => void handleSeatMapSvgRemove()} className="text-xs text-[#8585A0] underline-offset-2 hover:text-[#E8315B] hover:underline disabled:opacity-50">
+                        Gỡ file SVG
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {seatMapError && <p className="mt-2 text-xs text-[#E8315B]">{seatMapError}</p>}
               </div>
-              {seatMapError && <p className="mt-2 text-xs text-[#E8315B]">{seatMapError}</p>}
-            </div>
 
-            {zoneError && (
-              <div className="mb-4 rounded-xl border border-[#E8315B]/25 bg-[#E8315B]/10 px-3 py-2 text-sm text-[#E8315B]">
-                {zoneError}
-              </div>
-            )}
-            <div className="space-y-3">
-              {zones.length === 0 && (
-                <div className="rounded-xl border border-dashed border-white/10 py-8 text-center">
-                  <p className="mb-4 text-sm text-[#8585A0]">Chưa có zone nào</p>
-                  <button type="button" onClick={addZone} className="mx-auto inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/20 bg-[#F5C842]/10 px-4 py-2 text-sm text-[#F5C842]">
-                    <Plus className="h-4 w-4" />
-                    Thêm zone
-                  </button>
+              {zoneError && (
+                <div className="mb-4 rounded-xl border border-[#E8315B]/25 bg-[#E8315B]/10 px-3 py-2 text-sm text-[#E8315B]">
+                  {zoneError}
                 </div>
               )}
-
-              {zones.map((zone) => (
-                zone.isNew ? (
-                  <div key={zone.id} className="rounded-xl border border-[#F5C842]/20 bg-[#0D0D15] p-3.5">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <span className="text-sm font-semibold text-[#F5C842]">Zone mới</span>
-                      <button type="button" onClick={() => removeZone(zone.id)} className="rounded p-1 text-[#8585A0] transition-colors hover:bg-red-500/10 hover:text-[#E8315B]">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    <div className="grid gap-3 lg:grid-cols-4">
-                      <TicketTextField label="Mã zone" value={zone.code} onChange={(value) => updateZone(zone.id, { code: value.toUpperCase() })} />
-                      <TicketTextField label="Tên zone" value={zone.name} onChange={(value) => updateZone(zone.id, { name: value })} />
-                      <TicketNumberField label="Sức chứa" value={zone.capacity} onChange={(value) => updateZone(zone.id, { capacity: value })} />
-                      <TicketNumberField label="Thứ tự" value={zone.sortOrder} onChange={(value) => updateZone(zone.id, { sortOrder: value })} />
-                      <label className="lg:col-span-4">
-                        <span className="mb-1 block text-xs text-[#8585A0]">Mô tả</span>
-                        <input className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={zone.description} onChange={(event) => updateZone(zone.id, { description: event.target.value })} />
-                      </label>
-                      <div className="flex justify-end lg:col-span-4">
-                        <button
-                          type="button"
-                          disabled={zone.saving}
-                          onClick={() => void saveZone(zone)}
-                          className="inline-flex items-center gap-2 rounded-lg bg-[#F5C842] px-4 py-2 text-sm font-semibold text-[#0D0D14] disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {zone.saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                          Lưu zone
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div key={zone.id} className="rounded-2xl border border-white/[0.07] bg-[#0A0A12] p-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <div className="mb-2 flex items-center gap-2">
-                          <span className="rounded-lg bg-[#F5C842]/10 px-2 py-1 text-xs font-semibold text-[#F5C842]">{zone.code}</span>
-                          <h4 className="break-words text-sm font-semibold text-[#F0EDEB]">{zone.name}</h4>
-                        </div>
-                        {zone.description && <p className="text-xs leading-5 text-[#8585A0]">{zone.description}</p>}
-                      </div>
-                      <div className="grid min-w-[220px] grid-cols-2 gap-3">
-                        <TicketStat label="Sức chứa" value={Number(zone.capacity || 0).toLocaleString("vi-VN")} />
-                        <TicketStat label="Thứ tự" value={String(zone.sortOrder || 0)} />
-                      </div>
-                    </div>
-                  </div>
-                )
-              ))}
-
-              {zones.length > 0 && (
-                <button type="button" onClick={addZone} className="inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/15 bg-[#F5C842]/[0.08] px-4 py-2 text-sm text-[#F5C842]">
-                  <Plus className="h-4 w-4" />
-                  Thêm zone
-                </button>
-              )}
-            </div>
-          </EditorCard>
-        )}
-
-        {activeSection === "tickets" && (
-          <EditorCard title="Cấu hình loại vé">
-            {ticketError && (
-              <div className="mb-4 rounded-xl border border-[#E8315B]/25 bg-[#E8315B]/10 px-3 py-2 text-sm text-[#E8315B]">
-                {ticketError}
-              </div>
-            )}
-            {tickets.length === 0 ? (
-              <div className="py-8 text-center">
-                <Ticket className="mx-auto mb-2 h-8 w-8 text-[#8585A0]" />
-                <p className="mb-4 text-sm text-[#8585A0]">Chưa có loại vé nào</p>
-                {seatZoneOptions.length === 0 && (
-                  <p className="mx-auto mb-4 max-w-md text-xs text-[#8585A0]">Tạo ít nhất một zone trước khi thêm loại vé.</p>
-                )}
-                <button
-                  type="button"
-                  disabled={seatZoneOptions.length === 0}
-                  onClick={addTicketType}
-                  className="mx-auto inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/20 bg-[#F5C842]/10 px-4 py-2 text-sm text-[#F5C842] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Plus className="h-4 w-4" />
-                  Thêm loại vé
-                </button>
-              </div>
-            ) : (
               <div className="space-y-3">
-                {tickets.map((ticket, index) => (
-                  ticket.isNew ? (
-                    <div key={ticket.id} className="rounded-xl border border-[#F5C842]/20 bg-[#0D0D15] p-3.5">
+                {zones.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-white/10 py-8 text-center">
+                    <p className="mb-4 text-sm text-[#8585A0]">Chưa có zone nào</p>
+                    <button type="button" onClick={addZone} className="mx-auto inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/20 bg-[#F5C842]/10 px-4 py-2 text-sm text-[#F5C842]">
+                      <Plus className="h-4 w-4" />
+                      Thêm zone
+                    </button>
+                  </div>
+                )}
+
+                {zones.map((zone) => (
+                  zone.isNew ? (
+                    <div key={zone.id} className="rounded-xl border border-[#F5C842]/20 bg-[#0D0D15] p-3.5">
                       <div className="mb-3 flex items-center justify-between gap-3">
-                        <span className="text-sm font-semibold text-[#F5C842]">Loại vé mới</span>
-                        <button type="button" onClick={() => removeTicketType(ticket.id)} className="rounded p-1 text-[#8585A0] transition-colors hover:bg-red-500/10 hover:text-[#E8315B]">
+                        <span className="text-sm font-semibold text-[#F5C842]">Zone mới</span>
+                        <button type="button" onClick={() => removeZone(zone.id)} className="rounded p-1 text-[#8585A0] transition-colors hover:bg-red-500/10 hover:text-[#E8315B]">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
                       <div className="grid gap-3 lg:grid-cols-4">
-                        <label>
-                          <span className="mb-1 block text-xs text-[#8585A0]">Khu vực</span>
-                          <select
-                            className={`${editorInputClass} min-h-9`}
-                            style={editorInputStyle}
-                            value={ticket.seatZoneId}
-                            onChange={(event) => updateTicketType(ticket.id, { seatZoneId: event.target.value })}
-                          >
-                            {seatZoneOptions.map((zone) => (
-                              <option key={zone.id} value={zone.id}>{zone.label}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <TicketTextField label="Tên loại vé" value={ticket.name} onChange={(value) => updateTicketType(ticket.id, { name: value })} />
-                        <TicketNumberField label="Giá" value={ticket.price} onChange={(value) => updateTicketType(ticket.id, { price: value })} />
-                        <TicketNumberField label="Tổng số lượng" value={ticket.totalQuantity} onChange={(value) => updateTicketType(ticket.id, { totalQuantity: value })} />
-                        <TicketNumberField label="Tối đa / người" value={ticket.maxPerUser} onChange={(value) => updateTicketType(ticket.id, { maxPerUser: value })} />
-                        <label>
-                          <span className="mb-1 block text-xs text-[#8585A0]">Mở bán</span>
-                          <input type="datetime-local" className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={ticket.saleStartAt} onChange={(event) => updateTicketType(ticket.id, { saleStartAt: event.target.value })} />
-                        </label>
-                        <label>
-                          <span className="mb-1 block text-xs text-[#8585A0]">Đóng bán</span>
-                          <input type="datetime-local" className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={ticket.saleEndAt} onChange={(event) => updateTicketType(ticket.id, { saleEndAt: event.target.value })} />
-                        </label>
+                        <TicketTextField label="Mã zone" value={zone.code} onChange={(value) => updateZone(zone.id, { code: value.toUpperCase() })} />
+                        <TicketTextField label="Tên zone" value={zone.name} onChange={(value) => updateZone(zone.id, { name: value })} />
+                        <TicketNumberField label="Sức chứa" value={zone.capacity} onChange={(value) => updateZone(zone.id, { capacity: value })} />
+                        <TicketNumberField label="Thứ tự" value={zone.sortOrder} onChange={(value) => updateZone(zone.id, { sortOrder: value })} />
                         <label className="lg:col-span-4">
                           <span className="mb-1 block text-xs text-[#8585A0]">Mô tả</span>
-                          <input className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={ticket.description} onChange={(event) => updateTicketType(ticket.id, { description: event.target.value })} />
+                          <input className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={zone.description} onChange={(event) => updateZone(zone.id, { description: event.target.value })} />
                         </label>
                         <div className="flex justify-end lg:col-span-4">
                           <button
                             type="button"
-                            disabled={ticket.saving || !ticket.seatZoneId}
-                            onClick={() => void saveTicketType(ticket)}
+                            disabled={zone.saving}
+                            onClick={() => void saveZone(zone)}
                             className="inline-flex items-center gap-2 rounded-lg bg-[#F5C842] px-4 py-2 text-sm font-semibold text-[#0D0D14] disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            {ticket.saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                            Lưu loại vé
+                            {zone.saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                            Lưu zone
                           </button>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div key={ticket.id} className="rounded-2xl border border-white/[0.07] bg-[#0A0A12] p-4">
-                      <div className="mb-4 flex items-center justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ background: ticketDotColor(index) }} />
-                          <span className="break-words text-sm font-semibold text-[#F0EDEB]">{ticket.name}</span>
+                    <div key={zone.id} className="rounded-2xl border border-white/[0.07] bg-[#0A0A12] p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="mb-2 flex items-center gap-2">
+                            <span className="rounded-lg bg-[#F5C842]/10 px-2 py-1 text-xs font-semibold text-[#F5C842]">{zone.code}</span>
+                            <h4 className="break-words text-sm font-semibold text-[#F0EDEB]">{zone.name}</h4>
+                          </div>
+                          {zone.description && <p className="text-xs leading-5 text-[#8585A0]">{zone.description}</p>}
                         </div>
-                        <div className="flex shrink-0 gap-2 text-[#8585A0]">
-                          <button type="button" className="rounded p-1 transition-colors hover:bg-white/10 hover:text-[#7B61FF]" title="Chỉnh sửa loại vé">
-                            <Edit2 className="h-3.5 w-3.5" />
-                          </button>
-                          <button type="button" onClick={() => removeTicketType(ticket.id)} className="rounded p-1 transition-colors hover:bg-red-500/10 hover:text-[#E8315B]" title="Xóa loại vé">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                        <div className="grid min-w-[220px] grid-cols-2 gap-3">
+                          <TicketStat label="Sức chứa" value={Number(zone.capacity || 0).toLocaleString("vi-VN")} />
+                          <TicketStat label="Thứ tự" value={String(zone.sortOrder || 0)} />
                         </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                        <TicketStat label="Giá" value={formatMoney(Number(ticket.price || 0))} />
-                        <TicketStat label="Tổng" value={Number(ticket.totalQuantity || 0).toLocaleString("vi-VN")} />
-                        <TicketStat label="Đã bán" value={Number(ticket.soldQuantity || 0).toLocaleString("vi-VN")} />
-                        <TicketStat label="Còn lại" value={Number(ticket.availableQuantity || 0).toLocaleString("vi-VN")} />
                       </div>
                     </div>
                   )
                 ))}
-                <button
-                  type="button"
-                  disabled={seatZoneOptions.length === 0}
-                  onClick={addTicketType}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/15 bg-[#F5C842]/[0.08] px-4 py-2 text-sm text-[#F5C842] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Plus className="h-4 w-4" />
-                  Thêm loại vé
-                </button>
+
+                {zones.length > 0 && (
+                  <button type="button" onClick={addZone} className="inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/15 bg-[#F5C842]/[0.08] px-4 py-2 text-sm text-[#F5C842]">
+                    <Plus className="h-4 w-4" />
+                    Thêm zone
+                  </button>
+                )}
               </div>
-            )}
-          </EditorCard>
-        )}
+            </EditorCard>
+          )}
+
+          {activeSection === "tickets" && (
+            <EditorCard title="Cấu hình loại vé">
+              {ticketError && (
+                <div className="mb-4 rounded-xl border border-[#E8315B]/25 bg-[#E8315B]/10 px-3 py-2 text-sm text-[#E8315B]">
+                  {ticketError}
+                </div>
+              )}
+              {tickets.length === 0 ? (
+                <div className="py-8 text-center">
+                  <Ticket className="mx-auto mb-2 h-8 w-8 text-[#8585A0]" />
+                  <p className="mb-4 text-sm text-[#8585A0]">Chưa có loại vé nào</p>
+                  {seatZoneOptions.length === 0 && (
+                    <p className="mx-auto mb-4 max-w-md text-xs text-[#8585A0]">Tạo ít nhất một zone trước khi thêm loại vé.</p>
+                  )}
+                  <button
+                    type="button"
+                    disabled={seatZoneOptions.length === 0}
+                    onClick={addTicketType}
+                    className="mx-auto inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/20 bg-[#F5C842]/10 px-4 py-2 text-sm text-[#F5C842] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Thêm loại vé
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {tickets.map((ticket, index) => (
+                    ticket.isNew ? (
+                      <div key={ticket.id} className="rounded-xl border border-[#F5C842]/20 bg-[#0D0D15] p-3.5">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <span className="text-sm font-semibold text-[#F5C842]">Loại vé mới</span>
+                          <button type="button" onClick={() => removeTicketType(ticket.id)} className="rounded p-1 text-[#8585A0] transition-colors hover:bg-red-500/10 hover:text-[#E8315B]">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <div className="grid gap-3 lg:grid-cols-4">
+                          <label>
+                            <span className="mb-1 block text-xs text-[#8585A0]">Khu vực</span>
+                            <select
+                              className={`${editorInputClass} min-h-9`}
+                              style={editorInputStyle}
+                              value={ticket.seatZoneId}
+                              onChange={(event) => updateTicketType(ticket.id, { seatZoneId: event.target.value })}
+                            >
+                              {seatZoneOptions.map((zone) => (
+                                <option key={zone.id} value={zone.id}>{zone.label}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <TicketTextField label="Tên loại vé" value={ticket.name} onChange={(value) => updateTicketType(ticket.id, { name: value })} />
+                          <TicketNumberField label="Giá" value={ticket.price} onChange={(value) => updateTicketType(ticket.id, { price: value })} />
+                          <TicketNumberField label="Tổng số lượng" value={ticket.totalQuantity} onChange={(value) => updateTicketType(ticket.id, { totalQuantity: value })} />
+                          <TicketNumberField label="Tối đa / người" value={ticket.maxPerUser} onChange={(value) => updateTicketType(ticket.id, { maxPerUser: value })} />
+                          <label>
+                            <span className="mb-1 block text-xs text-[#8585A0]">Mở bán</span>
+                            <input type="datetime-local" className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={ticket.saleStartAt} onChange={(event) => updateTicketType(ticket.id, { saleStartAt: event.target.value })} />
+                          </label>
+                          <label>
+                            <span className="mb-1 block text-xs text-[#8585A0]">Đóng bán</span>
+                            <input type="datetime-local" className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={ticket.saleEndAt} onChange={(event) => updateTicketType(ticket.id, { saleEndAt: event.target.value })} />
+                          </label>
+                          <label className="lg:col-span-4">
+                            <span className="mb-1 block text-xs text-[#8585A0]">Mô tả</span>
+                            <input className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={ticket.description} onChange={(event) => updateTicketType(ticket.id, { description: event.target.value })} />
+                          </label>
+                          <div className="flex justify-end lg:col-span-4">
+                            <button
+                              type="button"
+                              disabled={ticket.saving || !ticket.seatZoneId}
+                              onClick={() => void saveTicketType(ticket)}
+                              className="inline-flex items-center gap-2 rounded-lg bg-[#F5C842] px-4 py-2 text-sm font-semibold text-[#0D0D14] disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {ticket.saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                              Lưu loại vé
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div key={ticket.id} className="rounded-2xl border border-white/[0.07] bg-[#0A0A12] p-4">
+                        <div className="mb-4 flex items-center justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ background: ticketDotColor(index) }} />
+                            <span className="break-words text-sm font-semibold text-[#F0EDEB]">{ticket.name}</span>
+                          </div>
+                          <div className="flex shrink-0 gap-2 text-[#8585A0]">
+                            <button type="button" className="rounded p-1 transition-colors hover:bg-white/10 hover:text-[#7B61FF]" title="Chỉnh sửa loại vé">
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                            <button type="button" onClick={() => removeTicketType(ticket.id)} className="rounded p-1 transition-colors hover:bg-red-500/10 hover:text-[#E8315B]" title="Xóa loại vé">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                          <TicketStat label="Giá" value={formatMoney(Number(ticket.price || 0))} />
+                          <TicketStat label="Tổng" value={Number(ticket.totalQuantity || 0).toLocaleString("vi-VN")} />
+                          <TicketStat label="Đã bán" value={Number(ticket.soldQuantity || 0).toLocaleString("vi-VN")} />
+                          <TicketStat label="Còn lại" value={Number(ticket.availableQuantity || 0).toLocaleString("vi-VN")} />
+                        </div>
+                      </div>
+                    )
+                  ))}
+                  <button
+                    type="button"
+                    disabled={seatZoneOptions.length === 0}
+                    onClick={addTicketType}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#F5C842]/15 bg-[#F5C842]/[0.08] px-4 py-2 text-sm text-[#F5C842] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Thêm loại vé
+                  </button>
+                </div>
+              )}
+            </EditorCard>
+          )}
         </fieldset>
       </div>
     </div>
@@ -2740,7 +2740,7 @@ function Header({ view, onNewRequest }: { view: OrganizerView; onNewRequest: () 
 
 function OrganizerAccessState({ role }: { role?: string }) {
   return (
-    <main className="min-h-screen bg-[#08080E] px-4 pt-28 text-[#F0EDEB]">
+    <main className="min-h-screen bg-[#080E] px-4 pt-28 text-[#F0EDEB]">
       <section className="mx-auto max-w-xl rounded-lg border border-white/10 bg-[#111118] p-6">
         <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[#7B61FF]/15 text-[#7B61FF]">
           <UserCheck className="h-5 w-5" />

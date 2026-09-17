@@ -51,7 +51,7 @@ export function AudienceHomePage() {
   const featured = concerts[0];
 
   return (
-    <div className="min-h-screen bg-[#08080E]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+    <div className="min-h-screen bg-[#080E]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       {featured && (
         <section className="relative min-h-[92vh] overflow-hidden pt-16">
           <div className="absolute inset-0">
@@ -121,7 +121,7 @@ export function AudienceHomePage() {
                   <Link
                     key={concert.id}
                     to={`/concerts/${concert.id}`}
-                    className="flex shrink-0 items-center gap-3 rounded-xl border border-white/10 bg-[#111118]/80 px-4 py-3 backdrop-blur transition-colors hover:bg-white/10"
+                    className="flex shrink-0 items-center gap-3 rounded-xl border border-white/10 bg-[#111118]/8080 px-4 py-3 backdrop-blur transition-colors hover:bg-white/10"
                   >
                     <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg">
                       <ImageWithFallback src={concert.coverImageUrl} alt={concert.title} className="h-full w-full object-cover" />

@@ -16,6 +16,19 @@ public final class RabbitMqConstants {
     public static final String CATALOG_CACHE_WARMUP_QUEUE = "catalog.cache-warmup.queue";
     public static final String CATALOG_CACHE_WARMUP_ROUTING_KEY = "inventory.cache-warmup";
 
+    // Payment Module Constants
+    public static final String PAYMENT_EXCHANGE = "payment.exchange";
+
+    public static final String PAYMENT_SUCCEEDED_ROUTING_KEY = "payment.succeeded";
+    public static final String PAYMENT_FAILED_ROUTING_KEY = "payment.failed";
+    public static final String TICKET_PAYMENT_SUCCEEDED_QUEUE = "ticket.payment-succeeded.queue";
+    public static final String NOTIFICATION_PAYMENT_FAILED_QUEUE = "notification.payment-failed.queue";
+
+    // Ticket Module Constants
+    public static final String TICKET_EXCHANGE = "ticket.exchange";
+    public static final String TICKET_ISSUED_ROUTING_KEY = "ticket.issued";
+    public static final String NOTIFICATION_TICKET_ISSUED_QUEUE = "notification.ticket-issued.queue";
+
     // Standard Template DLX & DLQ Constants (for future module reference)
     public static final String DEFAULT_DLX = "ticketbox.dlx";
     public static final String DEFAULT_DLQ_ROUTING_KEY = "ticketbox.dlk";

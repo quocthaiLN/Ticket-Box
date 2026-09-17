@@ -13,7 +13,7 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class HeldOrderItemResponse {
+public class OrderItemResponse {
 
     @JsonProperty("ticket_type_id")
     private UUID ticketTypeId;

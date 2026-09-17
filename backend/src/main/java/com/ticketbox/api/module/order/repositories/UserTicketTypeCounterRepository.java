@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -23,4 +24,12 @@ public interface UserTicketTypeCounterRepository extends JpaRepository<UserTicke
     Optional<UserTicketTypeCounter> findByUserIdAndTicketTypeIdForUpdate(
             @Param("userId") UUID userId,
             @Param("ticketTypeId") UUID ticketTypeId);
+
+    @Query("""
+            SELECT c FROM UserTicketTypeCounter c
+            WHERE c.id.userId = :userId AND c.ticketType.concert.id = :concertId
+            """)
+    List<UserTicketTypeCounter> findByUserIdAndConcertId(
+            @Param("userId") UUID userId,
+            @Param("concertId") UUID concertId);
 }

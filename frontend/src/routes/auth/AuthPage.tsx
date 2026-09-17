@@ -211,14 +211,14 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
   return (
     <main
-      className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#08080E] px-4 py-24"
+      className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#080E] px-4 py-24"
       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
     >
       <div
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(circle at 50% 40%, rgba(232,49,91,0.12) 0%, transparent 60%), radial-gradient(circle at 20% 80%, rgba(123,97,255,0.1) 0%, transparent 50%)",
+            "radial-gradient(circle at 50% 40%, rgba(232,49,91,0.12) 0%, transparent 60%), radial-gradient(circle at 20% 8080%, rgba(123,97,255,0.1) 0%, transparent 50%)",
         }}
       />
       <section
@@ -248,23 +248,23 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
           </Link>
 
           {(isLogin || registerStep === "form") && (
-          <div className="mb-6 text-center">
-            <h1
-              id="auth-title"
-              className="mb-1 text-center"
-              style={{
-                color: "#F0EDEB",
-                fontFamily: "'Cormorant Garamond', Georgia, serif",
-                fontSize: "1.8rem",
-                fontWeight: 700,
-              }}
-            >
-              {isLogin ? "Chào mừng trở lại" : "Tạo tài khoản"}
-            </h1>
-            <p className="text-sm" style={{ color: "#8585A0" }}>
-              {isLogin ? "Đăng nhập để mua vé và quản lý trải nghiệm sự kiện." : "Tham gia TicketBox để mua vé nhanh và nhận e-ticket thuận tiện."}
-            </p>
-          </div>
+            <div className="mb-6 text-center">
+              <h1
+                id="auth-title"
+                className="mb-1 text-center"
+                style={{
+                  color: "#F0EDEB",
+                  fontFamily: "'Cormorant Garamond', Georgia, serif",
+                  fontSize: "1.8rem",
+                  fontWeight: 700,
+                }}
+              >
+                {isLogin ? "Chào mừng trở lại" : "Tạo tài khoản"}
+              </h1>
+              <p className="text-sm" style={{ color: "#8585A0" }}>
+                {isLogin ? "Đăng nhập để mua vé và quản lý trải nghiệm sự kiện." : "Tham gia TicketBox để mua vé nhanh và nhận e-ticket thuận tiện."}
+              </p>
+            </div>
           )}
 
           {error && (
@@ -295,113 +295,113 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             />
           ) : (
             <>
-          <form className="space-y-3" onSubmit={handleSubmit}>
-            {!isLogin && (
-              <AuthField
-                icon={<User className="h-4 w-4" />}
-                placeholder="Họ và tên *"
-                type="text"
-                value={form.fullName}
-                onChange={(value) => setForm({ ...form, fullName: value })}
-                autoComplete="name"
-              />
-            )}
+              <form className="space-y-3" onSubmit={handleSubmit}>
+                {!isLogin && (
+                  <AuthField
+                    icon={<User className="h-4 w-4" />}
+                    placeholder="Họ và tên *"
+                    type="text"
+                    value={form.fullName}
+                    onChange={(value) => setForm({ ...form, fullName: value })}
+                    autoComplete="name"
+                  />
+                )}
 
-            <AuthField
-              icon={<Mail className="h-4 w-4" />}
-              placeholder="Email *"
-              type="email"
-              value={form.email}
-              onChange={(value) => {
-                setForm({ ...form, email: value });
-              }}
-              autoComplete="email"
-            />
+                <AuthField
+                  icon={<Mail className="h-4 w-4" />}
+                  placeholder="Email *"
+                  type="email"
+                  value={form.email}
+                  onChange={(value) => {
+                    setForm({ ...form, email: value });
+                  }}
+                  autoComplete="email"
+                />
 
-            <PasswordField
-              placeholder="Mật khẩu *"
-              value={form.password}
-              visible={showPassword}
-              onVisibleChange={() => setShowPassword((value) => !value)}
-              onChange={(value) => setForm({ ...form, password: value })}
-              autoComplete={isLogin ? "current-password" : "new-password"}
-            />
+                <PasswordField
+                  placeholder="Mật khẩu *"
+                  value={form.password}
+                  visible={showPassword}
+                  onVisibleChange={() => setShowPassword((value) => !value)}
+                  onChange={(value) => setForm({ ...form, password: value })}
+                  autoComplete={isLogin ? "current-password" : "new-password"}
+                />
 
-            {!isLogin && (
-              <PasswordField
-                placeholder="Xác nhận mật khẩu *"
-                value={form.confirmPassword}
-                visible={showPassword}
-                onVisibleChange={() => setShowPassword((value) => !value)}
-                onChange={(value) => setForm({ ...form, confirmPassword: value })}
-                autoComplete="new-password"
-              />
-            )}
+                {!isLogin && (
+                  <PasswordField
+                    placeholder="Xác nhận mật khẩu *"
+                    value={form.confirmPassword}
+                    visible={showPassword}
+                    onVisibleChange={() => setShowPassword((value) => !value)}
+                    onChange={(value) => setForm({ ...form, confirmPassword: value })}
+                    autoComplete="new-password"
+                  />
+                )}
 
-            {!isLogin &&
-              form.confirmPassword.length > 0 &&
-              form.confirmPassword !== form.password && (
-                <p className="text-xs" style={{ color: "#E8315B", marginTop: "-0.25rem" }}>
-                  Mật khẩu xác nhận không khớp.
-                </p>
-              )}
+                {!isLogin &&
+                  form.confirmPassword.length > 0 &&
+                  form.confirmPassword !== form.password && (
+                    <p className="text-xs" style={{ color: "#E8315B", marginTop: "-0.25rem" }}>
+                      Mật khẩu xác nhận không khớp.
+                    </p>
+                  )}
 
-            {isLogin && (
-              <div className="text-right">
-                <Link
-                  to="#"
-                  className="text-xs transition-colors hover:text-amber-400"
-                  style={{ color: "#8585A0" }}
+                {isLogin && (
+                  <div className="text-right">
+                    <Link
+                      to="#"
+                      className="text-xs transition-colors hover:text-amber-400"
+                      style={{ color: "#8585A0" }}
+                    >
+                      Quên mật khẩu?
+                    </Link>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full rounded-xl py-3.5 text-sm font-semibold transition-all hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{
+                    background: "linear-gradient(135deg, #E8315B, #C41E42)",
+                    boxShadow: "0 8px 24px rgba(232,49,91,0.3)",
+                    color: "#fff",
+                    marginTop: "0.5rem",
+                  }}
                 >
-                  Quên mật khẩu?
-                </Link>
+                  {loading ? "Đang xử lý..." : isLogin ? "Đăng nhập" : "Tạo tài khoản"}
+                </button>
+              </form>
+
+              <div className="relative my-5">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }} />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="px-3" style={{ background: "#111118", color: "#8585A0" }}>
+                    {isLogin ? "hoặc đăng nhập với" : "hoặc đăng ký với"}
+                  </span>
+                </div>
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-xl py-3.5 text-sm font-semibold transition-all hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
-              style={{
-                background: "linear-gradient(135deg, #E8315B, #C41E42)",
-                boxShadow: "0 8px 24px rgba(232,49,91,0.3)",
-                color: "#fff",
-                marginTop: "0.5rem",
-              }}
-            >
-              {loading ? "Đang xử lý..." : isLogin ? "Đăng nhập" : "Tạo tài khoản"}
-            </button>
-          </form>
+              <div
+                className="mb-6 grid gap-2"
+                style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)" }}
+              >
+                <SocialButton icon={<GoogleIcon />} label="Google" onClick={handleGoogleLogin} />
+                <SocialButton icon="F" label="Facebook" />
+              </div>
 
-          <div className="relative my-5">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }} />
-            </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="px-3" style={{ background: "#111118", color: "#8585A0" }}>
-                {isLogin ? "hoặc đăng nhập với" : "hoặc đăng ký với"}
-              </span>
-            </div>
-          </div>
-
-          <div
-            className="mb-6 grid gap-2"
-            style={{ gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)" }}
-          >
-            <SocialButton icon={<GoogleIcon />} label="Google" onClick={handleGoogleLogin} />
-            <SocialButton icon="F" label="Facebook" />
-          </div>
-
-          <p className="text-center text-xs" style={{ color: "#8585A0" }}>
-            {isLogin ? "Chưa có tài khoản?" : "Đã có tài khoản?"}{" "}
-            <Link
-              to={isLogin ? "/register" : "/login"}
-              className="font-medium transition-colors hover:text-amber-400"
-              style={{ color: "#F5C842" }}
-            >
-              {isLogin ? "Đăng ký" : "Đăng nhập"}
-            </Link>
-          </p>
+              <p className="text-center text-xs" style={{ color: "#8585A0" }}>
+                {isLogin ? "Chưa có tài khoản?" : "Đã có tài khoản?"}{" "}
+                <Link
+                  to={isLogin ? "/register" : "/login"}
+                  className="font-medium transition-colors hover:text-amber-400"
+                  style={{ color: "#F5C842" }}
+                >
+                  {isLogin ? "Đăng ký" : "Đăng nhập"}
+                </Link>
+              </p>
             </>
           )}
         </div>
@@ -606,24 +606,24 @@ function AuthField({
       >
         {icon}
       </span>
-        <input
-          type={type}
-          placeholder={placeholder}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          autoComplete={autoComplete}
-          required
-          className="auth-input min-w-0 flex-1 border-0 bg-transparent p-0 text-[#F0EDEB] outline-none placeholder:text-[#8585A0]"
-          style={{
-            width: "100%",
-            border: 0,
-            background: "transparent",
-            color: "#F0EDEB",
-            fontSize: "0.95rem",
-            lineHeight: "1.25rem",
-            padding: 0,
-          }}
-        />
+      <input
+        type={type}
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        autoComplete={autoComplete}
+        required
+        className="auth-input min-w-0 flex-1 border-0 bg-transparent p-0 text-[#F0EDEB] outline-none placeholder:text-[#8585A0]"
+        style={{
+          width: "100%",
+          border: 0,
+          background: "transparent",
+          color: "#F0EDEB",
+          fontSize: "0.95rem",
+          lineHeight: "1.25rem",
+          padding: 0,
+        }}
+      />
     </div>
   );
 }
@@ -658,32 +658,32 @@ function PasswordField({
       >
         <Lock className="h-4 w-4" />
       </span>
-        <input
-          type={visible ? "text" : "password"}
-          placeholder={placeholder}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          autoComplete={autoComplete}
-          required
-          className="auth-input min-w-0 flex-1 border-0 bg-transparent p-0 text-[#F0EDEB] outline-none placeholder:text-[#8585A0]"
-          style={{
-            width: "100%",
-            border: 0,
-            background: "transparent",
-            color: "#F0EDEB",
-            fontSize: "0.95rem",
-            lineHeight: "1.25rem",
-            padding: 0,
-          }}
-        />
-        <button
-          type="button"
-          onClick={onVisibleChange}
-          className="shrink-0 rounded-md p-1 text-[#8585A0] transition-colors hover:text-[#F0EDEB]"
-          aria-label={visible ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-        >
-          {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </button>
+      <input
+        type={visible ? "text" : "password"}
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        autoComplete={autoComplete}
+        required
+        className="auth-input min-w-0 flex-1 border-0 bg-transparent p-0 text-[#F0EDEB] outline-none placeholder:text-[#8585A0]"
+        style={{
+          width: "100%",
+          border: 0,
+          background: "transparent",
+          color: "#F0EDEB",
+          fontSize: "0.95rem",
+          lineHeight: "1.25rem",
+          padding: 0,
+        }}
+      />
+      <button
+        type="button"
+        onClick={onVisibleChange}
+        className="shrink-0 rounded-md p-1 text-[#8585A0] transition-colors hover:text-[#F0EDEB]"
+        aria-label={visible ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+      >
+        {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
     </div>
   );
 }

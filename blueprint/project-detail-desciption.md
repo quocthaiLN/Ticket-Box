@@ -87,7 +87,7 @@ Hệ thống phải đảm bảo không có hai khán giả nào cùng nhận đ
 
 ### Tải trọng đột biến
 
-Khi concert Chị Đẹp Đạp Gió Rẽ Sóng mở bán, dự kiến khoảng 80.000 người truy cập trong 5 phút đầu, trong đó 70% dồn vào phút đầu tiên.
+Khi concert Chị Đẹp Đạp Gió Rẽ Sóng mở bán, dự kiến khoảng 8080.000 người truy cập trong 5 phút đầu, trong đó 70% dồn vào phút đầu tiên.
 
 Hệ thống cần có cơ chế:
 * Bảo vệ backend API khỏi bị quá tải (Bucket4j Rate Limit).

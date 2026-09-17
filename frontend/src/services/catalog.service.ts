@@ -1,8 +1,8 @@
 import {
   getConcert,
+  getConcertQuota,
   getConcertMetadata,
   getInventory,
-  getMyTicketQuota,
   listConcerts,
   type ConcertDetail,
   type ConcertMetadata,
@@ -59,7 +59,7 @@ export async function getCatalogConcertDetail(concertId: string): Promise<UiConc
 }
 
 export async function getCatalogTicketQuota(concertId: string): Promise<TicketQuota> {
-  return getMyTicketQuota(concertId);
+  return getConcertQuota(concertId);
 }
 
 function emptyMetadata(concert: ConcertDetail): ConcertMetadata {

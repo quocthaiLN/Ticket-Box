@@ -1,7 +1,7 @@
 package com.ticketbox.api.infrastructure.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ticketbox.api.module.order.domain.dtos.HeldOrderResponse;
+import com.ticketbox.api.module.order.domain.dtos.OrderResponse;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -15,7 +15,7 @@ class JacksonConfigTest {
         ObjectMapper objectMapper = new JacksonConfig().objectMapper();
         LocalDateTime holdExpiresAt = LocalDateTime.of(2026, 9, 11, 20, 30, 0);
 
-        String json = objectMapper.writeValueAsString(HeldOrderResponse.builder()
+        String json = objectMapper.writeValueAsString(OrderResponse.builder()
                 .holdExpiresAt(holdExpiresAt)
                 .createdAt(holdExpiresAt.minusMinutes(15))
                 .build());

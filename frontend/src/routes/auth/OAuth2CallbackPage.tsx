@@ -19,7 +19,7 @@ export function OAuth2CallbackPage() {
   }, [navigate]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#08080E] px-4" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+    <main className="flex min-h-screen items-center justify-center bg-[#080E] px-4" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       <section className="w-full max-w-md rounded-3xl border border-white/10 bg-[#111118] p-8 text-center shadow-2xl">
         {error ? (
           <>

@@ -294,9 +294,10 @@ export async function getInventory(concertId: string) {
   return response.data;
 }
 
-export async function getMyTicketQuota(concertId: string) {
+/** Returns the authenticated user's remaining purchase quota for each ticket type. */
+export async function getConcertQuota(concertId: string) {
   const response = await apiGet<ApiResponse<TicketQuota>>(
-    `/concerts/${concertId}/my-ticket-quota`,
+    `/concerts/${concertId}/quota`,
   );
   return response.data;
 }

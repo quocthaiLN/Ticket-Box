@@ -46,8 +46,8 @@ export function EventsPage() {
   }, [search, city]);
 
   return (
-    <div className="min-h-screen bg-[#08080E] pt-16" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-      <header className="border-b border-white/10 px-4 py-12" style={{ background: "linear-gradient(to bottom, #111118, #08080E)" }}>
+    <div className="min-h-screen bg-[#080E] pt-16" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      <header className="border-b border-white/10 px-4 py-12" style={{ background: "linear-gradient(to bottom, #111118, #080E)" }}>
         <div className="mx-auto max-w-7xl">
           <h1
             className="mb-2 text-[#F0EDEB]"

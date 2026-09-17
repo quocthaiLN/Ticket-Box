@@ -23,8 +23,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.core.HashOperations;
-import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -50,12 +48,6 @@ class ConcertWarmUpServiceTest {
 
     @Mock
     private CacheService cacheService;
-
-    @Mock
-    private StringRedisTemplate stringRedisTemplate;
-
-    @Mock
-    private HashOperations<String, Object, Object> hashOperations;
 
     @Mock
     private StorageService storageService;
@@ -114,8 +106,6 @@ class ConcertWarmUpServiceTest {
         when(seatZoneRepository.findByConcertIdOrderBySortOrderAsc(concertId)).thenReturn(List.of(seatZone));
         when(ticketTypeRepository.findByConcertId(concertId)).thenReturn(List.of(ticketType));
         when(cacheService.generateHashKey(anyString(), anyMap())).thenReturn("concerts:" + concertId + ":ticket-types:hash");
-        when(stringRedisTemplate.opsForHash()).thenReturn(hashOperations);
-
         warmUpService.warmUpConcertCache(concertId);
 
         // Verify cache keys populated
@@ -125,8 +115,6 @@ class ConcertWarmUpServiceTest {
         verify(cacheService, times(1)).set(eq("concerts:" + concertId + ":ticket-types:hash"), anyList(), eq(Duration.ofMinutes(30)));
         verify(cacheService, times(1)).set(eq("concerts:" + concertId + ":inventory"), any(InventoryResponse.class), eq(Duration.ofMinutes(5)));
 
-        // Verify inventory hash snapshot
-        verify(hashOperations, times(1)).put(eq("inventory:concert:" + concertId), eq(ticketType.getId().toString()), eq("90"));
     }
 
     @Test
@@ -136,6 +124,5 @@ class ConcertWarmUpServiceTest {
         warmUpService.warmUpConcertCache(concertId);
 
         verifyNoInteractions(cacheService);
-        verifyNoInteractions(stringRedisTemplate);
     }
 }

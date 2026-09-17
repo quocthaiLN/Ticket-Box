@@ -72,38 +72,38 @@ export function AdminOrganizerRequestsPage() {
   return (
     <AdminShell>
       <section className="mx-auto max-w-7xl">
-          <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h1 className="text-[1.75rem] font-bold text-[#F0EDEB]" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
-                Hồ sơ Ban Tổ Chức
-              </h1>
-              <p className="mt-0.5 text-sm text-[#8585A0]">
-                Duyệt hồ sơ xin tổ chức concert
-              </p>
-            </div>
-            {pendingCount > 0 && (
-              <div className="inline-flex w-fit items-center gap-2 rounded-lg border border-[#F5C842]/25 bg-[#F5C842]/10 px-3 py-1.5 text-sm font-semibold text-[#F5C842]">
-                <Clock className="h-4 w-4" />
-                {pendingCount} chờ duyệt
-              </div>
-            )}
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 className="text-[1.75rem] font-bold text-[#F0EDEB]" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>
+              Hồ sơ Ban Tổ Chức
+            </h1>
+            <p className="mt-0.5 text-sm text-[#8585A0]">
+              Duyệt hồ sơ xin tổ chức concert
+            </p>
           </div>
+          {pendingCount > 0 && (
+            <div className="inline-flex w-fit items-center gap-2 rounded-lg border border-[#F5C842]/25 bg-[#F5C842]/10 px-3 py-1.5 text-sm font-semibold text-[#F5C842]">
+              <Clock className="h-4 w-4" />
+              {pendingCount} chờ duyệt
+            </div>
+          )}
+        </div>
 
-          {message && <Message text={message} error={loadState === "error" || message.toLowerCase().includes("không thể")} />}
+        {message && <Message text={message} error={loadState === "error" || message.toLowerCase().includes("không thể")} />}
 
-          <FilterTabs value={filter} pendingCount={pendingCount} onChange={setFilter} />
+        <FilterTabs value={filter} pendingCount={pendingCount} onChange={setFilter} />
 
-          <section className="mt-5 space-y-3">
-            {loadState === "loading" && <LoadingState />}
-            {loadState === "ready" && requests.length === 0 && (
-              <div className="rounded-2xl border border-white/[0.07] bg-[#111118] p-10 text-center text-sm text-[#8585A0]">
-                Không có hồ sơ phù hợp bộ lọc.
-              </div>
-            )}
-            {requests.map((request) => (
-              <RequestRow key={request.id} request={request} />
-            ))}
-          </section>
+        <section className="mt-5 space-y-3">
+          {loadState === "loading" && <LoadingState />}
+          {loadState === "ready" && requests.length === 0 && (
+            <div className="rounded-2xl border border-white/[0.07] bg-[#111118] p-10 text-center text-sm text-[#8585A0]">
+              Không có hồ sơ phù hợp bộ lọc.
+            </div>
+          )}
+          {requests.map((request) => (
+            <RequestRow key={request.id} request={request} />
+          ))}
+        </section>
       </section>
     </AdminShell>
   );
@@ -395,7 +395,7 @@ function CheckerPasswords({ result }: { result: ApproveOrganizerRequestResult })
 
 function AdminAccessState({ role }: { role?: string }) {
   return (
-    <main className="min-h-screen bg-[#08080E] px-4 pt-28 text-[#F0EDEB]">
+    <main className="min-h-screen bg-[#080E] px-4 pt-28 text-[#F0EDEB]">
       <section className="mx-auto max-w-xl rounded-lg border border-white/10 bg-[#111118] p-6">
         <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[#E8315B]/15 text-[#E8315B]">
           <ShieldCheck className="h-5 w-5" />

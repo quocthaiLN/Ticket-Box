@@ -10,10 +10,11 @@ import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
 import com.ticketbox.api.module.order.domain.dtos.CreateOrderItemRequest;
 import com.ticketbox.api.module.order.domain.dtos.CreateOrderRequest;
-import com.ticketbox.api.module.order.domain.dtos.HeldOrderResponse;
+import com.ticketbox.api.module.order.domain.dtos.OrderResponse;
 import com.ticketbox.api.module.order.domain.entities.Order;
 import com.ticketbox.api.module.order.repositories.OrderRepository;
 import com.ticketbox.api.module.order.repositories.UserTicketTypeCounterRepository;
+import com.ticketbox.api.module.shared.cache.CacheService;
 import com.ticketbox.api.module.shared.idempotency.IdempotencyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -41,9 +42,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -66,6 +69,9 @@ class OrderServiceImplTest {
 
     @Mock
     private TransactionTemplate transactionTemplate;
+
+    @Mock
+    private CacheService cacheService;
 
     @InjectMocks
     private OrderServiceImpl orderService;
@@ -96,12 +102,12 @@ class OrderServiceImplTest {
         firstTicketType = ticketType("00000000-0000-4000-8000-000000000001", 5, 4, new BigDecimal("100000"));
         secondTicketType = ticketType("ffffffff-ffff-4fff-8fff-ffffffffffff", 10, 4, new BigDecimal("200000"));
 
-        when(idempotencyService.execute(anyString(), anyString(), any(Duration.class), any(Class.class), any(), any()))
+        lenient().when(idempotencyService.execute(anyString(), anyString(), any(Duration.class), any(Class.class), any(), any()))
                 .thenAnswer(invocation -> {
                     Supplier<?> action = invocation.getArgument(5);
                     return action.get();
                 });
-        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
             TransactionCallback<?> callback = invocation.getArgument(0);
             return callback.doInTransaction(null);
         });
@@ -130,7 +136,7 @@ class OrderServiceImplTest {
             return order;
         });
 
-        HeldOrderResponse response = orderService.createHeldOrder(user, "c41e9a00-1111-4111-8111-111111111111", request);
+        OrderResponse response = orderService.createHeldOrder(user, "c41e9a00-1111-4111-8111-111111111111", request);
 
         assertEquals("HELD", response.getStatus());
         assertEquals(new BigDecimal("500000"), response.getTotalAmount());
@@ -143,8 +149,32 @@ class OrderServiceImplTest {
         verify(counterRepository, times(2)).save(any());
         verify(orderRepository).save(any(Order.class));
         verify(idempotencyService).execute(eq("idempotency:hold:c41e9a00-1111-4111-8111-111111111111"), anyString(),
-                eq(orderService.getHoldTtl()), eq(HeldOrderResponse.class), any(), any());
+                eq(orderService.getHoldTtl()), eq(OrderResponse.class), any(), any());
         verify(transactionTemplate).execute(any());
+        verify(cacheService).evictConcertCache(concert.getId());
+    }
+
+    @Test
+    @DisplayName("Does not evict inventory cache when idempotency replays an existing order")
+    void createHeldOrder_doesNotEvictCacheWhenIdempotencyReplaysOrder() {
+        CreateOrderRequest request = CreateOrderRequest.builder()
+                .concertId(concert.getId())
+                .items(List.of(item(firstTicketType.getId(), 1)))
+                .build();
+        OrderResponse replayedResponse = OrderResponse.builder()
+                .orderId(UUID.randomUUID())
+                .concertId(concert.getId())
+                .status("HELD")
+                .build();
+
+        when(idempotencyService.execute(anyString(), anyString(), any(Duration.class), eq(OrderResponse.class), any(), any()))
+                .thenReturn(replayedResponse);
+
+        OrderResponse response = orderService.createHeldOrder(user, "c41e9a00-1111-4111-8111-111111111111", request);
+
+        assertEquals(replayedResponse, response);
+        verifyNoInteractions(cacheService);
+        verifyNoInteractions(orderRepository);
     }
 
     @Test

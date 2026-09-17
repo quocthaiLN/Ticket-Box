@@ -34,6 +34,7 @@ Payment là module riêng nhưng là bước kế tiếp trực tiếp của che
 | Method | Endpoint | Chức năng | Ghi chú chính |
 | --- | --- | --- | --- |
 | `POST` | `/orders/{order_id}/payments` | Tạo một payment attempt và checkout URL cho order. | Yêu cầu đăng nhập, role `AUDIENCE` hoặc `ADMIN` và `Idempotency-Key` thuộc scope `payments`. |
+| `GET` | `/payments/{payment_id}` | Lấy payment attempt của user hiện tại. | Yêu cầu đăng nhập, role `AUDIENCE` hoặc `ADMIN`; chỉ chủ của order liên quan được xem; phản hồi `no-store`. |
 
 Order API không tự gọi endpoint này. Web App nhận order `HELD`, sau đó chủ động tạo payment attempt. Việc return URL, webhook, đối soát và phát hành vé thuộc Payment module.
 
@@ -93,6 +94,7 @@ Endpoint sau yêu cầu đăng nhập và role `ORGANIZER` hoặc `ADMIN`.
 | `400` | `MISSING_IDEMPOTENCY_KEY` / `IDEMPOTENCY_KEY_REUSED` | Thiếu key hoặc dùng lại key cho request có nội dung khác. |
 | `401` / `403` | `UNAUTHORIZED` / `FORBIDDEN` | Chưa đăng nhập hoặc không có role phù hợp. |
 | `403` / `404` | `ORDER_ACCESS_DENIED` / `ORDER_NOT_FOUND` | Không phải chủ order hoặc order không tồn tại. |
+| `404` | `PAYMENT_NOT_FOUND` | Payment không tồn tại hoặc không thuộc user hiện tại. |
 | `409` | `TICKET_SOLD_OUT` / `PER_USER_LIMIT_EXCEEDED` | Không đủ tồn kho hoặc vượt giới hạn mua của user. |
 | `409` | `ORDER_ALREADY_FINALIZED` | Cố hủy order không còn ở trạng thái `HELD`. |
 | `422` | `TICKET_TYPE_NOT_ON_SALE` / `SALE_WINDOW_CLOSED` | Loại vé chưa mở bán, đã đóng hoặc nằm ngoài khung giờ bán. |

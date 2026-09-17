@@ -54,6 +54,20 @@ services:
       - ./frontend/imgs:/data
     command: server /data --console-address ":9001"
 
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: ngrok
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    command:
+      - "http"
+      - "host.docker.internal:8080"
+      - "--url"
+      - "https://atypical-trombone-resonant.ngrok-free.dev"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    
 volumes:
   postgres_data:
   redis_data:

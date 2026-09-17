@@ -47,7 +47,7 @@ export function SeatMapPanel({
       aria-label="Phóng to sơ đồ chỗ ngồi"
     >
       <ImageWithFallback src={imageUrl} alt="Sơ đồ chỗ ngồi" className="max-h-[420px] w-full object-contain" />
-      <span className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-lg bg-black/60 px-2.5 py-1.5 text-xs text-[#F0EDEB] opacity-80 backdrop-blur transition-opacity group-hover:opacity-100">
+      <span className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-lg bg-black/60 px-2.5 py-1.5 text-xs text-[#F0EDEB] opacity-8080 backdrop-blur transition-opacity group-hover:opacity-100">
         <ZoomIn className="h-3.5 w-3.5" />
         Phóng to
       </span>

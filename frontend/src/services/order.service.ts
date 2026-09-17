@@ -37,6 +37,21 @@ export type CreatePaymentResult = {
   hold_expires_at: string;
 };
 
+export type PaymentDetail = {
+  payment_id: string;
+  order_id: string;
+  provider: PaymentProvider;
+  status: PaymentStatus;
+  amount: string;
+  currency: string;
+  checkout_url: string | null;
+  hold_expires_at: string | null;
+  paid_at: string | null;
+  failure_reason: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type OrderDetail = {
   id: string;
   status: OrderStatus;
@@ -108,6 +123,11 @@ export async function getOrder(orderId: string) {
   return response.data;
 }
 
+export async function getPayment(paymentId: string) {
+  const response = await apiGet<ApiResponse<PaymentDetail>>(`/payments/${paymentId}`);
+  return response.data;
+}
+
 /** Creates a payment attempt for an order already held by POST /orders. */
 export async function createPayment(
   orderId: string,
@@ -116,7 +136,7 @@ export async function createPayment(
 ) {
   const response = await apiPost<ApiResponse<CreatePaymentResult>>(
     `/orders/${orderId}/payments`,
-    { payment_provider: paymentProvider },
+    { provider: paymentProvider },
     { headers: { "Idempotency-Key": idempotencyKey } },
   );
   return response.data;
