@@ -15,6 +15,7 @@ import { ConcertDetailPage } from "./routes/audience/ConcertDetailPage";
 import { CheckoutPage } from "./routes/audience/CheckoutPage";
 import { EventsPage } from "./routes/audience/EventsPage";
 import { MyTicketsPage } from "./routes/audience/MyTicketsPage";
+import { TicketQrPage } from "./routes/audience/TicketQrPage";
 import { SeatSelectionPage } from "./routes/audience/SeatSelectionPage";
 import { CheckerPage } from "./routes/checker/CheckerPage";
 import { PaymentResultPage } from "./routes/payment/PaymentResultPage";
@@ -46,6 +47,10 @@ const router = createBrowserRouter([
       {
         path: "checkout",
         element: <CheckoutPage />
+      },
+      {
+        path: "my-tickets/:ticketId",
+        element: <TicketQrPage />
       },
       {
         path: "my-tickets",

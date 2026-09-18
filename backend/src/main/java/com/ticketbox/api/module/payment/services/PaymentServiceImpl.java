@@ -5,6 +5,7 @@ import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.order.domain.entities.Order;
 import com.ticketbox.api.module.order.domain.entities.OrderStatus;
 import com.ticketbox.api.module.order.repositories.OrderRepository;
+import com.ticketbox.api.module.order.services.OrderInventoryService;
 import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentRequest;
 import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentResponse;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentGatewayRequest;
@@ -49,6 +50,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final List<PaymentGatewayStrategy> paymentGateways;
     private final IdempotencyService idempotencyService;
     private final TransactionTemplate transactionTemplate;
+    private final OrderInventoryService orderInventoryService;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
 
@@ -89,7 +91,8 @@ public class PaymentServiceImpl implements PaymentService {
         } else if (callback.paymentId().isEmpty()) {
             result = CallbackHandlingResult.PAYMENT_NOT_FOUND;
         } else {
-            result = transactionTemplate.execute(status -> applyCallback(callback.paymentId().orElseThrow(), provider, callback));
+            result = transactionTemplate
+                    .execute(status -> applyCallback(callback.paymentId().orElseThrow(), provider, callback));
             if (result == null) {
                 throw new IllegalStateException("Payment callback transaction returned no result");
             }
@@ -100,7 +103,8 @@ public class PaymentServiceImpl implements PaymentService {
     private CreatePaymentResponse createNewPayment(User currentUser, String idempotencyKey,
             CreatePaymentRequest request, String clientIp) {
         PaymentGatewayStrategy gateway = resolveGateway(request.getProvider());
-        Payment payment = transactionTemplate.execute(status -> initializePayment(currentUser, idempotencyKey, request));
+        Payment payment = transactionTemplate
+                .execute(status -> initializePayment(currentUser, idempotencyKey, request));
         if (payment == null) {
             throw new IllegalStateException("Payment initialization transaction returned no payment");
         }
@@ -115,7 +119,8 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "ORDER_NOT_FOUND", "Order not found"));
 
         if (!order.getUser().getId().equals(currentUser.getId())) {
-            throw new AppException(HttpStatus.FORBIDDEN, "ORDER_ACCESS_DENIED", "Order does not belong to current user");
+            throw new AppException(HttpStatus.FORBIDDEN, "ORDER_ACCESS_DENIED",
+                    "Order does not belong to current user");
         }
         if (order.getStatus() != OrderStatus.HELD) {
             throw new AppException(HttpStatus.CONFLICT, "ORDER_NOT_PAYABLE", "Order is no longer held");
@@ -193,7 +198,9 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElseThrow(() -> new IllegalStateException("Verified callback has no target payment status"));
         if (targetStatus == PaymentStatus.SUCCEEDED) {
             payment.setStatus(targetStatus);
-            payment.setPaidAt(LocalDateTime.now());
+            LocalDateTime paidAt = LocalDateTime.now();
+            payment.setPaidAt(paidAt);
+            orderInventoryService.settlePaidOrder(payment.getOrder().getId(), paidAt);
         } else if (targetStatus == PaymentStatus.FAILED) {
             payment.setStatus(targetStatus);
             payment.setFailureReason(callback.failureReason().orElse("Payment provider rejected payment"));

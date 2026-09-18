@@ -37,18 +37,8 @@ export type TicketDetail = {
 };
 
 export type TicketQr = {
-  ticket_id: string;
-  payload: {
-    ticket_id: string;
-    concert_id: string;
-    ticket_type_id: string;
-    seat_zone_id: string;
-    gate_id: string;
-    issued_at: string;
-    qr_token: string;
-  };
-  qr_signature: string;
-  expires_at: string | null;
+  ticketId: string;
+  content: string;
 };
 
 type TicketListResponse = {
@@ -78,6 +68,6 @@ export async function getMyTicket(ticketId: string) {
 }
 
 export async function getMyTicketQr(ticketId: string) {
-  const response = await apiGet<ApiResponse<TicketQr>>(`/me/tickets/${ticketId}/qr`);
+  const response = await apiGet<ApiResponse<TicketQr>>(`/my-tickets/${ticketId}/qr`);
   return response.data;
 }

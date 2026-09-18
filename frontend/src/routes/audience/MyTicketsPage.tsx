@@ -32,7 +32,7 @@ export function MyTicketsPage() {
     setDownloadingId(ticket.id);
     try {
       const qrData = await getMyTicketQr(ticket.id);
-      const qrContent = JSON.stringify({ ...qrData.payload, qr_signature: qrData.qr_signature });
+      const qrContent = qrData.content;
 
       const qrDataUrl = await QRCode.toDataURL(qrContent, {
         errorCorrectionLevel: "M",
@@ -336,12 +336,7 @@ function QrModal({ ticket, onClose }: { ticket: TicketListItem; onClose: () => v
     };
   }, [ticket.id]);
 
-  // Nội dung QR = payload (các field server đã ký) GỘP với chữ ký. Không bọc thêm
-  // lớp ngoài: checker canonicalize payload (bỏ qr_signature) rồi verify Ed25519, nên
-  // object phải đúng bằng object server đã ký thì chữ ký mới khớp.
-  const qrContent = qr
-    ? JSON.stringify({ ...qr.payload, qr_signature: qr.qr_signature })
-    : "";
+  const qrContent = qr?.content ?? "";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/8080 p-4 backdrop-blur" onClick={onClose}>
@@ -367,7 +362,7 @@ function QrModal({ ticket, onClose }: { ticket: TicketListItem; onClose: () => v
             )}
           </div>
 
-          {qr && <p className="break-all font-mono text-[11px] leading-5 text-[#8585A0]">{qr.payload.qr_token}</p>}
+          {qr && <p className="break-all font-mono text-[11px] leading-5 text-[#8585A0]">{qr.content}</p>}
           <p className="mt-2 text-xs text-[#8585A0]">{ticket.status === "CHECKED_IN" ? "Vé đã được sử dụng." : "Xuất trình mã này tại cổng soát vé."}</p>
           <button type="button" onClick={onClose} className="mt-5 w-full rounded-xl border border-white/10 bg-white/[0.07] py-2.5 text-sm text-[#F0EDEB]">
             Đóng

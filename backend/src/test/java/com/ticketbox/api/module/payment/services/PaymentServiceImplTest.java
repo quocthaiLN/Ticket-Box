@@ -44,6 +44,9 @@ class PaymentServiceImplTest {
     @Mock
     private com.ticketbox.api.module.shared.idempotency.IdempotencyService idempotencyService;
 
+    @Mock
+    private com.ticketbox.api.module.order.services.OrderInventoryService orderInventoryService;
+
     @InjectMocks
     private PaymentServiceImpl paymentService;
 

@@ -35,6 +35,8 @@ jwt:
   refresh-token-expiration: 2592000000
 
 app:
+  ticket:
+    qr-secret: test-only-ticket-qr-secret-key-that-is-at-least-32-chars
   oauth2:
     success-redirect-uri: http://localhost:3001/oauth2/callback
     failure-redirect-uri: http://localhost:3001/login?error=oauth2
