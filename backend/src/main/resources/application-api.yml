@@ -1,5 +1,7 @@
 server:
-  port: ${PORT:8080}
+  address: ${BACKEND_BIND_ADDRESS:127.0.0.1}
+  port: ${PORT:8082}
+  forward-headers-strategy: framework
 
 logging:
   level:

@@ -2,6 +2,9 @@ package com.ticketbox.api.infrastructure.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketbox.api.infrastructure.response.ErrorResponse;
+import com.ticketbox.api.infrastructure.rateLimit.RateLimitFilter;
+import com.ticketbox.api.infrastructure.rateLimit.RateLimitPolicyRegistry;
+import com.ticketbox.api.infrastructure.rateLimit.RedisRateLimiter;
 import com.ticketbox.api.infrastructure.security.JwtFilter;
 import com.ticketbox.api.infrastructure.security.OidcFailureHandler;
 import com.ticketbox.api.infrastructure.security.OidcSuccessHandler;
@@ -33,12 +36,17 @@ public class SecurityConfig {
     private final ObjectMapper objectMapper;
     private final OidcFailureHandler oidcFailureHandler;
     private final OidcSuccessHandler oidcSuccessHandler;
+    private final RateLimitPolicyRegistry rateLimitPolicies;
+    private final RedisRateLimiter redisRateLimiter;
 
     public SecurityConfig(JwtFilter jwtFilter, OidcSuccessHandler oidcSuccessHandler,
-                          OidcFailureHandler oidcFailureHandler) {
+                          OidcFailureHandler oidcFailureHandler, RateLimitPolicyRegistry rateLimitPolicies,
+                          RedisRateLimiter redisRateLimiter) {
         this.jwtFilter = jwtFilter;
         this.oidcSuccessHandler = oidcSuccessHandler;
         this.oidcFailureHandler = oidcFailureHandler;
+        this.rateLimitPolicies = rateLimitPolicies;
+        this.redisRateLimiter = redisRateLimiter;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -74,7 +82,8 @@ public class SecurityConfig {
                 .oauth2Login(oauth2 -> oauth2
                         .successHandler(oidcSuccessHandler)
                         .failureHandler(oidcFailureHandler))
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(new RateLimitFilter(rateLimitPolicies, redisRateLimiter, objectMapper), JwtFilter.class);
 
         return http.build();
     }

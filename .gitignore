@@ -97,10 +97,3 @@ logs/
 *.tmp
 *.swp
 *.swo
-
-# Agent / project metadata
-skills-lock.json
-.agents/
-
-# Notes
-tech-note/

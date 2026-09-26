@@ -42,7 +42,7 @@ services:
     restart: unless-stopped
 
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio
     container_name: ticketbox-minio
     ports:
       - "9000:9000" # API endpoint
@@ -54,10 +54,23 @@ services:
       - ./frontend/imgs:/data
     command: server /data --console-address ":9001"
 
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: ticketbox-nginx
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
   ngrok:
     image: ngrok/ngrok:latest
     container_name: ngrok
+    networks:
+      ngrok_gateway:
+        ipv4_address: 172.31.250.10
     restart: unless-stopped
+    depends_on:
+      - nginx
     env_file:
       - ./backend/.env
     command:
@@ -67,6 +80,12 @@ services:
       - "https://atypical-trombone-resonant.ngrok-free.dev"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+networks:
+  ngrok_gateway:
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24
     
 volumes:
   postgres_data:
