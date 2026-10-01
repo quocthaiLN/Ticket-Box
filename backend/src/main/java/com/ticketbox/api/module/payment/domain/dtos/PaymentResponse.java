@@ -18,6 +18,7 @@ public record PaymentResponse(
         @JsonProperty("hold_expires_at") LocalDateTime holdExpiresAt,
         @JsonProperty("paid_at") LocalDateTime paidAt,
         @JsonProperty("failure_reason") String failureReason,
+        @JsonProperty("refund_required") boolean refundRequired,
         @JsonProperty("created_at") LocalDateTime createdAt,
         @JsonProperty("updated_at") LocalDateTime updatedAt) {
 }

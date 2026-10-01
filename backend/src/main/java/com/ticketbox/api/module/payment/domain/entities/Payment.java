@@ -96,6 +96,13 @@ public class Payment {
     @Column(name = "failure_reason", columnDefinition = "TEXT")
     private String failureReason;
 
+    @Column(name = "next_reconcile_at")
+    private LocalDateTime nextReconcileAt;
+
+    @Column(name = "refund_required", nullable = false)
+    @Builder.Default
+    private boolean refundRequired = false;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

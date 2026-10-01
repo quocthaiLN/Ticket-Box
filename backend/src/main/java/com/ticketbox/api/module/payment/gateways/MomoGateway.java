@@ -1,6 +1,5 @@
 package com.ticketbox.api.module.payment.gateways;
 
-import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.payment.domain.dtos.MomoCreatePaymentRequest;
 import com.ticketbox.api.module.payment.domain.dtos.MomoCreatePaymentResponse;
 import com.ticketbox.api.module.payment.domain.dtos.CallbackHandlingResult;
@@ -18,12 +17,19 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.Duration;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -41,6 +47,7 @@ public class MomoGateway implements PaymentGatewayStrategy {
     private final String secretKey;
     private final String redirectUrl;
     private final String ipnUrl;
+    private final CircuitBreaker circuitBreaker;
 
     @Autowired
     public MomoGateway(
@@ -50,7 +57,7 @@ public class MomoGateway implements PaymentGatewayStrategy {
             @Value("${app.payment.momo.secret-key}") String secretKey,
             @Value("${app.payment.momo.redirect-url}") String redirectUrl,
             @Value("${app.payment.momo.ipn-url}") String ipnUrl) {
-        this(RestClient.create(), createUrl, partnerCode, accessKey, secretKey, redirectUrl, ipnUrl);
+        this(client(), createUrl, partnerCode, accessKey, secretKey, redirectUrl, ipnUrl);
     }
 
     MomoGateway(
@@ -68,14 +75,19 @@ public class MomoGateway implements PaymentGatewayStrategy {
         this.secretKey = secretKey;
         this.redirectUrl = redirectUrl;
         this.ipnUrl = ipnUrl;
+        this.circuitBreaker = breaker();
     }
 
     @Override
     public String createPaymentUrl(PaymentGatewayRequest request) {
-        validateRequest(request);
+        try {
+            validateRequest(request);
+        } catch (IllegalArgumentException exception) {
+            throw new CreateRejectedException("MoMo payment request is invalid", exception);
+        }
 
         String orderId = request.txnRef();
-        String requestId = UUID.randomUUID().toString();
+        String requestId = orderId;
         String orderInfo = request.orderInfo() == null || request.orderInfo().isBlank()
                 ? "Payment for order " + request.orderId()
                 : request.orderInfo();
@@ -96,22 +108,77 @@ public class MomoGateway implements PaymentGatewayStrategy {
 
         MomoCreatePaymentResponse response;
         try {
-            response = restClient.post()
+            response = circuitBreaker.executeSupplier(() -> restClient.post()
                     .uri(createUrl)
                     .body(body)
                     .retrieve()
-                    .body(MomoCreatePaymentResponse.class);
-        } catch (RestClientException exception) {
-            throw new AppException(HttpStatus.BAD_GATEWAY, "MOMO_CREATE_FAILED",
-                    "MoMo payment service is unavailable");
+                    .body(MomoCreatePaymentResponse.class));
+        } catch (HttpClientErrorException exception) {
+            throw new CreateOutcomeUnknownException("MoMo create response needs reconciliation", exception);
+        } catch (CallNotPermittedException | RestClientException exception) {
+            throw new CreateOutcomeUnknownException("MoMo create result is unknown", exception);
         }
 
-        if (response == null || response.resultCode() == null || response.resultCode() != 0
-                || response.payUrl() == null || response.payUrl().isBlank()) {
-            throw new AppException(HttpStatus.BAD_GATEWAY, "MOMO_CREATE_FAILED",
-                    "MoMo did not create a payment URL");
+        if (response == null || response.resultCode() == null) {
+            throw new CreateOutcomeUnknownException("MoMo create response is incomplete");
+        }
+        if (response.resultCode() != 0) {
+            if (!isFinalCreateRejection(response.resultCode())) {
+                throw new CreateOutcomeUnknownException("MoMo create is in progress");
+            }
+            throw new CreateRejectedException("MoMo create resultCode=" + response.resultCode());
+        }
+        if (response.payUrl() == null || response.payUrl().isBlank()) {
+            throw new CreateOutcomeUnknownException("MoMo returned success without a payment URL");
         }
         return response.payUrl();
+    }
+
+    private boolean isFinalCreateRejection(int resultCode) {
+        return resultCode == 98 || resultCode == 99 || resultCode == 1001
+                || resultCode == 1002 || resultCode == 1003
+                || resultCode == 1004 || resultCode == 1005 || resultCode == 1006
+                || resultCode == 1007 || resultCode == 1017 || resultCode == 1026
+                || resultCode == 2019 || resultCode == 4001 || resultCode == 4002
+                || resultCode == 4100;
+    }
+
+    public static final class CreateOutcomeUnknownException extends RuntimeException {
+        public CreateOutcomeUnknownException(String message) {
+            super(message);
+        }
+
+        public CreateOutcomeUnknownException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+
+    public static final class CreateRejectedException extends RuntimeException {
+        public CreateRejectedException(String message) {
+            super(message);
+        }
+
+        public CreateRejectedException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+
+    private static RestClient client() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(3));
+        factory.setReadTimeout(Duration.ofSeconds(35));
+        return RestClient.builder().requestFactory(factory).build();
+    }
+
+    private static CircuitBreaker breaker() {
+        return CircuitBreaker.of("momo-create", CircuitBreakerConfig.custom()
+                .slidingWindowSize(10)
+                .minimumNumberOfCalls(5)
+                .failureRateThreshold(50)
+                .waitDurationInOpenState(Duration.ofSeconds(30))
+                .recordException(exception -> exception instanceof ResourceAccessException
+                        || exception instanceof HttpServerErrorException)
+                .build());
     }
 
     @Override
@@ -163,20 +230,25 @@ public class MomoGateway implements PaymentGatewayStrategy {
     }
 
     private Optional<PaymentStatus> targetStatus(String resultCode) {
-        if ("0".equals(resultCode)) {
-            return Optional.of(PaymentStatus.SUCCEEDED);
+        try {
+            int code = Integer.parseInt(resultCode);
+            if (code == 0) {
+                return Optional.of(PaymentStatus.SUCCEEDED);
+            }
+            if (code == 1003 || code == 1006 || code == 1017) {
+                return Optional.of(PaymentStatus.CANCELLED);
+            }
+            return Optional.of(isFinalCreateRejection(code) ? PaymentStatus.FAILED : PaymentStatus.PENDING);
+        } catch (NumberFormatException exception) {
+            return Optional.empty();
         }
-        if ("1000".equals(resultCode) || "7000".equals(resultCode) || "7002".equals(resultCode)) {
-            return Optional.of(PaymentStatus.PENDING);
-        }
-        return Optional.of(PaymentStatus.FAILED);
     }
 
     private Optional<String> failureReason(String resultCode) {
-        return "0".equals(resultCode) || "1000".equals(resultCode) || "7000".equals(resultCode)
-                || "7002".equals(resultCode)
-                        ? Optional.empty()
-                        : Optional.of("MOMO resultCode=" + resultCode);
+        PaymentStatus status = targetStatus(resultCode).orElse(PaymentStatus.PENDING);
+        return status == PaymentStatus.FAILED || status == PaymentStatus.CANCELLED
+                ? Optional.of("MOMO resultCode=" + resultCode)
+                : Optional.empty();
     }
 
     private Map<String, String> withoutSignature(Map<String, String> parameters) {

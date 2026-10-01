@@ -4,6 +4,7 @@ import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentRequest;
 import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentResponse;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentCallbackResponse;
+import com.ticketbox.api.module.payment.domain.dtos.CallbackHandlingResult;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentResponse;
 import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
 import java.util.Map;
@@ -17,4 +18,6 @@ public interface PaymentService {
             String clientIp);
 
     Optional<PaymentCallbackResponse> handleCallback(PaymentProvider provider, Map<String, String> parameters);
+
+    CallbackHandlingResult handleCallbackResult(PaymentProvider provider, Map<String, String> parameters);
 }

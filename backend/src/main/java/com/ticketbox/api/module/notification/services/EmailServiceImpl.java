@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import com.ticketbox.api.module.shared.domain.dtos.AuthOtpMessageDTO;
 import com.ticketbox.api.module.payment.events.PaymentCompletedEvent;
+import com.ticketbox.api.module.payment.domain.entities.PaymentStatus;
 import com.ticketbox.api.module.ticket.events.TicketIssuedEvent;
 
 import java.nio.charset.StandardCharsets;
@@ -75,12 +76,13 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendPaymentFailedEmail(String recipientEmail, PaymentCompletedEvent event) {
+        boolean cancelled = event.status() == PaymentStatus.CANCELLED;
         sendHtmlEmail(recipientEmail,
-                "[TicketBox] Thanh toán không thành công",
+                cancelled ? "[TicketBox] Thanh toán đã bị hủy" : "[TicketBox] Thanh toán không thành công",
                 String.format("""
-                        <p>Thanh toán cho đơn hàng <strong>%s</strong> không thành công.</p>
+                        <p>Thanh toán cho đơn hàng <strong>%s</strong> %s.</p>
                         <p>Bạn có thể thử thanh toán lại trước khi thời gian giữ chỗ kết thúc.</p>
-                        """, event.orderId()),
+                        """, event.orderId(), cancelled ? "đã bị hủy" : "không thành công"),
                 "payment-failed");
     }
 

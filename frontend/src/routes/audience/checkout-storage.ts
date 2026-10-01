@@ -1,4 +1,4 @@
-import { newIdempotencyKey, type PaymentProvider } from "../../services/order.service";
+import { newIdempotencyKey, type PaymentProvider, type PaymentStatus } from "../../services/order.service";
 
 export type PendingCheckoutItem = {
   ticketTypeId: string;
@@ -23,6 +23,8 @@ export type PendingCheckout = {
   totalPrice: number;
   orderId?: string;
   paymentId?: string;
+  paymentStatus?: PaymentStatus;
+  refundRequired?: boolean;
   checkoutUrl?: string;
   paymentIdempotencyKey?: string;
 };

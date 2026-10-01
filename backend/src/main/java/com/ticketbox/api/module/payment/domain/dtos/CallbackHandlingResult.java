@@ -7,6 +7,7 @@ public enum CallbackHandlingResult {
     INVALID_SIGNATURE,
     PAYMENT_NOT_FOUND,
     ALREADY_PROCESSED,
+    CONFLICTING_RESULT,
     AMOUNT_MISMATCH,
     PROCESSED
 }

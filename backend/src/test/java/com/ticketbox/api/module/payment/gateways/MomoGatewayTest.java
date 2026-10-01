@@ -1,18 +1,11 @@
 package com.ticketbox.api.module.payment.gateways;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.client.ExpectedCount.once;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
-import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
-
 import com.ticketbox.api.module.payment.domain.dtos.CallbackHandlingResult;
 import com.ticketbox.api.module.payment.domain.dtos.GatewayCallback;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentGatewayRequest;
 import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
 import com.ticketbox.api.module.payment.domain.entities.PaymentStatus;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
@@ -23,10 +16,23 @@ import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.client.ExpectedCount.once;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class MomoGatewayTest {
 
@@ -49,6 +55,7 @@ class MomoGatewayTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.partnerCode").value(PARTNER_CODE))
                 .andExpect(jsonPath("$.orderId").value(paymentId))
+                .andExpect(jsonPath("$.requestId").value(paymentId))
                 .andExpect(jsonPath("$.amount").value(1000))
                 .andExpect(jsonPath("$.requestType").value("captureWallet"))
                 .andExpect(jsonPath("$.extraData").value(""))
@@ -56,14 +63,81 @@ class MomoGatewayTest {
                         {"resultCode":0,"message":"Successful.","payUrl":"https://payment.example.test/pay"}
                         """, MediaType.APPLICATION_JSON));
 
-        String payUrl = gateway.createPaymentUrl(PaymentGatewayRequest.builder()
-                .orderId(UUID.fromString("22222222-2222-4222-8222-222222222222"))
-                .txnRef(paymentId)
-                .amount(new BigDecimal("1000"))
-                .orderInfo("Payment order " + paymentId)
-                .build());
+        String payUrl = gateway.createPaymentUrl(request(paymentId));
 
         assertThat(payUrl).isEqualTo("https://payment.example.test/pay");
+        server.verify();
+    }
+
+    @Test
+    void timeoutIsUnknownAndRetryUsesTheSameRequestId() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        MomoGateway gateway = gateway(builder.build());
+        String paymentId = "11111111-1111-4111-8111-111111111111";
+
+        server.expect(once(), requestTo(CREATE_URL))
+                .andExpect(jsonPath("$.requestId").value(paymentId))
+                .andRespond(request -> { throw new ResourceAccessException("Read timed out"); });
+        server.expect(once(), requestTo(CREATE_URL))
+                .andExpect(jsonPath("$.requestId").value(paymentId))
+                .andRespond(withSuccess("""
+                        {"resultCode":0,"payUrl":"https://payment.example.test/pay"}
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> gateway.createPaymentUrl(request(paymentId)))
+                .isInstanceOf(MomoGateway.CreateOutcomeUnknownException.class)
+                .hasCauseInstanceOf(ResourceAccessException.class);
+        assertThat(gateway.createPaymentUrl(request(paymentId))).isEqualTo("https://payment.example.test/pay");
+        server.verify();
+    }
+
+    @Test
+    void serverErrorsOpenTheCircuitAndPreventAnotherRequest() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        MomoGateway gateway = gateway(builder.build());
+        PaymentGatewayRequest request = request("11111111-1111-4111-8111-111111111111");
+        for (int attempt = 0; attempt < 5; attempt++) {
+            server.expect(once(), requestTo(CREATE_URL)).andRespond(withServerError());
+        }
+
+        for (int attempt = 0; attempt < 5; attempt++) {
+            assertThatThrownBy(() -> gateway.createPaymentUrl(request))
+                    .isInstanceOf(MomoGateway.CreateOutcomeUnknownException.class)
+                    .hasCauseInstanceOf(HttpServerErrorException.class);
+        }
+        assertThatThrownBy(() -> gateway.createPaymentUrl(request))
+                .isInstanceOf(MomoGateway.CreateOutcomeUnknownException.class)
+                .hasCauseInstanceOf(CallNotPermittedException.class);
+        server.verify();
+    }
+
+    @Test
+    void definitiveRejectionIsNotTreatedAsUnknown() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        MomoGateway gateway = gateway(builder.build());
+        server.expect(once(), requestTo(CREATE_URL)).andRespond(withSuccess("""
+                {"resultCode":1002,"message":"Payment rejected"}
+                """, MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> gateway.createPaymentUrl(request("11111111-1111-4111-8111-111111111111")))
+                .isInstanceOf(MomoGateway.CreateRejectedException.class);
+        server.verify();
+    }
+
+    @Test
+    void duplicateOrderCodeRemainsUnknownForReconciliation() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        MomoGateway gateway = gateway(builder.build());
+        server.expect(once(), requestTo(CREATE_URL)).andRespond(withSuccess("""
+                {"resultCode":41,"message":"Duplicate orderId"}
+                """, MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> gateway.createPaymentUrl(request("11111111-1111-4111-8111-111111111111")))
+                .isInstanceOf(MomoGateway.CreateOutcomeUnknownException.class);
         server.verify();
     }
 
@@ -88,8 +162,36 @@ class MomoGatewayTest {
         assertThat(gateway.verifyCallback(ipn).signatureValid()).isFalse();
     }
 
+    @ParameterizedTest
+    @CsvSource({"1003,CANCELLED", "1006,CANCELLED", "1017,CANCELLED",
+            "1001,FAILED", "0,SUCCEEDED", "1000,PENDING"})
+    void mapsSignedOutcomesWithEmptyPayType(String code, PaymentStatus expected) {
+        MomoGateway gateway = gateway(RestClient.create());
+        Map<String, String> ipn = signedIpn();
+        ipn.put("resultCode", code);
+        ipn.put("payType", "");
+        ipn.put("signature", hmacSha256(callbackData(ipn)));
+        GatewayCallback result = gateway.verifyCallback(ipn);
+        assertThat(result.signatureValid()).isTrue();
+        assertThat(result.targetStatus()).contains(expected);
+        if (expected == PaymentStatus.CANCELLED || expected == PaymentStatus.FAILED) {
+            assertThat(result.failureReason()).contains("MOMO resultCode=" + code);
+        }
+        ipn.put("payType", "qr");
+        assertThat(gateway.verifyCallback(ipn).signatureValid()).isFalse();
+    }
+
     private MomoGateway gateway(RestClient restClient) {
         return new MomoGateway(restClient, CREATE_URL, PARTNER_CODE, ACCESS_KEY, SECRET_KEY, REDIRECT_URL, IPN_URL);
+    }
+
+    private PaymentGatewayRequest request(String paymentId) {
+        return PaymentGatewayRequest.builder()
+                .orderId(UUID.fromString("22222222-2222-4222-8222-222222222222"))
+                .txnRef(paymentId)
+                .amount(new BigDecimal("1000"))
+                .orderInfo("Payment order " + paymentId)
+                .build();
     }
 
     private Map<String, String> signedIpn() {

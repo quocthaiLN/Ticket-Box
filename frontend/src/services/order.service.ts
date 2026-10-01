@@ -2,7 +2,7 @@ import { apiGet, apiPost, type ApiResponse } from "../lib/api-client";
 
 export type PaymentProvider = "VNPAY" | "MOMO";
 export type OrderStatus = "HELD" | "CONFIRMED" | "CANCELLED" | "EXPIRED";
-export type PaymentStatus = "PENDING" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "REFUNDED";
+export type PaymentStatus = "CREATING" | "PENDING" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "REFUNDED";
 
 export type CreateOrderItemInput = {
   ticket_type_id: string;
@@ -32,7 +32,7 @@ export type CreatePaymentResult = {
   payment_id: string;
   provider: PaymentProvider;
   status: PaymentStatus;
-  checkout_url: string;
+  checkout_url: string | null;
   order_id: string;
   hold_expires_at: string;
 };
@@ -45,6 +45,7 @@ export type PaymentDetail = {
   amount: string;
   currency: string;
   checkout_url: string | null;
+  refund_required: boolean;
   hold_expires_at: string | null;
   paid_at: string | null;
   failure_reason: string | null;
@@ -53,54 +54,8 @@ export type PaymentDetail = {
 };
 
 export type OrderDetail = {
-  id: string;
+  order_id: string;
   status: OrderStatus;
-  total_amount: string;
-  currency: string;
-  hold_expires_at: string | null;
-  confirmed_at: string | null;
-  cancelled_at: string | null;
-  expired_at: string | null;
-  cancelled_reason: string | null;
-  created_at: string;
-  updated_at: string;
-  items: Array<{
-    id: string;
-    ticket_type_id: string;
-    quantity: number;
-    unit_price: string;
-    line_total: string;
-    ticket_type: {
-      id: string;
-      name: string;
-      price: string;
-      currency: string;
-      seat_zone_code: string;
-      seat_zone_name: string;
-    };
-  }>;
-  payment: {
-    id: string;
-    provider: PaymentProvider;
-    status: PaymentStatus;
-    checkout_url: string | null;
-    amount: string;
-    currency: string;
-    paid_at: string | null;
-    failure_reason: string | null;
-    created_at: string;
-  } | null;
-  tickets: Array<{
-    id: string;
-    status: string;
-    issued_at: string | null;
-    ticket_type: {
-      id: string;
-      name: string;
-      seat_zone_code: string;
-      seat_zone_name: string;
-    };
-  }>;
 };
 
 export type CancelOrderResult = {

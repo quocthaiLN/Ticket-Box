@@ -95,15 +95,18 @@ app:
   payment:
     vnpay:
       vnpay-url: ${VNPAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+      query-url: ${VNPAY_QUERY_URL:https://sandbox.vnpayment.vn/merchant_webapi/api/transaction}
+      query-ip-address: ${VNPAY_QUERY_IP_ADDRESS:127.0.0.1}
       vnpay-tmn-code: ${VNPAY_TMN_CODE:TICKETBOX}
       vnpay-hash-secret: ${VNPAY_HASH_SECRET:ticketbox_secret}
       vnpay-return-url: ${VNPAY_RETURN_URL:http://localhost:3001/payment/result}
     momo:
       momo-url: ${MOMO_URL:https://test-payment.momo.vn/v2/gateway/api/create}
+      query-url: ${MOMO_QUERY_URL:https://test-payment.momo.vn/v2/gateway/api/query}
       partner-code: ${MOMO_PARTNER_CODE:}
       access-key: ${MOMO_ACCESS_KEY:}
       secret-key: ${MOMO_SECRET_KEY:}
-      redirect-url: ${MOMO_REDIRECT_URL:http://localhost:3001/payment/return}
+      redirect-url: ${MOMO_REDIRECT_URL:http://localhost:3001/payment/result}
       ipn-url: ${MOMO_IPN_URL:https://example.invalid/payments/momo/ipn}
   ticket:
     qr-secret: ${TICKET_QR_SECRET:}

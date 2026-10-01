@@ -1,4 +1,4 @@
-import { CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getPayment } from "../../services/order.service";
@@ -9,7 +9,7 @@ import {
   writePendingCheckout,
 } from "../audience/checkout-storage";
 
-type PaymentResultState = "PROCESSING" | "SUCCEEDED" | "FAILED" | "UNAVAILABLE";
+type PaymentResultState = "PROCESSING" | "SUCCEEDED" | "REFUND_REQUIRED" | "FAILED" | "CANCELLED" | "UNAVAILABLE";
 
 // VNPAY Return URL chỉ đưa browser quay lại đây. Trạng thái hiển thị luôn lấy
 // từ payment đã được backend cập nhật bằng IPN, không lấy từ query string VNPAY.
@@ -44,6 +44,12 @@ export function PaymentResultPage() {
         setPollError("");
 
         if (payment.status === "SUCCEEDED") {
+          if (payment.refund_required) {
+            writePendingCheckout({ ...checkout, paymentStatus: payment.status, refundRequired: true });
+            setRemainingHeldCount(readHeldCheckouts().filter((item) => item.expiresAt > Date.now()).length);
+            setResultState("REFUND_REQUIRED");
+            return;
+          }
           clearPendingCheckout(payment.order_id);
           const remaining = readHeldCheckouts().filter((item) => item.expiresAt > Date.now());
           const nextCheckout = remaining[0];
@@ -54,9 +60,12 @@ export function PaymentResultPage() {
         }
 
         if (["FAILED", "CANCELLED", "REFUNDED"].includes(payment.status)) {
+          if (payment.status === "FAILED" || payment.status === "CANCELLED") {
+            writePendingCheckout({ ...checkout, paymentStatus: payment.status, checkoutUrl: undefined });
+          }
           setFailureReason(payment.failure_reason ?? "Giao dịch chưa hoàn tất.");
           setRemainingHeldCount(readHeldCheckouts().filter((item) => item.expiresAt > Date.now()).length);
-          setResultState("FAILED");
+          setResultState(payment.status === "CANCELLED" ? "CANCELLED" : "FAILED");
           return;
         }
 
@@ -76,8 +85,10 @@ export function PaymentResultPage() {
     };
   }, [checkout]);
 
+  const cancelled = resultState === "CANCELLED";
   const success = resultState === "SUCCEEDED";
   const processing = resultState === "PROCESSING";
+  const refundRequired = resultState === "REFUND_REQUIRED";
 
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 py-16 text-center">
@@ -85,12 +96,15 @@ export function PaymentResultPage() {
         <Loader2 className="h-16 w-16 animate-spin text-primary" />
       ) : success ? (
         <CheckCircle2 className="h-16 w-16 text-green-500" />
+      ) : refundRequired ? (
+        <AlertCircle className="h-16 w-16 text-amber-500" />
       ) : (
         <XCircle className="h-16 w-16 text-red-500" />
       )}
 
       <h1 className="text-2xl font-semibold">
-        {processing ? "Đang xác nhận thanh toán" : success ? "Thanh toán thành công" : "Thanh toán thất bại"}
+        {processing ? "Đang xác nhận thanh toán" : success ? "Thanh toán thành công"
+          : refundRequired ? "Đã nhận tiền sau khi đơn hết hạn" : cancelled ? "Thanh toán đã bị hủy" : "Thanh toán thất bại"}
       </h1>
 
       <p className="text-muted-foreground">
@@ -98,6 +112,10 @@ export function PaymentResultPage() {
           ? "VNPAY đã đưa bạn về ứng dụng. Hệ thống đang chờ xác nhận chính thức từ cổng thanh toán."
           : success
           ? "Vé của bạn đã được xác nhận. Kiểm tra trong My Tickets."
+          : refundRequired
+          ? "Vé không được phát hành. Khoản tiền này cần được xử lý hoàn tiền thủ công."
+          : cancelled
+          ? "Giao dịch đã bị hủy. Bạn có thể thử thanh toán lại nếu đơn còn thời gian giữ vé."
           : failureReason || "Giao dịch chưa hoàn tất. Bạn có thể thử thanh toán lại."}
       </p>
 

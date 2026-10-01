@@ -5,6 +5,7 @@ import {
   createOrder,
   createPayment,
   getOrder,
+  getPayment,
   newIdempotencyKey,
   type OrderDetail,
   type PaymentProvider,
@@ -32,6 +33,8 @@ const CHECKOUT_ERROR_MESSAGES: Record<string, string> = {
   PER_USER_LIMIT_EXCEEDED: "Bạn đã đạt giới hạn số vé được mua cho loại vé này.",
   ORDER_NOT_HELD: "Đơn hàng đã hết hạn giữ vé. Vui lòng chọn vé và tạo đơn mới.",
 };
+
+const LATE_PAYMENT_NOTICE = "Cổng thanh toán đã xác nhận nhận tiền sau khi đơn hết hạn. Vé không được phát hành; khoản tiền cần được xử lý hoàn tiền thủ công.";
 
 function checkoutErrorMessage(err: unknown, fallback: string): string {
   const code = getApiErrorCode(err);
@@ -100,7 +103,7 @@ export function CheckoutPage() {
         if (stopped) return;
         setOrder(detail);
         if (detail.status === "CONFIRMED") {
-          clearPendingCheckout(detail.id);
+          clearPendingCheckout(detail.order_id);
           setHeldCheckouts(readHeldCheckouts());
           setStep("success");
         } else if (detail.status === "CANCELLED" || detail.status === "EXPIRED") {
@@ -139,10 +142,76 @@ export function CheckoutPage() {
   }, [pending?.orderId]);
 
   const orderStatus = order?.status ?? (pending?.orderId ? "HELD" : null);
-  const paymentStatus = order?.payment?.status ?? null;
-  const isExpired = timeLeft <= 0 && step !== "success";
+  const paymentStatus = pending?.paymentStatus ?? null;
+  const canRetryPayment = paymentStatus === "FAILED" || paymentStatus === "CANCELLED";
+  const activePaymentId = pending?.paymentId;
+  const paymentRequestUncertain = Boolean(pending?.paymentIdempotencyKey && !activePaymentId);
+  const hasLatePayment = paymentStatus === "SUCCEEDED" && pending?.refundRequired === true;
+  const isExpired = hasLatePayment || ((timeLeft <= 0 || order?.status === "EXPIRED") && step !== "success");
+  const waitingForUrl = Boolean(!isExpired && activePaymentId && !pending?.checkoutUrl
+    && paymentStatus !== "FAILED" && paymentStatus !== "CANCELLED"
+    && paymentStatus !== "SUCCEEDED" && paymentStatus !== "REFUNDED");
+  const checkingExpiredPayment = Boolean(isExpired && activePaymentId && !pending?.refundRequired
+    && paymentStatus !== "FAILED" && paymentStatus !== "CANCELLED" && paymentStatus !== "REFUNDED");
+  const shouldPollPayment = waitingForUrl || checkingExpiredPayment;
+  const paymentResolvedWithoutUrl = Boolean(activePaymentId && !pending?.checkoutUrl
+    && (paymentStatus === "SUCCEEDED" || paymentStatus === "REFUNDED"));
 
   const providerLabel = pending?.paymentProvider === "MOMO" ? "MoMo" : "VNPAY";
+
+  useEffect(() => {
+    if (!shouldPollPayment || !activePaymentId || !pending?.orderId) return;
+    let stopped = false;
+    let timeoutId: number | undefined;
+
+    const pollPayment = async () => {
+      if (document.hidden) return;
+      try {
+        const detail = await getPayment(activePaymentId);
+        if (stopped) return;
+        setPending((current) => {
+          if (!current || current.orderId !== detail.order_id
+            || (current.paymentId && current.paymentId !== detail.payment_id)) return current;
+          const checkoutUrl = detail.status === "FAILED" || detail.status === "CANCELLED"
+            ? undefined
+            : current.checkoutUrl ?? (!isExpired && detail.status === "PENDING" && detail.checkout_url
+              ? detail.checkout_url
+              : undefined);
+          if (current.paymentId === detail.payment_id && current.paymentStatus === detail.status
+            && current.checkoutUrl === checkoutUrl && current.refundRequired === detail.refund_required) return current;
+          const next = { ...current, paymentId: detail.payment_id, paymentStatus: detail.status,
+            refundRequired: detail.refund_required, checkoutUrl };
+          writePendingCheckout(next);
+          return next;
+        });
+        if (detail.status !== "CREATING" && (detail.status !== "PENDING" || (!isExpired && detail.checkout_url))) return;
+      } catch (err) {
+        if (stopped) return;
+        const retryAfterMs = err instanceof ApiClientError && err.retryAfter
+          ? err.retryAfter * 1_000
+          : isExpired ? 10_000 : 3_000;
+        timeoutId = window.setTimeout(() => void pollPayment(), retryAfterMs);
+        return;
+      }
+      timeoutId = window.setTimeout(() => void pollPayment(), isExpired ? 10_000 : 3_000);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+        timeoutId = undefined;
+      } else if (timeoutId === undefined) {
+        void pollPayment();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    void pollPayment();
+    return () => {
+      stopped = true;
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [activePaymentId, pending?.orderId, shouldPollPayment, isExpired]);
 
   async function submitOrder() {
     if (!pending || pending.items.length === 0) return;
@@ -180,15 +249,20 @@ export function CheckoutPage() {
   }
 
   async function submitPayment() {
-    if (!pending?.orderId) return;
+    if (!pending?.orderId || busy || isExpired || (activePaymentId && !canRetryPayment)) return;
     setBusy(true);
     setError("");
     setPaymentError("");
     setStep("processing");
     try {
-      const paymentIdempotencyKey = pending.paymentIdempotencyKey ?? newIdempotencyKey();
+      const paymentIdempotencyKey = canRetryPayment
+        ? newIdempotencyKey()
+        : pending.paymentIdempotencyKey ?? newIdempotencyKey();
       const pendingPayment = {
         ...pending,
+        paymentId: undefined,
+        paymentStatus: undefined,
+        checkoutUrl: undefined,
         paymentIdempotencyKey,
       };
 
@@ -206,7 +280,8 @@ export function CheckoutPage() {
       const nextPending = {
         ...pendingPayment,
         paymentId: result.payment_id,
-        checkoutUrl: result.checkout_url,
+        paymentStatus: result.status,
+        checkoutUrl: result.checkout_url ?? undefined,
         expiresAt: new Date(result.hold_expires_at).getTime(),
       };
       writePendingCheckout(nextPending);
@@ -214,10 +289,18 @@ export function CheckoutPage() {
       setHeldCheckouts(readHeldCheckouts());
       setTimeLeft(remainingSeconds(nextPending.expiresAt));
       setStep("payment");
-      // Redirect in the current tab so browser popup policies cannot block checkout.
-      window.location.assign(result.checkout_url);
+      if (result.checkout_url) {
+        // Redirect in the current tab so browser popup policies cannot block checkout.
+        window.location.assign(result.checkout_url);
+      }
     } catch (err) {
       if (getApiErrorCode(err) === "PAYMENT_PROVIDER_UNAVAILABLE") {
+        setPending((current) => {
+          if (!current) return null;
+          const next = { ...current, paymentIdempotencyKey: undefined };
+          writePendingCheckout(next);
+          return next;
+        });
         const failedProvider = pending.paymentProvider;
         const nextFailed = failedProviders.includes(failedProvider)
           ? failedProviders
@@ -246,7 +329,7 @@ export function CheckoutPage() {
       const detail = await getOrder(pending.orderId);
       setOrder(detail);
       if (detail.status === "CONFIRMED") {
-        clearPendingCheckout(detail.id);
+        clearPendingCheckout(detail.order_id);
         setHeldCheckouts(readHeldCheckouts());
         setStep("success");
       }
@@ -258,11 +341,13 @@ export function CheckoutPage() {
   }
 
   function updateProvider(provider: PaymentProvider) {
-    if (!pending || pending.checkoutUrl) return;
+    if (!pending || busy || isExpired || pending.checkoutUrl || paymentRequestUncertain
+      || (activePaymentId && !canRetryPayment)) return;
     const next = {
       ...pending,
       paymentProvider: provider,
       paymentId: undefined,
+      paymentStatus: undefined,
       paymentIdempotencyKey: undefined,
     };
     if (next.orderId) writePendingCheckout(next);
@@ -292,12 +377,12 @@ export function CheckoutPage() {
 
   if (!pending) return null;
 
-  if (step === "success" || order?.status === "CONFIRMED") {
+  if (!hasLatePayment && (step === "success" || order?.status === "CONFIRMED")) {
     return <SuccessState order={order} />;
   }
 
   if (isExpired && otherHeldCheckouts.length === 0) {
-    return <ExpiredState concertId={pending.concertId} />;
+    return <ExpiredState concertId={pending.concertId} orderId={pending.orderId} refundRequired={hasLatePayment} />;
   }
 
   return (
@@ -391,7 +476,7 @@ export function CheckoutPage() {
               <div className="space-y-2">
                 <PaymentOption
                   active={pending.paymentProvider === "VNPAY"}
-                  disabled={Boolean(pending.checkoutUrl)}
+                  disabled={Boolean(busy || isExpired || pending.checkoutUrl || paymentRequestUncertain || (activePaymentId && !canRetryPayment))}
                   icon={<CreditCard className="h-5 w-5" />}
                   label="VNPAY"
                   sublabel="Thẻ ATM, QR, Internet Banking"
@@ -400,7 +485,7 @@ export function CheckoutPage() {
                 />
                 <PaymentOption
                   active={pending.paymentProvider === "MOMO"}
-                  disabled={Boolean(pending.checkoutUrl)}
+                  disabled={Boolean(busy || isExpired || pending.checkoutUrl || paymentRequestUncertain || (activePaymentId && !canRetryPayment))}
                   icon={<Smartphone className="h-5 w-5" />}
                   label="MoMo"
                   sublabel="Thanh toán qua ví điện tử MoMo"
@@ -414,11 +499,11 @@ export function CheckoutPage() {
               <SectionCard title="Trạng thái đơn hàng">
                 <div className="grid gap-3 sm:grid-cols-3">
                   <StatusTile label="Đơn hàng" value={orderStatus ?? "HELD"} tone={statusTone(orderStatus)} />
-                  <StatusTile label="Thanh toán" value={paymentStatus ?? "PENDING"} tone={statusTone(paymentStatus)} />
+                  <StatusTile label="Thanh toán" value={paymentStatus ?? "NOT_STARTED"} tone={statusTone(paymentStatus)} />
                   <StatusTile label="Mã đơn" value={pending.orderId} tone="#7B61FF" />
                 </div>
                 <div className="mt-4 flex flex-wrap gap-3">
-                  {pending.checkoutUrl && (
+                  {pending.checkoutUrl && !isExpired && (
                     <a href={pending.checkoutUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-[#F5C842]/30 bg-[#F5C842]/10 px-4 py-2.5 text-sm font-semibold text-[#F5C842]">
                       <ExternalLink className="h-4 w-4" />
                       Mở lại cổng {providerLabel}
@@ -429,6 +514,7 @@ export function CheckoutPage() {
                     Kiểm tra lại
                   </button>
                 </div>
+                {isExpired && <p className="mt-3 text-sm text-[#E8315B]">{hasLatePayment ? LATE_PAYMENT_NOTICE : "Đơn đã hết hạn giữ vé. Không thể tiếp tục thanh toán đơn này."}</p>}
               </SectionCard>
             )}
           </section>
@@ -462,7 +548,27 @@ export function CheckoutPage() {
                 </button>
               ) : (
                 <div className="space-y-3">
-                  {!pending.checkoutUrl && paymentError && (
+                  {isExpired && (
+                    <p className="rounded-xl border border-[#E8315B]/25 bg-[#E8315B]/10 p-3 text-sm text-[#E8315B]">{hasLatePayment ? LATE_PAYMENT_NOTICE : "Đơn đã hết hạn giữ vé. Hãy chọn đơn còn hạn ở phía trên hoặc quay lại sự kiện."}</p>
+                  )}
+                  {!isExpired && waitingForUrl && (
+                    <div role="status" className="flex items-start gap-2 rounded-xl border border-[#F5C842]/25 bg-[#F5C842]/10 p-3 text-sm text-[#F5C842]">
+                      <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+                      <span>Đang chuẩn bị URL thanh toán {providerLabel}. Trang sẽ tự kiểm tra; vui lòng không tạo yêu cầu mới.</span>
+                    </div>
+                  )}
+                  {!isExpired && paymentResolvedWithoutUrl && (
+                    <p className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm text-[#F0EDEB]">Thanh toán đã có kết quả. Vui lòng kiểm tra lại trạng thái đơn hàng.</p>
+                  )}
+                  {!isExpired && !pending.checkoutUrl && canRetryPayment && (
+                    <div className="rounded-xl border border-[#E8315B]/25 bg-[#E8315B]/10 p-3">
+                      <p className="text-sm text-[#E8315B]">{paymentStatus === "CANCELLED" ? "Thanh toán đã bị hủy." : "Thanh toán thất bại."} Bạn có thể thử lại hoặc chọn cổng khác.</p>
+                      <button type="button" onClick={submitPayment} disabled={busy || isExpired} className="mt-3 rounded-lg border border-white/15 bg-white/[0.06] px-3 py-2.5 text-sm font-semibold text-[#F0EDEB] disabled:opacity-50">
+                        {busy ? "Đang thử lại..." : `Thử lại ${providerLabel}`}
+                      </button>
+                    </div>
+                  )}
+                  {!isExpired && !pending.checkoutUrl && !waitingForUrl && !paymentResolvedWithoutUrl && !canRetryPayment && paymentError && (
                     <div className="rounded-xl border border-[#E8315B]/25 bg-[#E8315B]/10 p-3">
                       <p className="text-sm text-[#E8315B]">{paymentError}</p>
                       <div className="mt-3 grid gap-2">
@@ -487,17 +593,21 @@ export function CheckoutPage() {
                       </div>
                     </div>
                   )}
-                  {!pending.checkoutUrl && !paymentError && (
+                  {!isExpired && !pending.checkoutUrl && !waitingForUrl && !paymentResolvedWithoutUrl && !canRetryPayment && !paymentError && (
                     <button type="button" onClick={submitPayment} disabled={busy || isExpired} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#E8315B] to-[#C41E42] py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#E8315B]/25 disabled:opacity-50">
                       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                      {failedProviders.includes(pending.paymentProvider) ? "Thử lại" : "Gửi yêu cầu thanh toán qua"} {providerLabel}
+                      {paymentRequestUncertain ? "Kiểm tra lại yêu cầu qua" : failedProviders.includes(pending.paymentProvider) ? "Thử lại" : "Gửi yêu cầu thanh toán qua"} {providerLabel}
                     </button>
                   )}
-                  <p className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-center text-xs text-[#8585A0]">
+                  {!isExpired && <p className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-center text-xs text-[#8585A0]">
                     {pending.checkoutUrl
                       ? "Đang chờ xác nhận từ cổng thanh toán. Trang này tự kiểm tra mỗi 3 giây."
-                      : "Vé đã được giữ. Hãy gửi yêu cầu thanh toán trước khi thời gian giữ vé kết thúc."}
-                  </p>
+                      : waitingForUrl
+                        ? "Vé vẫn được giữ trong thời gian hiển thị ở trên. Bạn có thể kiểm tra lại trạng thái thanh toán."
+                      : paymentRequestUncertain
+                        ? "Yêu cầu trước có thể đã được ghi nhận. Nhấn kiểm tra lại để dùng đúng mã yêu cầu cũ."
+                        : "Vé đã được giữ. Hãy gửi yêu cầu thanh toán trước khi thời gian giữ vé kết thúc."}
+                  </p>}
                 </div>
               )}
             </div>
@@ -517,7 +627,7 @@ function SuccessState({ order }: { order: OrderDetail | null }) {
         </div>
         <h1 className="text-3xl font-bold" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Đặt vé thành công</h1>
         <p className="mt-3 text-sm leading-6 text-[#8585A0]">Vé điện tử đã được phát hành. Bạn có thể xem mã QR trong mục Vé của tôi.</p>
-        {order && <p className="mt-3 text-xs text-[#8585A0]">Mã đơn: <span className="text-[#F5C842]">{order.id}</span></p>}
+        {order && <p className="mt-3 text-xs text-[#8585A0]">Mã đơn: <span className="text-[#F5C842]">{order.order_id}</span></p>}
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link to="/my-tickets" className="inline-flex items-center gap-2 rounded-xl bg-[#E8315B] px-5 py-3 text-sm font-semibold text-white">
             <QrCode className="h-4 w-4" />
@@ -530,13 +640,14 @@ function SuccessState({ order }: { order: OrderDetail | null }) {
   );
 }
 
-function ExpiredState({ concertId }: { concertId: string }) {
+function ExpiredState({ concertId, orderId, refundRequired }: { concertId: string; orderId?: string; refundRequired?: boolean }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#080E] px-4 pt-20 text-center text-[#F0EDEB]">
       <section className="max-w-sm rounded-2xl border border-white/10 bg-[#111118] p-8">
         <AlertCircle className="mx-auto mb-4 h-12 w-12 text-[#E8315B]" />
         <h1 className="text-lg font-semibold">Phiên giữ vé đã hết hạn</h1>
-        <p className="mt-2 text-sm text-[#8585A0]">Vui lòng quay lại trang sự kiện và chọn vé lại.</p>
+        <p className="mt-2 text-sm text-[#8585A0]">{refundRequired ? LATE_PAYMENT_NOTICE : "Vui lòng quay lại trang sự kiện và chọn vé lại."}</p>
+        {refundRequired && orderId && <p className="mt-3 break-all text-xs text-[#8585A0]">Mã đơn: {orderId}</p>}
         <Link to={`/concerts/${concertId}`} className="mt-6 inline-flex rounded-xl bg-[#E8315B] px-5 py-3 text-sm font-semibold text-white">
           Quay lại sự kiện
         </Link>
@@ -597,6 +708,8 @@ function statusLabel(value: string) {
     CONFIRMED: "Đã xác nhận",
     CANCELLED: "Đã hủy",
     EXPIRED: "Hết hạn",
+    NOT_STARTED: "Chưa bắt đầu",
+    CREATING: "Đang tạo URL",
     PENDING: "Đang chờ",
     SUCCEEDED: "Thành công",
     FAILED: "Thất bại",
@@ -608,7 +721,7 @@ function statusLabel(value: string) {
 function statusTone(value?: string | null) {
   if (value === "CONFIRMED" || value === "SUCCEEDED") return "#2DBE6C";
   if (value === "CANCELLED" || value === "EXPIRED" || value === "FAILED") return "#E8315B";
-  if (value === "HELD" || value === "PENDING") return "#F5C842";
+  if (value === "HELD" || value === "CREATING" || value === "PENDING") return "#F5C842";
   return "#8585A0";
 }
 

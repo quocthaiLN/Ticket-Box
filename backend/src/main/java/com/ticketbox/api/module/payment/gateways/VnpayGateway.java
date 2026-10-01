@@ -162,6 +162,7 @@ public class VnpayGateway implements PaymentGatewayStrategy {
             case INVALID_SIGNATURE -> PaymentCallbackResponse.of("97", "Invalid checksum");
             case PAYMENT_NOT_FOUND -> PaymentCallbackResponse.of("01", "Order not found");
             case ALREADY_PROCESSED -> PaymentCallbackResponse.of("02", "Order already confirmed");
+            case CONFLICTING_RESULT -> PaymentCallbackResponse.of("99", "Conflicting transaction result");
             case AMOUNT_MISMATCH -> PaymentCallbackResponse.of("04", "Invalid amount");
             case PROCESSED -> PaymentCallbackResponse.of("00", "Confirm Success");
         });

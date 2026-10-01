@@ -8,7 +8,10 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import jakarta.persistence.LockModeType;
 import com.ticketbox.api.module.order.domain.entities.Order;
+import com.ticketbox.api.module.order.domain.entities.OrderStatus;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,5 +31,8 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     @EntityGraph(attributePaths = {"user", "concert", "orderItems", "orderItems.ticketType",
             "orderItems.ticketType.seatZone"})
     Optional<Order> findByIdForTicketIssuance(@Param("id") UUID id);
+
+    @Query("SELECT o.id FROM Order o WHERE o.status = :status AND o.holdExpiresAt <= :now ORDER BY o.holdExpiresAt")
+    List<UUID> findExpiredHeldOrderIds(@Param("status") OrderStatus status, @Param("now") LocalDateTime now);
 
 }

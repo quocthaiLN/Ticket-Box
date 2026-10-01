@@ -17,8 +17,12 @@ import com.ticketbox.api.module.payment.domain.entities.Payment;
 import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
 import com.ticketbox.api.module.payment.domain.entities.PaymentStatus;
 import com.ticketbox.api.module.payment.gateways.PaymentGatewayStrategy;
+import com.ticketbox.api.module.payment.gateways.PaymentStatusQueryGateway;
+import com.ticketbox.api.module.payment.gateways.GatewayQueryResult;
+import com.ticketbox.api.module.payment.gateways.MomoGateway;
 import com.ticketbox.api.module.payment.repositories.PaymentRepository;
 import com.ticketbox.api.module.payment.events.PaymentCompletedEvent;
+import com.ticketbox.api.module.ticket.consumers.TicketPaymentSucceededConsumer;
 import com.ticketbox.api.module.shared.idempotency.IdempotencyService;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -37,22 +41,28 @@ import org.springframework.http.HttpStatus;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 @RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
 
+    private static final Logger log = LoggerFactory.getLogger(PaymentServiceImpl.class);
     private static final Duration IDEMPOTENCY_TTL = Duration.ofHours(24);
+    private static final Duration RECONCILE_DELAY = Duration.ofSeconds(60);
     private static final String IDEMPOTENCY_KEY_PREFIX = "idempotency:payment:";
 
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final List<PaymentGatewayStrategy> paymentGateways;
+    private final List<PaymentStatusQueryGateway> paymentStatusQueryGateways;
     private final IdempotencyService idempotencyService;
     private final TransactionTemplate transactionTemplate;
     private final OrderInventoryService orderInventoryService;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final TicketPaymentSucceededConsumer ticketIssuer;
 
     @Override
     public PaymentResponse getPayment(User currentUser, UUID paymentId) {
@@ -71,17 +81,25 @@ public class PaymentServiceImpl implements PaymentService {
         String fingerprint = fingerprint(currentUser, request);
         String redisKey = IDEMPOTENCY_KEY_PREFIX + idempotencyKey;
 
-        return idempotencyService.execute(
+        CreatePaymentResponse result = idempotencyService.execute(
                 redisKey,
                 fingerprint,
                 IDEMPOTENCY_TTL,
                 CreatePaymentResponse.class,
                 () -> findExistingPayment(currentUser, idempotencyKey, request),
                 () -> createNewPayment(currentUser, idempotencyKey, request, clientIp));
+        return paymentRepository.findPaymentWithOrderAndUserById(result.paymentId())
+                .map(this::mapToResponse)
+                .orElse(result);
     }
 
     @Override
     public Optional<PaymentCallbackResponse> handleCallback(PaymentProvider provider, Map<String, String> parameters) {
+        return resolveGateway(provider).responseFor(handleCallbackResult(provider, parameters));
+    }
+
+    @Override
+    public CallbackHandlingResult handleCallbackResult(PaymentProvider provider, Map<String, String> parameters) {
         PaymentGatewayStrategy gateway = resolveGateway(provider);
         GatewayCallback callback = gateway.verifyCallback(parameters);
         CallbackHandlingResult result;
@@ -97,21 +115,41 @@ public class PaymentServiceImpl implements PaymentService {
                 throw new IllegalStateException("Payment callback transaction returned no result");
             }
         }
-        return gateway.responseFor(result);
+        return result;
     }
 
     private CreatePaymentResponse createNewPayment(User currentUser, String idempotencyKey,
             CreatePaymentRequest request, String clientIp) {
         PaymentGatewayStrategy gateway = resolveGateway(request.getProvider());
-        Payment payment = transactionTemplate
-                .execute(status -> initializePayment(currentUser, idempotencyKey, request));
-        if (payment == null) {
-            throw new IllegalStateException("Payment initialization transaction returned no payment");
+
+        // VNPay
+        if (request.getProvider() == PaymentProvider.VNPAY) {
+            CreatePaymentResponse response = transactionTemplate.execute(status -> {
+                Payment payment = initializePayment(currentUser, idempotencyKey, request);
+                String checkoutUrl = gateway.createPaymentUrl(gatewayRequest(payment, request, clientIp, gateway));
+                return saveCheckoutUrl(payment.getId(), checkoutUrl);
+            });
+            if (response == null) {
+                throw new IllegalStateException("VNPay creation transaction returned no response");
+            }
+            return response;
+        } else {
+        // MOMO
+            Payment payment = transactionTemplate.execute(status -> initializePayment(currentUser, idempotencyKey, request));
+            if (payment == null) {
+                throw new IllegalStateException("Payment initialization transaction returned no payment");
+            }
+
+            try {
+                String checkoutUrl = gateway.createPaymentUrl(gatewayRequest(payment, request, clientIp, gateway));
+                return transactionTemplate.execute(status -> saveCheckoutUrl(payment.getId(), checkoutUrl));
+            } catch (MomoGateway.CreateOutcomeUnknownException exception) {
+                log.warn("MoMo create outcome unknown for payment {}: {}", payment.getId(), exception.getMessage());
+                return transactionTemplate.execute(status -> scheduleReconcile(payment.getId()));
+            } catch (MomoGateway.CreateRejectedException exception) {
+                return transactionTemplate.execute(status -> failCreate(payment.getId(), exception.getMessage()));
+            }
         }
-
-        String checkoutUrl = gateway.createPaymentUrl(gatewayRequest(payment, request, clientIp, gateway));
-
-        return transactionTemplate.execute(status -> saveCheckoutUrl(payment.getId(), checkoutUrl));
     }
 
     private Payment initializePayment(User currentUser, String idempotencyKey, CreatePaymentRequest request) {
@@ -132,6 +170,10 @@ public class PaymentServiceImpl implements PaymentService {
             throw new AppException(HttpStatus.CONFLICT, "PAYMENT_IN_PROGRESS",
                     "Order already has a payment in progress");
         }
+        if (paymentRepository.existsByOrderIdAndStatus(order.getId(), PaymentStatus.CREATING)) {
+            throw new AppException(HttpStatus.CONFLICT, "PAYMENT_IN_PROGRESS",
+                    "Order already has a payment in progress");
+        }
         if (paymentRepository.existsByOrderIdAndStatus(order.getId(), PaymentStatus.SUCCEEDED)) {
             throw new AppException(HttpStatus.CONFLICT, "ORDER_ALREADY_PAID", "Order has already been paid");
         }
@@ -142,16 +184,49 @@ public class PaymentServiceImpl implements PaymentService {
                 .idempotencyKey(idempotencyKey)
                 .amount(order.getTotalAmount())
                 .currency(order.getCurrency())
-                .status(PaymentStatus.PENDING)
+                .status(request.getProvider() == PaymentProvider.MOMO ? PaymentStatus.CREATING : PaymentStatus.PENDING)
+                .nextReconcileAt(request.getProvider() == PaymentProvider.MOMO ? nextReconcileAt() : null)
                 .build());
     }
 
     private CreatePaymentResponse saveCheckoutUrl(UUID paymentId, String checkoutUrl) {
-        Payment payment = paymentRepository.findById(paymentId)
+        Payment payment = paymentRepository.findByIdForUpdate(paymentId)
                 .orElseThrow(() -> new IllegalStateException("Initialized payment no longer exists"));
+        if (payment.getStatus() == PaymentStatus.CREATING) {
+            Order order = orderRepository.findByIdForUpdate(payment.getOrder().getId()).orElseThrow();
+            if (!isHoldActive(order)) {
+                payment.setNextReconcileAt(nextReconcileAt());
+                return mapToResponse(paymentRepository.saveAndFlush(payment));
+            }
+            payment.setStatus(PaymentStatus.PENDING);
+        }
+        if (payment.getStatus() != PaymentStatus.PENDING) {
+            return mapToResponse(payment);
+        }
         payment.setCheckoutUrl(checkoutUrl);
+        payment.setNextReconcileAt(nextReconcileAt());
         Payment savedPayment = paymentRepository.saveAndFlush(payment);
         return mapToResponse(savedPayment);
+    }
+
+    private CreatePaymentResponse scheduleReconcile(UUID paymentId) {
+        Payment payment = paymentRepository.findByIdForUpdate(paymentId).orElseThrow();
+        if (payment.getStatus() == PaymentStatus.CREATING || payment.getStatus() == PaymentStatus.PENDING) {
+            payment.setNextReconcileAt(nextReconcileAt());
+            paymentRepository.saveAndFlush(payment);
+        }
+        return mapToResponse(payment);
+    }
+
+    private CreatePaymentResponse failCreate(UUID paymentId, String reason) {
+        Payment payment = paymentRepository.findByIdForUpdate(paymentId).orElseThrow();
+        if (payment.getStatus() == PaymentStatus.CREATING) {
+            payment.setStatus(PaymentStatus.FAILED);
+            payment.setFailureReason(reason);
+            payment.setNextReconcileAt(null);
+            paymentRepository.saveAndFlush(payment);
+        }
+        return mapToResponse(payment);
     }
 
     private Optional<CreatePaymentResponse> findExistingPayment(User currentUser, String idempotencyKey,
@@ -177,37 +252,78 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private CallbackHandlingResult applyCallback(UUID paymentId, PaymentProvider provider, GatewayCallback callback) {
+        return applyVerifiedOutcome(paymentId, provider, callback, true);
+    }
+
+    private CallbackHandlingResult applyVerifiedOutcome(UUID paymentId, PaymentProvider provider,
+            GatewayCallback callback, boolean fromIpn) {
         Payment payment = paymentRepository.findByIdForUpdate(paymentId)
                 .orElse(null);
         if (payment == null || payment.getProvider() != provider) {
             return CallbackHandlingResult.PAYMENT_NOT_FOUND;
         }
-        if (payment.getStatus() != PaymentStatus.PENDING) {
-            return CallbackHandlingResult.ALREADY_PROCESSED;
-        }
         if (callback.amount().isEmpty() || payment.getAmount().compareTo(callback.amount().orElseThrow()) != 0) {
             return CallbackHandlingResult.AMOUNT_MISMATCH;
         }
 
-        payment.setWebhookPayload(writePayload(callback.sanitizedPayload()));
-        payment.setWebhookReceivedAt(LocalDateTime.now());
-        payment.setWebhookSignatureValid(true);
-        payment.setProviderTransactionId(callback.providerTransactionId());
-
         PaymentStatus targetStatus = callback.targetStatus()
                 .orElseThrow(() -> new IllegalStateException("Verified callback has no target payment status"));
+        if (payment.getProviderTransactionId() != null && callback.providerTransactionId() != null
+                && !payment.getProviderTransactionId().equals(callback.providerTransactionId())) {
+            log.error("Conflicting provider transaction ID for payment {}", paymentId);
+            return CallbackHandlingResult.CONFLICTING_RESULT;
+        }
+        if (payment.getStatus() != PaymentStatus.PENDING && payment.getStatus() != PaymentStatus.CREATING) {
+            if (payment.getStatus() != targetStatus && targetStatus != PaymentStatus.PENDING) {
+                log.error("Conflicting {} result for payment {}: stored={}, incoming={}",
+                        fromIpn ? "IPN" : "query", paymentId, payment.getStatus(), targetStatus);
+                return CallbackHandlingResult.CONFLICTING_RESULT;
+            }
+            return CallbackHandlingResult.ALREADY_PROCESSED;
+        }
+
+        if (fromIpn) {
+            payment.setWebhookPayload(writePayload(callback.sanitizedPayload()));
+            payment.setWebhookReceivedAt(LocalDateTime.now());
+            payment.setWebhookSignatureValid(true);
+        } else {
+            payment.setProviderPayload(writePayload(callback.sanitizedPayload()));
+        }
+        if (callback.providerTransactionId() != null && !callback.providerTransactionId().isBlank()) {
+            payment.setProviderTransactionId(callback.providerTransactionId());
+        }
+
+        if (targetStatus == PaymentStatus.PENDING) {
+            payment.setNextReconcileAt(nextReconcileAt());
+            paymentRepository.saveAndFlush(payment);
+            return CallbackHandlingResult.PROCESSED;
+        }
+
+        boolean issueTickets = false;
         if (targetStatus == PaymentStatus.SUCCEEDED) {
-            payment.setStatus(targetStatus);
+            Order order = orderRepository.findByIdForUpdate(payment.getOrder().getId()).orElseThrow();
+            issueTickets = payment.getStatus() == PaymentStatus.PENDING && isHoldActive(order);
+            payment.setStatus(PaymentStatus.SUCCEEDED);
             LocalDateTime paidAt = LocalDateTime.now();
             payment.setPaidAt(paidAt);
-            orderInventoryService.settlePaidOrder(payment.getOrder().getId(), paidAt);
-        } else if (targetStatus == PaymentStatus.FAILED) {
+            if (issueTickets) {
+                orderInventoryService.settlePaidOrder(order.getId(), paidAt);
+            } else {
+                payment.setRefundRequired(true);
+                payment.setFailureReason("REFUND_REQUIRED: paid after hold expiry or before checkout URL was available");
+                log.warn("Payment {} requires manual refund", paymentId);
+            }
+        } else if (targetStatus == PaymentStatus.FAILED || targetStatus == PaymentStatus.CANCELLED) {
             payment.setStatus(targetStatus);
             payment.setFailureReason(callback.failureReason().orElse("Payment provider rejected payment"));
         }
+        payment.setNextReconcileAt(null);
 
         Payment savedPayment = paymentRepository.saveAndFlush(payment);
-        if (targetStatus != PaymentStatus.PENDING) {
+        if (issueTickets) {
+            PaymentCompletedEvent event = completedEvent(savedPayment);
+            ticketIssuer.issueTickets(event);
+        } else if (targetStatus == PaymentStatus.FAILED || targetStatus == PaymentStatus.CANCELLED) {
             eventPublisher.publishEvent(new PaymentCompletedEvent(
                     savedPayment.getId(),
                     savedPayment.getOrder().getId(),
@@ -219,6 +335,72 @@ public class PaymentServiceImpl implements PaymentService {
                     savedPayment.getProviderTransactionId()));
         }
         return CallbackHandlingResult.PROCESSED;
+    }
+
+    private PaymentCompletedEvent completedEvent(Payment payment) {
+        return new PaymentCompletedEvent(
+                payment.getId(), payment.getOrder().getId(), payment.getOrder().getUser().getId(),
+                payment.getProvider(), payment.getStatus(), payment.getAmount(), payment.getCurrency(),
+                payment.getProviderTransactionId());
+    }
+
+    private boolean isHoldActive(Order order) {
+        return order.getStatus() == OrderStatus.HELD
+                && order.getHoldExpiresAt() != null
+                && LocalDateTime.now().isBefore(order.getHoldExpiresAt());
+    }
+
+    private LocalDateTime nextReconcileAt() {
+        return LocalDateTime.now().plus(RECONCILE_DELAY);
+    }
+
+    public void reconcilePayment(UUID paymentId) {
+        Payment payment = paymentRepository.findPaymentWithOrderAndUserById(paymentId).orElse(null);
+        if (payment == null || payment.getNextReconcileAt() == null
+                || payment.getNextReconcileAt().isAfter(LocalDateTime.now())
+                || (payment.getStatus() != PaymentStatus.CREATING && payment.getStatus() != PaymentStatus.PENDING)) {
+            return;
+        }
+
+        try {
+            if (payment.getStatus() == PaymentStatus.CREATING && payment.getProvider() == PaymentProvider.MOMO
+                    && isHoldActive(payment.getOrder())) {
+                PaymentGatewayStrategy gateway = resolveGateway(PaymentProvider.MOMO);
+                String url = gateway.createPaymentUrl(PaymentGatewayRequest.builder()
+                        .orderId(payment.getOrder().getId())
+                        .amount(payment.getAmount())
+                        .currency(payment.getCurrency())
+                        .txnRef(gateway.transactionReference(paymentId))
+                        .orderInfo("Payment order " + gateway.transactionReference(paymentId))
+                        .build());
+                transactionTemplate.execute(status -> saveCheckoutUrl(paymentId, url));
+                return;
+            }
+
+            GatewayQueryResult result = resolveQueryGateway(payment.getProvider()).query(payment);
+            String expectedReference = resolveGateway(payment.getProvider()).transactionReference(paymentId);
+            if (!expectedReference.equals(result.merchantReference())
+                    || result.amount() == null || payment.getAmount().compareTo(result.amount()) != 0) {
+                throw new IllegalStateException("Gateway query result does not match payment " + paymentId);
+            }
+            GatewayCallback callback = new GatewayCallback(
+                    true, Optional.of(paymentId), Optional.of(result.amount()), result.providerTransactionId(),
+                    Optional.of(result.status()), Optional.of("Provider query resultCode=" + result.resultCode()),
+                    Map.of("source", "query", "resultCode", result.resultCode()));
+            transactionTemplate.execute(status -> applyVerifiedOutcome(paymentId, payment.getProvider(), callback, false));
+        } catch (MomoGateway.CreateRejectedException exception) {
+            transactionTemplate.execute(status -> failCreate(paymentId, exception.getMessage()));
+        } catch (RuntimeException exception) {
+            log.warn("Payment reconciliation deferred for {}: {}", paymentId, exception.getMessage());
+            transactionTemplate.execute(status -> scheduleReconcile(paymentId));
+        }
+    }
+
+    private PaymentStatusQueryGateway resolveQueryGateway(PaymentProvider provider) {
+        return paymentStatusQueryGateways.stream()
+                .filter(gateway -> gateway.getProvider() == provider)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("No query gateway for provider " + provider));
     }
 
     private String writePayload(Map<String, String> parameters) {
@@ -270,6 +452,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .holdExpiresAt(payment.getOrder().getHoldExpiresAt())
                 .paidAt(payment.getPaidAt())
                 .failureReason(payment.getFailureReason())
+                .refundRequired(payment.isRefundRequired())
                 .createdAt(payment.getCreatedAt())
                 .updatedAt(payment.getUpdatedAt())
                 .build();

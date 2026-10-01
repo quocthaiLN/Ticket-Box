@@ -4,6 +4,7 @@ import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.infrastructure.response.ApiResponse;
 import com.ticketbox.api.module.auth.services.CustomUserDetails;
 import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentRequest;
+import com.ticketbox.api.module.payment.domain.dtos.CallbackHandlingResult;
 import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentResponse;
 import com.ticketbox.api.module.payment.domain.dtos.MomoIpnRequest;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentCallbackResponse;
@@ -15,6 +16,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -32,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/payments")
 @RequiredArgsConstructor
+@Slf4j
 public class PaymentController {
 
     private final PaymentService paymentService;
@@ -62,15 +65,26 @@ public class PaymentController {
 
     @GetMapping("/vnpay/ipn")
     public ResponseEntity<PaymentCallbackResponse> vnpayIpn(@RequestParam Map<String, String> parameters) {
-        PaymentCallbackResponse response = paymentService.handleCallback(PaymentProvider.VNPAY, parameters)
-                .orElseThrow(() -> new IllegalStateException("VNPAY gateway did not return an IPN response"));
-        return ResponseEntity.ok(response);
+        try {
+            PaymentCallbackResponse response = paymentService.handleCallback(PaymentProvider.VNPAY, parameters)
+                    .orElseThrow(() -> new IllegalStateException("VNPAY gateway did not return an IPN response"));
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException exception) {
+            log.error("Could not process VNPay IPN", exception);
+            return ResponseEntity.ok(PaymentCallbackResponse.of("99", "Payment could not be confirmed"));
+        }
     }
 
     @PostMapping("/momo/ipn")
     public ResponseEntity<Void> momoIpn(@Valid @RequestBody MomoIpnRequest request) {
-        paymentService.handleCallback(PaymentProvider.MOMO, request.toParameters());
-        return ResponseEntity.noContent().build();
+        CallbackHandlingResult result = paymentService.handleCallbackResult(PaymentProvider.MOMO, request.toParameters());
+        return switch (result) {
+            case PROCESSED, ALREADY_PROCESSED -> ResponseEntity.noContent().build();
+            case INVALID_SIGNATURE -> ResponseEntity.badRequest().build();
+            case PAYMENT_NOT_FOUND -> ResponseEntity.notFound().build();
+            case AMOUNT_MISMATCH -> ResponseEntity.unprocessableEntity().build();
+            case CONFLICTING_RESULT -> ResponseEntity.status(HttpStatus.CONFLICT).build();
+        };
     }
 
     private UUID parseIdempotencyKey(String header) {

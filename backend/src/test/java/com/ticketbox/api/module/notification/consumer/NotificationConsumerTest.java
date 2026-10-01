@@ -1,8 +1,5 @@
 package com.ticketbox.api.module.notification.consumer;
 
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.auth.repositories.UserRepository;
 import com.ticketbox.api.module.notification.services.EmailService;
@@ -16,11 +13,16 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+
 class NotificationConsumerTest {
 
     @Mock
@@ -32,11 +34,12 @@ class NotificationConsumerTest {
     @InjectMocks
     private NotificationConsumer notificationConsumer;
 
-    @Test
-    void sendsPaymentFailedEmailToPaymentOwner() {
+    @ParameterizedTest
+    @EnumSource(value = PaymentStatus.class, names = {"FAILED", "CANCELLED"})
+    void sendsPaymentFailedEmailToPaymentOwner(PaymentStatus status) {
         UUID userId = UUID.randomUUID();
         PaymentCompletedEvent event = new PaymentCompletedEvent(UUID.randomUUID(), UUID.randomUUID(), userId,
-                PaymentProvider.MOMO, PaymentStatus.FAILED, BigDecimal.valueOf(100_000), "VND", "provider-txn");
+                PaymentProvider.MOMO, status, BigDecimal.valueOf(100_000), "VND", "provider-txn");
         when(userRepository.findById(userId)).thenReturn(Optional.of(User.builder().email("buyer@example.com").build()));
 
         notificationConsumer.receivePaymentFailed(event);

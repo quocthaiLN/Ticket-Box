@@ -17,7 +17,7 @@ public record MomoIpnRequest(
         @NotNull @Positive Long responseTime,
         @NotNull Integer resultCode,
         @NotBlank String message,
-        @NotBlank String payType,
+        @NotNull String payType,
         @NotBlank String requestId,
         @NotBlank String orderInfo) {
 
