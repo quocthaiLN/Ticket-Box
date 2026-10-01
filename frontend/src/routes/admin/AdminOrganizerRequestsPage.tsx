@@ -395,7 +395,7 @@ function CheckerPasswords({ result }: { result: ApproveOrganizerRequestResult })
 
 function AdminAccessState({ role }: { role?: string }) {
   return (
-    <main className="min-h-screen bg-[#080E] px-4 pt-28 text-[#F0EDEB]">
+    <main className="min-h-screen bg-[#080E14] px-4 pt-28 text-[#F0EDEB]">
       <section className="mx-auto max-w-xl rounded-lg border border-white/10 bg-[#111118] p-6">
         <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[#E8315B]/15 text-[#E8315B]">
           <ShieldCheck className="h-5 w-5" />

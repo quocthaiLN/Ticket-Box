@@ -51,7 +51,7 @@ export function AudienceHomePage() {
   const featured = concerts[0];
 
   return (
-    <div className="min-h-screen bg-[#080E]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+    <div className="min-h-screen bg-[#080E14]" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       {featured && (
         <section className="relative min-h-[92vh] overflow-hidden pt-16">
           <div className="absolute inset-0">

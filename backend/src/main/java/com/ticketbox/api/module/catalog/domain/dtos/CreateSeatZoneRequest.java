@@ -16,6 +16,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CreateSeatZoneRequest {
 
+    @com.fasterxml.jackson.annotation.JsonAnySetter
+    public void rejectUnknown(String field, Object value) { UnknownAdminField.reject(field); }
+
     @NotBlank(message = "Code is required")
     @Size(max = 50, message = "Code must not exceed 50 characters")
     private String code;

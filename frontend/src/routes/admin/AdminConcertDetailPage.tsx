@@ -29,7 +29,7 @@ type LoadStatus = "loading" | "ready" | "error";
 
 // Trang chi tiết concert của Admin: gộp Thông tin / Khách mời / Bio vào một chỗ
 // (thay cho trang "Khách mời" độc lập trước đây).
-export function AdminConcertDetailPage() {
+export function ConcertDetailPage() {
   const { concertId } = useParams<{ concertId: string }>();
   const session = getStoredAuthSession();
   const canUseAdmin = session?.user.role === "ADMIN";

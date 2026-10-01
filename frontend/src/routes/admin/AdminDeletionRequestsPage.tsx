@@ -15,10 +15,10 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getStoredAuthSession } from "../../lib/auth-session";
 import {
-  approveAdminConcertDeletionRequest,
-  listAdminConcertDeletionRequests,
-  rejectAdminConcertDeletionRequest,
-  type AdminConcertDeletionRequest,
+  approveConcertDeletionRequest,
+  listConcertDeletionRequests,
+  rejectConcertDeletionRequest,
+  type ConcertDeletionRequest,
 } from "../../services/admin-organizer.service";
 import type { ApprovalStatus } from "../../services/organizer.service";
 import { AdminShell } from "./AdminShell";
@@ -31,7 +31,7 @@ export function AdminDeletionRequestsPage() {
   const canUseAdmin = session?.user.role === "ADMIN";
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [filter, setFilter] = useState<(typeof statuses)[number]>("all");
-  const [requests, setRequests] = useState<AdminConcertDeletionRequest[]>([]);
+  const [requests, setRequests] = useState<ConcertDeletionRequest[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [reviewNote, setReviewNote] = useState("");
@@ -45,7 +45,7 @@ export function AdminDeletionRequestsPage() {
     setLoadState("loading");
     setMessage("");
     try {
-      const data = await listAdminConcertDeletionRequests(status);
+      const data = await listConcertDeletionRequests(status);
       setRequests(data);
       setLoadState("ready");
     } catch (err) {
@@ -57,7 +57,7 @@ export function AdminDeletionRequestsPage() {
   async function approve(requestId: string) {
     setMessage("");
     try {
-      const result = await approveAdminConcertDeletionRequest(requestId);
+      const result = await approveConcertDeletionRequest(requestId);
       setReviewingId(null);
       setReviewNote("");
       setMessage(`Đã duyệt yêu cầu hủy. Concert ${result.concert_id} đã chuyển sang ${result.concert_status}.`);
@@ -70,7 +70,7 @@ export function AdminDeletionRequestsPage() {
   async function reject(requestId: string) {
     setMessage("");
     try {
-      await rejectAdminConcertDeletionRequest(requestId, reviewNote);
+      await rejectConcertDeletionRequest(requestId, reviewNote);
       setReviewingId(null);
       setReviewNote("");
       setMessage("Đã từ chối yêu cầu hủy concert.");
@@ -153,7 +153,7 @@ function DeletionRequestCard({
   onApprove,
   onReject,
 }: {
-  request: AdminConcertDeletionRequest;
+  request: ConcertDeletionRequest;
   expanded: boolean;
   reviewing: boolean;
   reviewNote: string;
@@ -263,7 +263,7 @@ function DeletionRequestCard({
 
 function AdminAccessState({ role }: { role?: string }) {
   return (
-    <main className="min-h-screen bg-[#080E] px-4 pt-28 text-[#F0EDEB]">
+    <main className="min-h-screen bg-[#080E14] px-4 pt-28 text-[#F0EDEB]">
       <section className="mx-auto max-w-xl rounded-2xl border border-white/[0.07] bg-[#111118] p-6">
         <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[#E8315B]/15 text-[#E8315B]">
           <ShieldCheck className="h-5 w-5" />

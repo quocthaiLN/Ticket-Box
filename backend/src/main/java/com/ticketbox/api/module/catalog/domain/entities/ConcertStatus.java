@@ -4,5 +4,6 @@ public enum ConcertStatus {
     DRAFT,
     PUBLISHED,
     CANCELED,
+    CANCELLED,
     COMPLETED
 }

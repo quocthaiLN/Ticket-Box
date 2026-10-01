@@ -17,6 +17,9 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class CreateConcertRequest {
 
+    @com.fasterxml.jackson.annotation.JsonAnySetter
+    public void rejectUnknown(String field, Object value) { UnknownAdminField.reject(field); }
+
     @NotBlank(message = "Title is required")
     @Size(max = 255, message = "Title must not exceed 255 characters")
     private String title;
@@ -41,10 +44,12 @@ public class CreateConcertRequest {
 
     @NotNull(message = "Starts at time is required")
     @JsonProperty("starts_at")
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = Rfc3339UtcLocalDateTimeDeserializer.class)
     private LocalDateTime startsAt;
 
     @NotNull(message = "Ends at time is required")
     @JsonProperty("ends_at")
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = Rfc3339UtcLocalDateTimeDeserializer.class)
     private LocalDateTime endsAt;
 
     @JsonProperty("cover_image_url")

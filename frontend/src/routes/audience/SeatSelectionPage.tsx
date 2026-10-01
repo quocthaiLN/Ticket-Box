@@ -150,8 +150,8 @@ export function SeatSelectionPage() {
   if (timeLeft <= 0) return <ExpiredState concertId={concert.slug} />;
 
   return (
-    <main className="min-h-screen bg-[#080E] pt-16 text-[#F0EDEB]">
-      <header className="sticky top-16 z-30 border-b border-white/10 bg-[#080E]/95 px-4 py-3 backdrop-blur sm:px-6">
+    <main className="min-h-screen bg-[#080E14] pt-16 text-[#F0EDEB]">
+      <header className="sticky top-16 z-30 border-b border-white/10 bg-[#080E14]/95 px-4 py-3 backdrop-blur sm:px-6">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <button type="button" onClick={() => navigate(-1)} className="rounded-lg p-2 text-[#F0EDEB] hover:bg-white/10" aria-label="Quay lại">
@@ -340,7 +340,7 @@ function toPendingItem(ticketType: UiTicketType, concert: UiConcert, quantity: n
 
 function CenteredState({ text, actionLabel }: { text: string; actionLabel?: string }) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-[#080E] px-4 pt-20 text-center text-[#F0EDEB]">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-[#080E14] px-4 pt-20 text-center text-[#F0EDEB]">
       <p className="text-sm text-[#8585A0]">{text}</p>
       {actionLabel && <Link to="/events" className="mt-4 text-sm font-semibold text-[#F5C842]">{actionLabel}</Link>}
     </main>
@@ -349,7 +349,7 @@ function CenteredState({ text, actionLabel }: { text: string; actionLabel?: stri
 
 function ExpiredState({ concertId }: { concertId: string }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#080E] px-4 pt-20 text-center text-[#F0EDEB]">
+    <main className="flex min-h-screen items-center justify-center bg-[#080E14] px-4 pt-20 text-center text-[#F0EDEB]">
       <section className="max-w-sm rounded-2xl border border-white/10 bg-[#111118] p-8">
         <AlertCircle className="mx-auto mb-4 h-12 w-12 text-[#E8315B]" />
         <h1 className="text-lg font-semibold">Phiên giữ vé đã hết hạn</h1>

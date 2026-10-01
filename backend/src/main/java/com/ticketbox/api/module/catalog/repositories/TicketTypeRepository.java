@@ -21,6 +21,8 @@ public interface TicketTypeRepository extends JpaRepository<TicketType, UUID> {
 
     boolean existsByConcertIdAndName(UUID concertId, String name);
 
+    boolean existsByConcertIdAndNameAndIdNot(UUID concertId, String name, UUID id);
+
     Optional<TicketType> findByIdAndConcertId(UUID id, UUID concertId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -28,5 +30,5 @@ public interface TicketTypeRepository extends JpaRepository<TicketType, UUID> {
     Optional<TicketType> findByIdForUpdate(@Param("id") UUID id);
 
     @Query("SELECT COALESCE(SUM(t.totalQuantity), 0) FROM TicketType t WHERE t.concert.id = :concertId AND t.seatZone.id = :seatZoneId")
-    Integer sumTotalQuantityByConcertIdAndSeatZoneId(@Param("concertId") UUID concertId, @Param("seatZoneId") UUID seatZoneId);
+    Long sumTotalQuantityByConcertIdAndSeatZoneId(@Param("concertId") UUID concertId, @Param("seatZoneId") UUID seatZoneId);
 }

@@ -177,7 +177,7 @@ function emptyInventory(concertId: string): Inventory {
 
 function PreviewState({ text, backTo }: { text: string; backTo: string }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#080E] px-4 pt-20 text-center text-[#F0EDEB]">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#080E14] px-4 pt-20 text-center text-[#F0EDEB]">
       <h1 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2rem" }}>{text}</h1>
       <Link to={backTo} className="mt-4 text-sm text-[#F5C842]">
         Quay lại quản trị

@@ -3,7 +3,7 @@ package com.ticketbox.api.module.catalog.services;
 import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.auth.domain.entities.UserRole;
-import com.ticketbox.api.module.catalog.domain.dtos.ConcertDetailResponse;
+import com.ticketbox.api.module.catalog.domain.dtos.AdminConcertResponse;
 import com.ticketbox.api.module.catalog.domain.dtos.CreateConcertRequest;
 import com.ticketbox.api.module.catalog.domain.dtos.UpdateConcertRequest;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
@@ -31,7 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class AdminConcertServiceTest {
+class ConcertServiceTest {
 
     @Mock
     private ConcertRepository concertRepository;
@@ -48,8 +48,11 @@ class AdminConcertServiceTest {
     @Mock
     private StorageService storageService;
 
+    @Mock
+    private com.ticketbox.api.module.audit.services.AuditLogService auditLogService;
+
     @InjectMocks
-    private AdminConcertServiceImpl adminConcertService;
+    private ConcertServiceImpl concertService;
 
     private User organizerUser;
     private User otherOrganizerUser;
@@ -104,19 +107,19 @@ class AdminConcertServiceTest {
                 .build();
 
         when(concertRepository.existsBySlug("new-concert")).thenReturn(false);
-        when(concertRepository.save(any(Concert.class))).thenAnswer(invocation -> {
+        when(concertRepository.saveAndFlush(any(Concert.class))).thenAnswer(invocation -> {
             Concert c = invocation.getArgument(0);
             c.setId(UUID.randomUUID());
             return c;
         });
 
-        ConcertDetailResponse response = adminConcertService.createConcert(organizerUser, request);
+        AdminConcertResponse response = concertService.createConcert(organizerUser, request);
 
         assertNotNull(response);
         assertEquals("New Concert", response.getTitle());
         assertEquals("DRAFT", response.getStatus());
         assertEquals(organizerUser.getId(), response.getOrganizerId());
-        verify(concertRepository, times(1)).save(any(Concert.class));
+        verify(concertRepository, times(1)).saveAndFlush(any(Concert.class));
     }
 
     @Test
@@ -126,10 +129,10 @@ class AdminConcertServiceTest {
                 .title("Updated Title")
                 .build();
 
-        when(concertRepository.findById(concertId)).thenReturn(Optional.of(concert));
+        when(concertRepository.findByIdForUpdate(concertId)).thenReturn(Optional.of(concert));
 
         AppException ex = assertThrows(AppException.class, () ->
-                adminConcertService.updateConcert(otherOrganizerUser, concertId, request)
+                concertService.updateConcert(otherOrganizerUser, concertId, request)
         );
 
         assertEquals(HttpStatus.FORBIDDEN, ex.getStatus());
@@ -143,12 +146,52 @@ class AdminConcertServiceTest {
                 .title("Admin Updated Title")
                 .build();
 
-        when(concertRepository.findById(concertId)).thenReturn(Optional.of(concert));
+        when(concertRepository.findByIdForUpdate(concertId)).thenReturn(Optional.of(concert));
         when(concertRepository.save(any(Concert.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ConcertDetailResponse response = adminConcertService.updateConcert(adminUser, concertId, request);
+        AdminConcertResponse response = concertService.updateConcert(adminUser, concertId, request);
 
         assertNotNull(response);
         assertEquals("Admin Updated Title", response.getTitle());
+    }
+
+    @Test
+    @DisplayName("Repeated publish on a published concert is side-effect free")
+    void publishConcert_alreadyPublished() {
+        concert.setStatus(ConcertStatus.PUBLISHED);
+        when(concertRepository.findByIdForUpdate(concertId)).thenReturn(Optional.of(concert));
+
+        AdminConcertResponse response = concertService.publishConcert(adminUser, concertId);
+
+        assertEquals("PUBLISHED", response.getStatus());
+        verifyNoInteractions(seatZoneRepository, ticketTypeRepository, auditLogService, cacheService);
+        verify(concertRepository, never()).save(any(Concert.class));
+    }
+
+    @Test
+    @DisplayName("Completed concert cannot be edited")
+    void updateConcert_completedConcertConflicts() {
+        concert.setStatus(ConcertStatus.COMPLETED);
+        when(concertRepository.findByIdForUpdate(concertId)).thenReturn(Optional.of(concert));
+
+        AppException ex = assertThrows(AppException.class, () ->
+                concertService.updateConcert(adminUser, concertId, UpdateConcertRequest.builder().title("Nope").build()));
+
+        assertEquals(HttpStatus.CONFLICT, ex.getStatus());
+        assertEquals("INVALID_CONCERT_STATE", ex.getErrorCode());
+        verify(concertRepository, never()).save(any(Concert.class));
+    }
+
+    @Test
+    @DisplayName("Repeated cancel on cancelled concert does not repeat side effects")
+    void cancelConcert_alreadyCancelled() {
+        concert.setStatus(ConcertStatus.CANCELED);
+        when(concertRepository.findByIdForUpdate(concertId)).thenReturn(Optional.of(concert));
+
+        AdminConcertResponse response = concertService.cancelConcert(adminUser, concertId, "retry");
+
+        assertEquals("CANCELED", response.getStatus());
+        verify(concertRepository, never()).save(any(Concert.class));
+        verifyNoInteractions(auditLogService, cacheService);
     }
 }

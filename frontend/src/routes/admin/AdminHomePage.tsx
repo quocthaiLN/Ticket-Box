@@ -17,7 +17,7 @@ import { getStoredAuthSession } from "../../lib/auth-session";
 import { listAdminConcerts, type ConcertSummary } from "../../lib/api-client";
 import { listAdminUsers } from "../../services/admin-account.service";
 import {
-  listAdminConcertDeletionRequests,
+  listConcertDeletionRequests,
   listAdminOrganizerRequests,
   type AdminOrganizerRequestSummary,
 } from "../../services/admin-organizer.service";
@@ -45,7 +45,7 @@ export function AdminHomePage() {
     Promise.allSettled([
       listAdminConcerts(),
       listAdminOrganizerRequests("PENDING"),
-      listAdminConcertDeletionRequests("PENDING"),
+      listConcertDeletionRequests("PENDING"),
       listAdminUsers(),
     ])
       .then(([concertResult, requestResult, deletionResult, userResult]) => {

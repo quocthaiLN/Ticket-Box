@@ -37,7 +37,7 @@ export function Navbar() {
   }
 
   return (
-    <nav className="fixed left-0 right-0 top-0 z-50 border-b border-white/10 bg-[#080E]/85 backdrop-blur-xl">
+    <nav className="fixed left-0 right-0 top-0 z-50 border-b border-white/10 bg-[#080E14]/85 backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5">
@@ -130,7 +130,7 @@ export function Navbar() {
       </div>
 
       {menuOpen && (
-        <div className="space-y-2 border-t border-white/10 bg-[#080E]/95 px-4 py-4 md:hidden">
+        <div className="space-y-2 border-t border-white/10 bg-[#080E14]/95 px-4 py-4 md:hidden">
           <MobileNavLink to="/" label="Trang chủ" onClick={() => setMenuOpen(false)} />
           <MobileNavLink to="/events" label="Khám phá" onClick={() => setMenuOpen(false)} />
           {session ? (

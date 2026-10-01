@@ -5,7 +5,7 @@ import { AppLayout } from "./routes/AppLayout";
 import { AdminAccountsPage } from "./routes/admin/AdminAccountsPage";
 import { AdminAuditLogPage } from "./routes/admin/AdminAuditLogPage";
 import { AdminDeletionRequestsPage } from "./routes/admin/AdminDeletionRequestsPage";
-import { AdminConcertDetailPage } from "./routes/admin/AdminConcertDetailPage";
+import { ConcertDetailPage as AdminConcertDetailPage } from "./routes/admin/AdminConcertDetailPage";
 import { AdminHomePage } from "./routes/admin/AdminHomePage";
 import { AdminOrganizerRequestReviewPage, AdminOrganizerRequestsPage } from "./routes/admin/AdminOrganizerRequestsPage";
 import { AuthPage } from "./routes/auth/AuthPage";

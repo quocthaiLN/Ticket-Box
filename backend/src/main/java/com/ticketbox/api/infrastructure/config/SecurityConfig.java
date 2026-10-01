@@ -2,6 +2,7 @@ package com.ticketbox.api.infrastructure.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketbox.api.infrastructure.response.ErrorResponse;
+import com.ticketbox.api.infrastructure.response.AdminProblemWriter;
 import com.ticketbox.api.infrastructure.rateLimit.RateLimitFilter;
 import com.ticketbox.api.infrastructure.rateLimit.RateLimitPolicyRegistry;
 import com.ticketbox.api.infrastructure.rateLimit.RedisRateLimiter;
@@ -77,7 +78,7 @@ public class SecurityConfig {
                         .hasAnyRole("AUDIENCE", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/concerts/**")
                         .permitAll()
-                        .requestMatchers("/admin/**").hasAnyRole("ADMIN")
+                        .requestMatchers("/admin/**").hasAnyRole("ADMIN", "ORGANIZER")
                         .anyRequest().authenticated())
                 .oauth2Login(oauth2 -> oauth2
                         .successHandler(oidcSuccessHandler)
@@ -105,6 +106,8 @@ public class SecurityConfig {
     @Bean
     public AuthenticationEntryPoint customAuthenticationEntryPoint() {
         return (request, response, authException) -> {
+            if (AdminProblemWriter.write(objectMapper, request, response, 401, "UNAUTHORIZED",
+                    "Authentication is required to access this resource")) return;
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 
@@ -125,6 +128,8 @@ public class SecurityConfig {
     @Bean
     public AccessDeniedHandler customAccessDeniedHandler() {
         return (request, response, accessDeniedException) -> {
+            if (AdminProblemWriter.write(objectMapper, request, response, 403, "FORBIDDEN",
+                    "Access denied: insufficient permissions")) return;
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 

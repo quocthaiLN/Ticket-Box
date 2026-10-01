@@ -43,7 +43,7 @@ export type ApproveOrganizerRequestResult = {
   }>;
 };
 
-export type AdminConcertDeletionRequest = {
+export type ConcertDeletionRequest = {
   id: string;
   concert_id: string;
   concert?: {
@@ -112,22 +112,22 @@ export async function rejectAdminOrganizerRequest(requestId: string, reviewNote:
   return response.data;
 }
 
-export async function listAdminConcertDeletionRequests(status?: ApprovalStatus | "all") {
+export async function listConcertDeletionRequests(status?: ApprovalStatus | "all") {
   const query = status && status !== "all" ? `?status=${status}&limit=100` : "?limit=100";
-  const response = await apiGet<ApiCollectionResponse<AdminConcertDeletionRequest>>(
+  const response = await apiGet<ApiCollectionResponse<ConcertDeletionRequest>>(
     `/admin/concert-deletion-requests${query}`,
   );
   return response.data;
 }
 
-export async function approveAdminConcertDeletionRequest(requestId: string) {
+export async function approveConcertDeletionRequest(requestId: string) {
   const response = await apiPost<ApiResponse<ApproveConcertDeletionResult>>(
     `/admin/concert-deletion-requests/${requestId}/approve`,
   );
   return response.data;
 }
 
-export async function rejectAdminConcertDeletionRequest(requestId: string, reviewNote: string) {
+export async function rejectConcertDeletionRequest(requestId: string, reviewNote: string) {
   const response = await apiPost<ApiResponse<{ id: string; status: ApprovalStatus; reviewed_at: string }>>(
     `/admin/concert-deletion-requests/${requestId}/reject`,
     { review_note: reviewNote },
@@ -135,7 +135,7 @@ export async function rejectAdminConcertDeletionRequest(requestId: string, revie
   return response.data;
 }
 
-export async function listAdminConcertCheckerAccounts(concertId: string) {
+export async function listConcertCheckerAccounts(concertId: string) {
   const response = await apiGet<ApiCollectionResponse<AdminCheckerAccount>>(
     `/admin/concerts/${concertId}/checker-accounts?limit=100`,
   );

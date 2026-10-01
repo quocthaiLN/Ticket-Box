@@ -211,7 +211,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 
   return (
     <main
-      className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#080E] px-4 py-24"
+      className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#080E14] px-4 py-24"
       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
     >
       <div

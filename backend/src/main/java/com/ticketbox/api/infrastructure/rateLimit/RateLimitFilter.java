@@ -2,6 +2,7 @@ package com.ticketbox.api.infrastructure.rateLimit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketbox.api.infrastructure.response.ErrorResponse;
+import com.ticketbox.api.infrastructure.response.AdminProblemWriter;
 import com.ticketbox.api.module.auth.services.CustomUserDetails;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -48,7 +49,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             log.error("rate_limit outcome=redis_error resource={} latency_ms={}", policy.resource(),
                     (System.nanoTime() - start) / 1_000_000, exception);
             if (policy.failClosed()) {
-                writeError(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE,
+                writeError(request, response, HttpServletResponse.SC_SERVICE_UNAVAILABLE,
                         "RATE_LIMIT_UNAVAILABLE", "Rate limiting is temporarily unavailable");
                 return;
             }
@@ -60,7 +61,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             log.info("rate_limit outcome=rejected resource={} latency_ms={}", policy.resource(),
                     (System.nanoTime() - start) / 1_000_000);
             response.setHeader("Retry-After", Long.toString(Math.max(1, (decision.retryAfterMs() + 999) / 1000)));
-            writeError(response, 429, "RATE_LIMITED", "Too many requests");
+            writeError(request, response, 429, "RATE_LIMITED", "Too many requests");
             return;
         }
 
@@ -69,7 +70,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 
-    private void writeError(HttpServletResponse response, int status, String code, String message) throws IOException {
+    private void writeError(HttpServletRequest request, HttpServletResponse response, int status, String code, String message) throws IOException {
+        if (AdminProblemWriter.write(objectMapper, request, response, status, code, message)) return;
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");

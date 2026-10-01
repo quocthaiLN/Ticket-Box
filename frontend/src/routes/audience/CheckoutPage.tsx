@@ -386,7 +386,7 @@ export function CheckoutPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#080E] px-4 pb-12 pt-24 text-[#F0EDEB] sm:px-6">
+    <main className="min-h-screen bg-[#080E14] px-4 pb-12 pt-24 text-[#F0EDEB] sm:px-6">
       <div className="mx-auto max-w-5xl">
         <header className="mb-8 flex items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
@@ -424,7 +424,7 @@ export function CheckoutPage() {
                   key={checkout.orderId}
                   type="button"
                   onClick={() => selectHeldCheckout(checkout)}
-                  className="rounded-lg border border-[#F5C842]/25 bg-[#080E]/40 px-3 py-2 text-left text-xs text-[#F0EDEB] hover:border-[#F5C842]/60"
+                  className="rounded-lg border border-[#F5C842]/25 bg-[#080E14]/40 px-3 py-2 text-left text-xs text-[#F0EDEB] hover:border-[#F5C842]/60"
                 >
                   <span className="block font-semibold">{checkout.items.reduce((sum, item) => sum + item.quantity, 0)} vé · {formatMoney(checkout.totalPrice)}</span>
                   <span className="mt-0.5 block text-[#8585A0]">Còn {formatCountdown(remainingSeconds(checkout.expiresAt))}</span>
@@ -620,7 +620,7 @@ export function CheckoutPage() {
 
 function SuccessState({ order }: { order: OrderDetail | null }) {
   return (
-    <main className="min-h-screen bg-[#080E] px-4 pt-28 text-center text-[#F0EDEB]">
+    <main className="min-h-screen bg-[#080E14] px-4 pt-28 text-center text-[#F0EDEB]">
       <section className="mx-auto max-w-md">
         <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full border border-[#2DBE6C]/30 bg-[#2DBE6C]/15">
           <CheckCircle2 className="h-10 w-10 text-[#2DBE6C]" />
@@ -642,7 +642,7 @@ function SuccessState({ order }: { order: OrderDetail | null }) {
 
 function ExpiredState({ concertId, orderId, refundRequired }: { concertId: string; orderId?: string; refundRequired?: boolean }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#080E] px-4 pt-20 text-center text-[#F0EDEB]">
+    <main className="flex min-h-screen items-center justify-center bg-[#080E14] px-4 pt-20 text-center text-[#F0EDEB]">
       <section className="max-w-sm rounded-2xl border border-white/10 bg-[#111118] p-8">
         <AlertCircle className="mx-auto mb-4 h-12 w-12 text-[#E8315B]" />
         <h1 className="text-lg font-semibold">Phiên giữ vé đã hết hạn</h1>

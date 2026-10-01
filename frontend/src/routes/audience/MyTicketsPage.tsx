@@ -38,7 +38,7 @@ export function MyTicketsPage() {
         errorCorrectionLevel: "M",
         margin: 1,
         width: 300,
-        color: { dark: "#080E", light: "#FFFFFF" },
+        color: { dark: "#080E14", light: "#FFFFFF" },
       });
 
       const canvas = document.createElement("canvas");
@@ -49,7 +49,7 @@ export function MyTicketsPage() {
 
       const gradient = ctx.createLinearGradient(0, 0, 0, 900);
       gradient.addColorStop(0, "#111118");
-      gradient.addColorStop(1, "#080E");
+      gradient.addColorStop(1, "#080E14");
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, 600, 900);
 
@@ -188,7 +188,7 @@ export function MyTicketsPage() {
   );
 
   return (
-    <main className="min-h-screen bg-[#080E] px-4 pb-12 pt-24 text-[#F0EDEB] sm:px-6">
+    <main className="min-h-screen bg-[#080E14] px-4 pb-12 pt-24 text-[#F0EDEB] sm:px-6">
       <section className="mx-auto max-w-4xl">
         <header className="mb-6">
           <h1 className="text-3xl font-bold" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>Vé của tôi</h1>
@@ -352,7 +352,7 @@ function QrModal({ ticket, onClose }: { ticket: TicketListItem; onClose: () => v
           <h2 className="text-xl font-bold" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>{ticket.concert_title}</h2>
           <p className="mt-1 text-xs text-[#8585A0]">{ticket.ticket_type_name} - Khu {ticket.zone_code}</p>
 
-          <div className="my-5 rounded-2xl border border-white/10 bg-[#080E] p-4">
+          <div className="my-5 rounded-2xl border border-white/10 bg-[#080E14] p-4">
             {status === "loading" ? (
               <div className="flex h-44 items-center justify-center text-sm text-[#8585A0]">Đang tải QR...</div>
             ) : status === "error" ? (
@@ -386,7 +386,7 @@ function QrImage({ content }: { content: string }) {
       errorCorrectionLevel: "M",
       margin: 2,
       width: 256,
-      color: { dark: "#080E", light: "#FFFFFF" },
+      color: { dark: "#080E14", light: "#FFFFFF" },
     })
       .then((url) => {
         if (mounted) setDataUrl(url);

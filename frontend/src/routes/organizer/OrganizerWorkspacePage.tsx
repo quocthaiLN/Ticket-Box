@@ -226,7 +226,7 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#080E] pt-16 text-[#F0EDEB]">
+    <div className="flex min-h-screen bg-[#080E14] pt-16 text-[#F0EDEB]">
       <aside className="fixed bottom-0 left-0 top-16 hidden w-56 flex-col border-r border-white/[0.07] bg-[#0D0D15] px-3 py-6 md:flex">
         <div className="mb-4 px-2 text-xs font-semibold uppercase tracking-widest text-[#8585A0]">Ban tổ chức</div>
         <nav className="flex-1 space-y-1">
@@ -2740,7 +2740,7 @@ function Header({ view, onNewRequest }: { view: OrganizerView; onNewRequest: () 
 
 function OrganizerAccessState({ role }: { role?: string }) {
   return (
-    <main className="min-h-screen bg-[#080E] px-4 pt-28 text-[#F0EDEB]">
+    <main className="min-h-screen bg-[#080E14] px-4 pt-28 text-[#F0EDEB]">
       <section className="mx-auto max-w-xl rounded-lg border border-white/10 bg-[#111118] p-6">
         <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-[#7B61FF]/15 text-[#7B61FF]">
           <UserCheck className="h-5 w-5" />

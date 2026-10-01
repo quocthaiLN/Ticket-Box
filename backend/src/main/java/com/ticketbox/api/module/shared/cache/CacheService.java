@@ -153,4 +153,12 @@ public class CacheService {
             log.warn("Failed to evict cache for concerts:all*: {}", e.getMessage());
         }
     }
+
+    /** Strict variant for after-commit admin writes so bounded retries can observe Redis failures. */
+    public void invalidateAdminConcert(UUID concertId) {
+        Set<String> concertKeys = stringRedisTemplate.keys("concerts:" + concertId + "*");
+        Set<String> listKeys = stringRedisTemplate.keys("concerts:all*");
+        if (concertKeys != null && !concertKeys.isEmpty()) stringRedisTemplate.delete(concertKeys);
+        if (listKeys != null && !listKeys.isEmpty()) stringRedisTemplate.delete(listKeys);
+    }
 }

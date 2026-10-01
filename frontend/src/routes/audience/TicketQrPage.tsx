@@ -39,7 +39,7 @@ export function TicketQrPage() {
   }, [location.pathname, ticketId]);
 
   return (
-    <main className="min-h-screen bg-[#080E] px-4 pb-12 pt-24 text-[#F0EDEB] sm:px-6">
+    <main className="min-h-screen bg-[#080E14] px-4 pb-12 pt-24 text-[#F0EDEB] sm:px-6">
       <section className="mx-auto max-w-md rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center shadow-2xl">
         <QrCode className="mx-auto h-9 w-9 text-[#F5C842]" />
         <h1 className="mt-4 text-3xl font-bold">Mã QR vé</h1>
