@@ -2,7 +2,9 @@ import { Ban, Calendar, CheckCircle, Download, Loader2, QrCode, Ticket as Ticket
 import QRCode from "qrcode";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { getApiErrorCode } from "../../lib/api-client";
 import {
+  getTicketErrorMessage,
   getMyTicketQr,
   listMyTickets,
   type TicketListItem,
@@ -17,7 +19,7 @@ const tabs: Array<{ value: TicketTab; label: string }> = [
   { value: "ISSUED", label: "Chờ sử dụng" },
   { value: "CHECKED_IN", label: "Đã check-in" },
   { value: "CANCELLED", label: "Đã hủy" },
-  { value: "REFUNDED", label: "Đã hoàn" },
+  { value: "EXPIRED", label: "Hết hạn" },
 ];
 
 export function MyTicketsPage() {
@@ -71,7 +73,7 @@ export function MyTicketsPage() {
 
       ctx.fillStyle = "#F0EDEB";
       ctx.font = "bold 28px sans-serif";
-      const words = ticket.concert_title.split(" ");
+      const words = ticket.concert.title.split(" ");
       let line = "";
       let y = 110;
       const maxWidth = 500;
@@ -103,9 +105,9 @@ export function MyTicketsPage() {
         ctx.fillText(value, 60, detailY + 22);
       };
 
-      drawDetail("Loại vé / Ticket Type", ticket.ticket_type_name, infoStartY);
-      drawDetail("Khu vực / Zone", `Khu ${ticket.zone_code}`, infoStartY + 65);
-      drawDetail("Ngày phát hành / Issued Date", formatDate(ticket.issued_at), infoStartY + 130);
+      drawDetail("Loại vé / Ticket Type", ticket.ticketType.name, infoStartY);
+      drawDetail("Khu vực / Zone", `Khu ${ticket.seatZone.code}`, infoStartY + 65);
+      drawDetail("Ngày phát hành / Issued Date", formatDate(ticket.issuedAt), infoStartY + 130);
       drawDetail("Mã vé / Ticket ID", `#${ticket.id}`, infoStartY + 195);
 
       const lineY = infoStartY + 270;
@@ -135,7 +137,7 @@ export function MyTicketsPage() {
       const finalDataUrl = canvas.toDataURL("image/png");
       const link = document.createElement("a");
       link.href = finalDataUrl;
-      const cleanTitle = ticket.concert_title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
+      const cleanTitle = ticket.concert.title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
       link.download = `ticket-${cleanTitle}-${ticket.id.slice(0, 8)}.png`;
       document.body.appendChild(link);
       link.click();
@@ -151,7 +153,7 @@ export function MyTicketsPage() {
   useEffect(() => {
     let mounted = true;
     setStatus("loading");
-    listMyTickets({ limit: 100 })
+    listMyTickets()
       .then((items) => {
         if (!mounted) return;
         setTickets(items);
@@ -179,8 +181,8 @@ export function MyTicketsPage() {
       tickets
         .filter((ticket) => activeTab === "all" || ticket.status === activeTab)
         .sort((a, b) => {
-          const timeA = new Date(a.issued_at).getTime();
-          const timeB = new Date(b.issued_at).getTime();
+          const timeA = new Date(a.issuedAt).getTime();
+          const timeB = new Date(b.issuedAt).getTime();
           if (timeB !== timeA) return timeB - timeA;
           return b.id.localeCompare(a.id);
         }),
@@ -272,15 +274,15 @@ function TicketCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2">
-            <h2 className="break-words text-base font-semibold">{ticket.concert_title}</h2>
+            <h2 className="break-words text-base font-semibold">{ticket.concert.title}</h2>
             <StatusBadge status={ticket.status} />
           </div>
           <div className="flex flex-wrap gap-3 text-xs text-[#8585A0]">
             <span className="inline-flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5 text-[#F5C842]" />Phát hành {formatDate(ticket.issued_at)}
+              <Calendar className="h-3.5 w-3.5 text-[#F5C842]" />Phát hành {formatDate(ticket.issuedAt)}
             </span>
-            <span>{ticket.ticket_type_name}</span>
-            <span>Khu {ticket.zone_code}</span>
+            <span>{ticket.ticketType.name}</span>
+            <span>Khu {ticket.seatZone.code}</span>
           </div>
         </div>
         <div className="flex gap-2 sm:flex-col">
@@ -318,6 +320,7 @@ function TicketCard({
 function QrModal({ ticket, onClose }: { ticket: TicketListItem; onClose: () => void }) {
   const [qr, setQr] = useState<TicketQr | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [errorMessage, setErrorMessage] = useState("Không thể tải mã QR");
 
   useEffect(() => {
     let mounted = true;
@@ -328,8 +331,10 @@ function QrModal({ ticket, onClose }: { ticket: TicketListItem; onClose: () => v
         setQr(qrData);
         setStatus("ready");
       })
-      .catch(() => {
-        if (mounted) setStatus("error");
+      .catch((error: unknown) => {
+        if (!mounted) return;
+        setErrorMessage(getTicketErrorMessage(getApiErrorCode(error)));
+        setStatus("error");
       });
     return () => {
       mounted = false;
@@ -349,21 +354,21 @@ function QrModal({ ticket, onClose }: { ticket: TicketListItem; onClose: () => v
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-[#F5C842]/10 text-[#F5C842]">
             <QrCode className="h-7 w-7" />
           </div>
-          <h2 className="text-xl font-bold" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>{ticket.concert_title}</h2>
-          <p className="mt-1 text-xs text-[#8585A0]">{ticket.ticket_type_name} - Khu {ticket.zone_code}</p>
+          <h2 className="text-xl font-bold" style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}>{ticket.concert.title}</h2>
+          <p className="mt-1 text-xs text-[#8585A0]">{ticket.ticketType.name} - Khu {ticket.seatZone.code}</p>
 
           <div className="my-5 rounded-2xl border border-white/10 bg-[#080E14] p-4">
             {status === "loading" ? (
               <div className="flex h-44 items-center justify-center text-sm text-[#8585A0]">Đang tải QR...</div>
             ) : status === "error" ? (
-              <div className="flex h-44 items-center justify-center text-sm text-[#E8315B]">Không thể tải QR</div>
+              <div className="flex h-44 items-center justify-center text-sm text-[#E8315B]">{errorMessage}</div>
             ) : (
               <QrImage content={qrContent} />
             )}
           </div>
 
           {qr && <p className="break-all font-mono text-[11px] leading-5 text-[#8585A0]">{qr.content}</p>}
-          <p className="mt-2 text-xs text-[#8585A0]">{ticket.status === "CHECKED_IN" ? "Vé đã được sử dụng." : "Xuất trình mã này tại cổng soát vé."}</p>
+          <p className="mt-2 text-xs text-[#8585A0]">{ticket.status === "CHECKED_IN" ? "Vé đã được sử dụng." : ticket.status === "ISSUED" ? "Xuất trình mã này tại cổng soát vé." : "Mã QR không còn khả dụng cho vé này."}</p>
           <button type="button" onClick={onClose} className="mt-5 w-full rounded-xl border border-white/10 bg-white/[0.07] py-2.5 text-sm text-[#F0EDEB]">
             Đóng
           </button>
@@ -421,7 +426,7 @@ function StatusBadge({ status }: { status: TicketStatus }) {
   if (status === "CHECKED_IN") {
     return <span className="inline-flex items-center gap-1 rounded-full bg-[#2DBE6C]/10 px-2 py-0.5 text-xs text-[#2DBE6C]"><CheckCircle className="h-3 w-3" />Đã check-in</span>;
   }
-  return <span className="inline-flex items-center gap-1 rounded-full bg-[#E8315B]/10 px-2 py-0.5 text-xs text-[#E8315B]"><Ban className="h-3 w-3" />{status === "REFUNDED" ? "Đã hoàn" : "Đã hủy"}</span>;
+  return <span className="inline-flex items-center gap-1 rounded-full bg-[#E8315B]/10 px-2 py-0.5 text-xs text-[#E8315B]"><Ban className="h-3 w-3" />{status === "EXPIRED" ? "Hết hạn" : "Đã hủy"}</span>;
 }
 
 function Stat({ label, value, tone }: { label: string; value: number; tone: string }) {

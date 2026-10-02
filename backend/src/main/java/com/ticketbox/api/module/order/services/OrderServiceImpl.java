@@ -1,10 +1,11 @@
 package com.ticketbox.api.module.order.services;
 
-import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
 import com.ticketbox.api.module.catalog.domain.entities.TicketType;
 import com.ticketbox.api.module.catalog.domain.entities.TicketTypeStatus;
+import com.ticketbox.api.module.catalog.domain.exception.ConcertNotFoundException;
+import com.ticketbox.api.module.catalog.domain.exception.TicketTypeNotFoundException;
 import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
 import com.ticketbox.api.module.order.domain.dtos.CreateOrderItemRequest;
@@ -16,14 +17,21 @@ import com.ticketbox.api.module.order.domain.entities.OrderItem;
 import com.ticketbox.api.module.order.domain.entities.OrderStatus;
 import com.ticketbox.api.module.order.domain.entities.UserTicketTypeCounter;
 import com.ticketbox.api.module.order.domain.entities.UserTicketTypeCounterId;
+import com.ticketbox.api.module.order.domain.exception.OrderAccessDeniedException;
+import com.ticketbox.api.module.order.domain.exception.OrderNotFoundException;
+import com.ticketbox.api.module.order.domain.exception.PerUserLimitExceededException;
+import com.ticketbox.api.module.order.domain.exception.SaleWindowClosedException;
+import com.ticketbox.api.module.order.domain.exception.TicketSoldOutException;
+import com.ticketbox.api.module.order.domain.exception.TicketTypeNotOnSaleException;
 import com.ticketbox.api.module.order.repositories.OrderRepository;
 import com.ticketbox.api.module.order.repositories.UserTicketTypeCounterRepository;
 import com.ticketbox.api.module.shared.cache.CacheService;
 import com.ticketbox.api.module.shared.idempotency.IdempotencyService;
+import com.ticketbox.api.module.shared.idempotency.exception.IdempotencyKeyReusedException;
+import com.ticketbox.api.module.shared.validation.RequestValidationException;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -85,7 +93,7 @@ public class OrderServiceImpl implements OrderService {
             CreateOrderRequest request) {
         List<CreateOrderItemRequest> sortedItems = validateAndSortItems(request);
         Concert concert = concertRepository.findById(request.getConcertId())
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "CONCERT_NOT_FOUND", "Concert not found"));
+                .orElseThrow(() -> new ConcertNotFoundException(request.getConcertId()));
 
         LocalDateTime now = LocalDateTime.now();
         List<LockedItem> lockedItems = sortedItems.stream()
@@ -94,7 +102,7 @@ public class OrderServiceImpl implements OrderService {
 
         String currency = lockedItems.getFirst().ticketType().getCurrency();
         if (lockedItems.stream().anyMatch(item -> !currency.equals(item.ticketType().getCurrency()))) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "INVALID_CHECKOUT_REQUEST",
+            throw new RequestValidationException("INVALID_CHECKOUT_REQUEST",
                     "All ticket types in an order must use the same currency");
         }
 
@@ -136,9 +144,9 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public OrderResponse getOrder(User currentUser, UUID orderId) {
         Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "ORDER_NOT_FOUND", "Order not found"));
+                .orElseThrow(OrderNotFoundException::new);
         if (!order.getUser().getId().equals(currentUser.getId())) {
-            throw new AppException(HttpStatus.FORBIDDEN, "ORDER_ACCESS_DENIED", "You do not have access to this order");
+            throw new OrderAccessDeniedException();
         }
         return mapToOrderResponse(order);
     }
@@ -150,8 +158,7 @@ public class OrderServiceImpl implements OrderService {
         return orderRepository.findByIdempotencyKey(idempotencyKey)
                 .map(order -> {
                     if (!matchesExistingOrder(order, currentUser, request)) {
-                        throw new AppException(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REUSED",
-                                "Idempotency key was already used for a different request");
+                        throw new IdempotencyKeyReusedException();
                     }
                     return mapToOrderResponse(order);
                 });
@@ -161,7 +168,7 @@ public class OrderServiceImpl implements OrderService {
         Set<UUID> ticketTypeIds = new HashSet<>();
         for (CreateOrderItemRequest item : request.getItems()) {
             if (!ticketTypeIds.add(item.getTicketTypeId())) {
-                throw new AppException(HttpStatus.BAD_REQUEST, "INVALID_CHECKOUT_REQUEST",
+                throw new RequestValidationException("INVALID_CHECKOUT_REQUEST",
                         "Each ticket type may appear only once in an order");
             }
         }
@@ -185,23 +192,20 @@ public class OrderServiceImpl implements OrderService {
 
     private TicketType lockAndValidateTicketType(CreateOrderItemRequest request, Concert concert, LocalDateTime now) {
         TicketType ticketType = ticketTypeRepository.findByIdForUpdate(request.getTicketTypeId())
-                .orElseThrow(
-                        () -> new AppException(HttpStatus.NOT_FOUND, "TICKET_TYPE_NOT_FOUND", "Ticket type not found"));
+                .orElseThrow(() -> new TicketTypeNotFoundException(request.getTicketTypeId()));
 
         if (!ticketType.getConcert().getId().equals(concert.getId())) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "INVALID_CHECKOUT_REQUEST",
+            throw new RequestValidationException("INVALID_CHECKOUT_REQUEST",
                     "All ticket types must belong to the requested concert");
         }
         if (ticketType.getStatus() != TicketTypeStatus.ON_SALE) {
-            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "TICKET_TYPE_NOT_ON_SALE",
-                    "Ticket type is not on sale");
+            throw new TicketTypeNotOnSaleException();
         }
         if (now.isBefore(ticketType.getSaleStartAt()) || !now.isBefore(ticketType.getSaleEndAt())) {
-            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "SALE_WINDOW_CLOSED",
-                    "Ticket type is outside its sale window");
+            throw new SaleWindowClosedException();
         }
         if (ticketType.getAvailableQuantity() < request.getQuantity()) {
-            throw new AppException(HttpStatus.CONFLICT, "TICKET_SOLD_OUT", "Insufficient ticket inventory");
+            throw new TicketSoldOutException();
         }
         return ticketType;
     }
@@ -218,8 +222,7 @@ public class OrderServiceImpl implements OrderService {
                         .build());
 
         if (counter.getHeldQuantity() + counter.getPaidQuantity() + requestedQuantity > ticketType.getMaxPerUser()) {
-            throw new AppException(HttpStatus.CONFLICT, "PER_USER_LIMIT_EXCEEDED",
-                    "Ticket purchase limit per user would be exceeded");
+            throw new PerUserLimitExceededException();
         }
 
         ticketType.setHeldQuantity(ticketType.getHeldQuantity() + requestedQuantity);

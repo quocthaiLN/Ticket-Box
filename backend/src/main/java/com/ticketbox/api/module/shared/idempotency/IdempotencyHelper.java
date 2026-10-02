@@ -4,6 +4,10 @@ import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketbox.api.infrastructure.exception.AppException;
+import com.ticketbox.api.module.shared.exception.BusinessException;
+import com.ticketbox.api.module.shared.exception.ReplayedBusinessException;
+import com.ticketbox.api.module.shared.idempotency.exception.IdempotencyKeyReusedException;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -136,7 +140,7 @@ public class IdempotencyHelper {
     public String processingValue(String fingerprint) {
         IdempotencyState state = IdempotencyState.PROCESSING;
         IdempotencyRecord record = new IdempotencyRecord(state, fingerprint, null, null, null, null, null,
-                null);
+                null, null);
         return writeRecord(record);
     }
 
@@ -147,7 +151,7 @@ public class IdempotencyHelper {
         IdempotencyState state = IdempotencyState.COMPLETED;
         IdempotencyOutcome outcome = IdempotencyOutcome.SUCCESS;
         IdempotencyRecord record = new IdempotencyRecord(state, fingerprint, outcome,
-                objectMapper.valueToTree(result), null, null, null, null);
+                objectMapper.valueToTree(result), null, null, null, null, null);
         return writeRecord(record);
     }
 
@@ -160,7 +164,14 @@ public class IdempotencyHelper {
         IdempotencyOutcome outcome = IdempotencyOutcome.ERROR;
         JsonNode details = exception.getDetails() == null ? null : objectMapper.valueToTree(exception.getDetails());
         IdempotencyRecord record = new IdempotencyRecord(state, fingerprint, outcome, null,
-                exception.getStatus().value(), exception.getErrorCode(), exception.getMessage(), details);
+                exception.getStatus().value(), exception.getErrorCode(), exception.getMessage(), details, null);
+        return writeRecord(record);
+    }
+
+    public String errorValue(String fingerprint, BusinessException exception) {
+        IdempotencyRecord record = new IdempotencyRecord(IdempotencyState.COMPLETED, fingerprint,
+                IdempotencyOutcome.ERROR, null, null, exception.getErrorCode().code(), exception.getMessage(),
+                objectMapper.valueToTree(exception.getDetails()), exception.getErrorCode().type());
         return writeRecord(record);
     }
 
@@ -200,8 +211,7 @@ public class IdempotencyHelper {
      */
     private void validateFingerprint(IdempotencyRecord record, String fingerprint) {
         if (!fingerprint.equals(record.fingerprint())) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REUSED",
-                    "Idempotency key was already used for a different request");
+            throw new IdempotencyKeyReusedException();
         }
     }
 
@@ -212,6 +222,12 @@ public class IdempotencyHelper {
     private <T> T readResponse(IdempotencyRecord record, JavaType responseType) {
         IdempotencyOutcome outcome = record.outcome();
         if (outcome == IdempotencyOutcome.ERROR) {
+            if (record.errorType() != null && record.errorCode() != null && record.message() != null) {
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> details = record.details() == null ? java.util.Map.of()
+                        : objectMapper.convertValue(record.details(), java.util.Map.class);
+                throw new ReplayedBusinessException(record.errorCode(), record.errorType(), record.message(), details);
+            }
             if (record.httpStatus() == null || record.errorCode() == null || record.message() == null) {
                 throw unavailable();
             }

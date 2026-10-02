@@ -14,3 +14,7 @@ Cover:
 3. **Execution flow:** Trace the path from the entry point to the result. Include meaningful branches, error handling, and external interactions when present. Use a short text flow or Mermaid diagram if it makes the flow easier to follow.
 
 Base the explanation on the final implementation. Distinguish verified behavior from assumptions, and mention material review risks or limitations when relevant.
+
+## Presentation style
+
+When the user provides or edits a reference section, match its presentation style across the remaining explanation. For architecture and learning notes, prefer a compact outline where each item names a concept and its responsibility with an arrow (for example, `BusinessException → expected business outcome`), then nests examples, fields, and consequences underneath. Keep peer concepts at the same level, use code formatting for identifiers, and split long explanations into reviewable component groups. Do not rewrite user-edited sections unless asked.

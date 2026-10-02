@@ -1,6 +1,5 @@
 package com.ticketbox.api.module.auth.services;
 
-import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.infrastructure.security.JwtUtils;
 import com.ticketbox.api.infrastructure.security.TokenBlacklistService;
 import com.ticketbox.api.module.auth.domain.dtos.*;
@@ -10,15 +9,25 @@ import com.ticketbox.api.module.auth.domain.entities.UserRole;
 import com.ticketbox.api.module.auth.domain.entities.UserStatus;
 import com.ticketbox.api.module.auth.domain.entities.UserProvider;
 import com.ticketbox.api.module.auth.domain.entities.UserAccountStatus;
+import com.ticketbox.api.module.auth.domain.exception.AccountDisabledException;
+import com.ticketbox.api.module.auth.domain.exception.AccountNotVerifiedException;
+import com.ticketbox.api.module.auth.domain.exception.AlreadyVerifiedException;
+import com.ticketbox.api.module.auth.domain.exception.EmailAlreadyExistsException;
+import com.ticketbox.api.module.auth.domain.exception.ExpiredRefreshTokenException;
+import com.ticketbox.api.module.auth.domain.exception.InvalidCredentialsException;
+import com.ticketbox.api.module.auth.domain.exception.InvalidOtpException;
+import com.ticketbox.api.module.auth.domain.exception.PhoneAlreadyExistsException;
+import com.ticketbox.api.module.auth.domain.exception.RevokedRefreshTokenException;
+import com.ticketbox.api.module.auth.domain.exception.UserNotFoundException;
 import com.ticketbox.api.module.auth.producer.AuthProducer;
 import com.ticketbox.api.module.auth.repositories.UserAccountRepository;
 import com.ticketbox.api.module.auth.repositories.UserRepository;
 import com.ticketbox.api.module.shared.domain.dtos.AuthOtpMessageDTO;
+import com.ticketbox.api.module.shared.validation.RequestValidationException;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,17 +59,17 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse register(RegisterRequest request) {
         if (request.getConfirmPassword() != null && !request.getPassword().equals(request.getConfirmPassword())) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "PASSWORD_MISMATCH",
+            throw new RequestValidationException("PASSWORD_MISMATCH",
                     "Password and confirm password do not match");
         }
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new AppException(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS", "Email is already registered");
+            throw new EmailAlreadyExistsException();
         }
 
         if (request.getPhone() != null && !request.getPhone().isBlank()
                 && userRepository.existsByPhone(request.getPhone())) {
-            throw new AppException(HttpStatus.CONFLICT, "PHONE_ALREADY_EXISTS", "Phone number is already registered");
+            throw new PhoneAlreadyExistsException();
         }
 
         User user = User.builder()
@@ -110,14 +119,14 @@ public class UserServiceImpl implements UserService {
         String cachedOtp = stringRedisTemplate.opsForValue().get(redisKey);
 
         if (cachedOtp == null || !cachedOtp.equals(request.getOtp())) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "INVALID_OTP", "Invalid or expired OTP code");
+            throw new InvalidOtpException();
         }
 
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User not found"));
+                .orElseThrow(UserNotFoundException::new);
 
         if (user.getStatus() != UserStatus.PENDING) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "ALREADY_VERIFIED", "Account is already verified or not in pending state");
+            throw new AlreadyVerifiedException("Account is already verified or not in pending state");
         }
 
         user.setStatus(UserStatus.ACTIVE);
@@ -132,10 +141,10 @@ public class UserServiceImpl implements UserService {
     @Override
     public void resendOtp(ResendOtpRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User not found"));
+                .orElseThrow(UserNotFoundException::new);
 
         if (user.getStatus() != UserStatus.PENDING) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "ALREADY_VERIFIED", "Account is already verified");
+            throw new AlreadyVerifiedException("Account is already verified");
         }
 
         String otpCode = String.format("%06d", secureRandom.nextInt(1000000));
@@ -157,16 +166,14 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS",
-                        "Invalid email or password"));
+                .orElseThrow(InvalidCredentialsException::new);
 
         if (user.getStatus() == UserStatus.PENDING) {
-            throw new AppException(HttpStatus.UNAUTHORIZED, "ACCOUNT_NOT_VERIFIED",
-                    "Account has not been verified via OTP");
+            throw new AccountNotVerifiedException();
         }
 
         if (user.getStatus() != UserStatus.ACTIVE || user.getDeletedAt() != null) {
-            throw new AppException(HttpStatus.UNAUTHORIZED, "ACCOUNT_DISABLED", "Account is disabled or locked");
+            throw new AccountDisabledException();
         }
 
         UserAccount localAccount = user.getAccounts().stream()
@@ -174,11 +181,10 @@ public class UserServiceImpl implements UserService {
                         && acc.getUserAccountStatus() == UserAccountStatus.ACTIVE
                         && acc.getDeletedAt() == null)
                 .findFirst()
-                .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS",
-                        "Invalid email or password"));
+                .orElseThrow(InvalidCredentialsException::new);
 
         if (!bCryptPasswordEncoder.matches(request.getPassword(), localAccount.getPasswordHash())) {
-            throw new AppException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Invalid email or password");
+            throw new InvalidCredentialsException();
         }
 
         return createLoginResponse(user);
@@ -192,7 +198,7 @@ public class UserServiceImpl implements UserService {
                 .orElseGet(() -> findOrCreateGoogleUser(providerUserId, email, fullName));
 
         if (user.getStatus() != UserStatus.ACTIVE || user.getDeletedAt() != null) {
-            throw new AppException(HttpStatus.UNAUTHORIZED, "ACCOUNT_DISABLED", "Account is disabled or locked");
+            throw new AccountDisabledException();
         }
 
         return createLoginResponse(user);
@@ -213,20 +219,20 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public LoginResponse refreshToken(String refreshToken) {
         if (refreshToken == null || !jwtUtils.validateRefreshToken(refreshToken)) {
-            throw new AppException(HttpStatus.UNAUTHORIZED, "TOKEN_EXPIRED", "Refresh token is invalid or expired");
+            throw new ExpiredRefreshTokenException();
         }
 
         String jti = jwtUtils.extractJtiFromRefreshToken(refreshToken);
         if (tokenBlacklistService.isBlacklisted(jti)) {
-            throw new AppException(HttpStatus.UNAUTHORIZED, "TOKEN_REVOKED", "Refresh token has been revoked");
+            throw new RevokedRefreshTokenException();
         }
 
         UUID userId = jwtUtils.extractIdFromRefreshToken(refreshToken);
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "User not found"));
+                .orElseThrow(InvalidCredentialsException::new);
 
         if (user.getStatus() != UserStatus.ACTIVE) {
-            throw new AppException(HttpStatus.UNAUTHORIZED, "ACCOUNT_DISABLED", "Account is disabled or locked");
+            throw new AccountDisabledException();
         }
 
         String newAccessToken = jwtUtils.generateAccessToken(user.getId(), user.getRole().name());
@@ -243,7 +249,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public UserResponse getProfile(UUID userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User not found"));
+                .orElseThrow(UserNotFoundException::new);
         return UserResponse.fromEntity(user);
     }
 

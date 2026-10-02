@@ -1,8 +1,7 @@
 package com.ticketbox.api.infrastructure.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ticketbox.api.infrastructure.response.ErrorResponse;
-import com.ticketbox.api.infrastructure.response.AdminProblemWriter;
+import com.ticketbox.api.infrastructure.response.ApiProblemWriter;
 import com.ticketbox.api.infrastructure.rateLimit.RateLimitFilter;
 import com.ticketbox.api.infrastructure.rateLimit.RateLimitPolicyRegistry;
 import com.ticketbox.api.infrastructure.rateLimit.RedisRateLimiter;
@@ -14,7 +13,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -96,6 +94,7 @@ public class SecurityConfig {
                 List.of("http://localhost:3000", "http://localhost:3001", "http://10.0.148.2:3001/"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-Id", "Idempotency-Key"));
+        configuration.setExposedHeaders(List.of("X-Request-Id", "Retry-After"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -106,11 +105,6 @@ public class SecurityConfig {
     @Bean
     public AuthenticationEntryPoint customAuthenticationEntryPoint() {
         return (request, response, authException) -> {
-            if (AdminProblemWriter.write(objectMapper, request, response, 401, "UNAUTHORIZED",
-                    "Authentication is required to access this resource")) return;
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-
             String jwtError = (String) request.getAttribute("JWT_ERROR");
             String errorCode = "UNAUTHORIZED";
             String errorMessage = "Authentication is required to access this resource";
@@ -120,21 +114,16 @@ public class SecurityConfig {
                 errorMessage = "JWT token has been revoked";
             }
 
-            ErrorResponse errorResponse = ErrorResponse.of(errorCode, errorMessage);
-            response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+            ApiProblemWriter.write(objectMapper, request, response, HttpServletResponse.SC_UNAUTHORIZED,
+                    errorCode, errorMessage);
         };
     }
 
     @Bean
     public AccessDeniedHandler customAccessDeniedHandler() {
         return (request, response, accessDeniedException) -> {
-            if (AdminProblemWriter.write(objectMapper, request, response, 403, "FORBIDDEN",
-                    "Access denied: insufficient permissions")) return;
-            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-
-            ErrorResponse errorResponse = ErrorResponse.of("FORBIDDEN", "Access denied: insufficient permissions");
-            response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+            ApiProblemWriter.write(objectMapper, request, response, HttpServletResponse.SC_FORBIDDEN,
+                    "FORBIDDEN", "Access denied: insufficient permissions");
         };
     }
 }

@@ -1,11 +1,13 @@
 package com.ticketbox.api.module.auth.controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ticketbox.api.infrastructure.exception.GlobalExceptionHandler;
 import com.ticketbox.api.module.auth.domain.dtos.LoginRequest;
 import com.ticketbox.api.module.auth.domain.dtos.LoginResponse;
 import com.ticketbox.api.module.auth.domain.dtos.UserResponse;
 import com.ticketbox.api.module.auth.domain.entities.UserRole;
 import com.ticketbox.api.module.auth.domain.entities.UserStatus;
+import com.ticketbox.api.module.auth.domain.exception.InvalidCredentialsException;
 import com.ticketbox.api.module.auth.services.UserService;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +43,9 @@ class AuthControllerTest {
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(authController).build();
+        mockMvc = MockMvcBuilders.standaloneSetup(authController)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
         objectMapper = new ObjectMapper();
     }
 
@@ -103,5 +107,18 @@ class AuthControllerTest {
                         .cookie(new Cookie("refresh_token", "valid_refresh_token")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.access_token").value("new_access_token"));
+    }
+
+    @Test
+    void login_businessExceptionUsesAuthCodeAndUnauthorizedStatus() throws Exception {
+        when(userService.login(any(LoginRequest.class))).thenThrow(new InvalidCredentialsException());
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(LoginRequest.builder()
+                                .email("user@example.com").password("wrong").build())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"))
+                .andExpect(jsonPath("$.status").value(401));
     }
 }

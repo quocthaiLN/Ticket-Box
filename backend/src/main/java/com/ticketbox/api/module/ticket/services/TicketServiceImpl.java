@@ -1,6 +1,5 @@
 package com.ticketbox.api.module.ticket.services;
 
-import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.ticket.domain.dtos.ConcertInfo;
 import com.ticketbox.api.module.ticket.domain.dtos.QrInfo;
@@ -10,12 +9,13 @@ import com.ticketbox.api.module.ticket.domain.dtos.TicketResponse;
 import com.ticketbox.api.module.ticket.domain.dtos.TicketTypeInfo;
 import com.ticketbox.api.module.ticket.domain.entities.Ticket;
 import com.ticketbox.api.module.ticket.domain.entities.TicketStatus;
+import com.ticketbox.api.module.ticket.domain.exception.TicketNotFoundException;
+import com.ticketbox.api.module.ticket.domain.exception.TicketQrUnavailableException;
 import com.ticketbox.api.module.ticket.repositories.TicketRepository;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,16 +36,13 @@ public class TicketServiceImpl implements TicketService {
         @Override
         public TicketQrResponse getMyTicketQr(User currentUser, UUID ticketId) {
                 Ticket ticket = ticketRepository.findByIdAndUserId(ticketId, currentUser.getId())
-                                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "TICKET_NOT_FOUND",
-                                                "Ticket not found"));
+                                .orElseThrow(TicketNotFoundException::new);
 
                 if (ticket.getStatus() != TicketStatus.ISSUED) {
-                        throw new AppException(HttpStatus.CONFLICT, "TICKET_QR_UNAVAILABLE",
-                                        "QR code is unavailable for this ticket");
+                        throw new TicketQrUnavailableException("QR code is unavailable for this ticket");
                 }
                 if (ticket.getQrPayload() == null || ticket.getQrSignature() == null) {
-                        throw new AppException(HttpStatus.CONFLICT, "TICKET_QR_UNAVAILABLE",
-                                        "QR code has not been issued for this ticket");
+                        throw new TicketQrUnavailableException("QR code has not been issued for this ticket");
                 }
                 return new TicketQrResponse(ticket.getId().toString(), ticket.getId() + "." + ticket.getQrSignature());
         }

@@ -1,8 +1,7 @@
 package com.ticketbox.api.infrastructure.rateLimit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ticketbox.api.infrastructure.response.ErrorResponse;
-import com.ticketbox.api.infrastructure.response.AdminProblemWriter;
+import com.ticketbox.api.infrastructure.response.ApiProblemWriter;
 import com.ticketbox.api.module.auth.services.CustomUserDetails;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -14,7 +13,6 @@ import java.io.IOException;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -71,10 +69,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private void writeError(HttpServletRequest request, HttpServletResponse response, int status, String code, String message) throws IOException {
-        if (AdminProblemWriter.write(objectMapper, request, response, status, code, message)) return;
-        response.setStatus(status);
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setCharacterEncoding("UTF-8");
-        objectMapper.writeValue(response.getWriter(), ErrorResponse.of(code, message));
+        ApiProblemWriter.write(objectMapper, request, response, status, code, message);
     }
 }

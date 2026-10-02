@@ -1,6 +1,5 @@
 package com.ticketbox.api.module.auth.services;
 
-import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.infrastructure.security.JwtUtils;
 import com.ticketbox.api.infrastructure.security.TokenBlacklistService;
 import com.ticketbox.api.module.auth.domain.dtos.LoginRequest;
@@ -13,6 +12,18 @@ import com.ticketbox.api.module.auth.domain.entities.UserAccountStatus;
 import com.ticketbox.api.module.auth.domain.entities.UserProvider;
 import com.ticketbox.api.module.auth.domain.entities.UserRole;
 import com.ticketbox.api.module.auth.domain.entities.UserStatus;
+import com.ticketbox.api.module.auth.domain.exception.AccountDisabledException;
+import com.ticketbox.api.module.auth.domain.exception.AccountNotVerifiedException;
+import com.ticketbox.api.module.auth.domain.exception.AlreadyVerifiedException;
+import com.ticketbox.api.module.auth.domain.exception.AuthErrorCode;
+import com.ticketbox.api.module.auth.domain.exception.EmailAlreadyExistsException;
+import com.ticketbox.api.module.auth.domain.exception.ExpiredRefreshTokenException;
+import com.ticketbox.api.module.auth.domain.exception.InvalidCredentialsException;
+import com.ticketbox.api.module.auth.domain.exception.InvalidOtpException;
+import com.ticketbox.api.module.auth.domain.exception.PhoneAlreadyExistsException;
+import com.ticketbox.api.module.auth.domain.exception.RevokedRefreshTokenException;
+import com.ticketbox.api.module.auth.domain.exception.UserNotFoundException;
+import com.ticketbox.api.module.shared.validation.RequestValidationException;
 import com.ticketbox.api.module.auth.repositories.UserAccountRepository;
 import com.ticketbox.api.module.auth.repositories.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,7 +32,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.util.Optional;
@@ -118,9 +128,8 @@ class UserServiceTest {
                 .fullName("New User")
                 .build();
 
-        AppException ex = assertThrows(AppException.class, () -> userService.register(request));
-        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
-        assertEquals("PASSWORD_MISMATCH", ex.getErrorCode());
+        RequestValidationException ex = assertThrows(RequestValidationException.class, () -> userService.register(request));
+        assertEquals("PASSWORD_MISMATCH", ex.getCode());
     }
 
     @Test
@@ -154,9 +163,10 @@ class UserServiceTest {
         when(userRepository.findByEmail(request.getEmail())).thenReturn(Optional.of(sampleUser));
         when(bCryptPasswordEncoder.matches(request.getPassword(), "hashed_password")).thenReturn(false);
 
-        AppException ex = assertThrows(AppException.class, () -> userService.login(request));
-        assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatus());
-        assertEquals("INVALID_CREDENTIALS", ex.getErrorCode());
+        InvalidCredentialsException ex = assertThrows(InvalidCredentialsException.class, () -> userService.login(request));
+        assertEquals(AuthErrorCode.INVALID_CREDENTIALS, ex.getErrorCode());
+        assertEquals("INVALID_CREDENTIALS", ex.getErrorCode().code());
+        assertEquals(com.ticketbox.api.module.shared.exception.ErrorType.UNAUTHORIZED, ex.getErrorCode().type());
     }
 
     @Test
@@ -188,11 +198,66 @@ class UserServiceTest {
         when(userAccountRepository.findByProviderAndProviderUserId(UserProvider.GOOGLE, "google-subject"))
                 .thenReturn(Optional.of(sampleAccount));
 
-        AppException ex = assertThrows(AppException.class,
+        AccountDisabledException ex = assertThrows(AccountDisabledException.class,
                 () -> userService.loginWithGoogle("google-subject", "test@example.com", "Test User"));
 
-        assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatus());
-        assertEquals("ACCOUNT_DISABLED", ex.getErrorCode());
+        assertEquals("ACCOUNT_DISABLED", ex.getErrorCode().code());
+    }
+
+    @Test
+    void register_rejectsExistingEmailAndPhone() {
+        RegisterRequest request = RegisterRequest.builder().email("test@example.com").password("secret").build();
+        when(userRepository.existsByEmail(request.getEmail())).thenReturn(true);
+        assertEquals("EMAIL_ALREADY_EXISTS", assertThrows(EmailAlreadyExistsException.class,
+                () -> userService.register(request)).getErrorCode().code());
+
+        request.setEmail("new@example.com");
+        request.setPhone("123");
+        when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
+        when(userRepository.existsByPhone("123")).thenReturn(true);
+        assertEquals("PHONE_ALREADY_EXISTS", assertThrows(PhoneAlreadyExistsException.class,
+                () -> userService.register(request)).getErrorCode().code());
+    }
+
+    @Test
+    void verifyOtp_rejectsInvalidOtpMissingUserAndAlreadyVerifiedAccount() {
+        var request = com.ticketbox.api.module.auth.domain.dtos.VerifyOtpRequest.builder()
+                .email("test@example.com").otp("000000").build();
+        when(valueOperations.get("otp:register:test@example.com")).thenReturn("111111");
+        assertEquals("INVALID_OTP", assertThrows(InvalidOtpException.class,
+                () -> userService.verifyOtp(request)).getErrorCode().code());
+
+        when(valueOperations.get("otp:register:test@example.com")).thenReturn("000000");
+        when(userRepository.findByEmail(request.getEmail())).thenReturn(Optional.empty());
+        assertEquals("USER_NOT_FOUND", assertThrows(UserNotFoundException.class,
+                () -> userService.verifyOtp(request)).getErrorCode().code());
+
+        sampleUser.setStatus(UserStatus.ACTIVE);
+        when(userRepository.findByEmail(request.getEmail())).thenReturn(Optional.of(sampleUser));
+        assertEquals("ALREADY_VERIFIED", assertThrows(AlreadyVerifiedException.class,
+                () -> userService.verifyOtp(request)).getErrorCode().code());
+    }
+
+    @Test
+    void login_rejectsUnverifiedAccount() {
+        sampleUser.setStatus(UserStatus.PENDING);
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(sampleUser));
+        var request = LoginRequest.builder().email("test@example.com").password("secret").build();
+        assertEquals("ACCOUNT_NOT_VERIFIED", assertThrows(AccountNotVerifiedException.class,
+                () -> userService.login(request)).getErrorCode().code());
+    }
+
+    @Test
+    void refreshToken_rejectsExpiredAndRevokedTokens() {
+        when(jwtUtils.validateRefreshToken("expired")).thenReturn(false);
+        assertEquals("TOKEN_EXPIRED", assertThrows(ExpiredRefreshTokenException.class,
+                () -> userService.refreshToken("expired")).getErrorCode().code());
+
+        when(jwtUtils.validateRefreshToken("revoked")).thenReturn(true);
+        when(jwtUtils.extractJtiFromRefreshToken("revoked")).thenReturn("jti");
+        when(tokenBlacklistService.isBlacklisted("jti")).thenReturn(true);
+        assertEquals("TOKEN_REVOKED", assertThrows(RevokedRefreshTokenException.class,
+                () -> userService.refreshToken("revoked")).getErrorCode().code());
     }
 
     @Test

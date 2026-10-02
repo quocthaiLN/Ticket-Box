@@ -3,6 +3,11 @@ package com.ticketbox.api.module.shared.idempotency;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.ticketbox.api.infrastructure.exception.AppException;
+import com.ticketbox.api.module.order.domain.exception.OrderNotSettlableException;
+import com.ticketbox.api.module.shared.exception.ErrorType;
+import com.ticketbox.api.module.shared.exception.ReplayedBusinessException;
+import com.ticketbox.api.module.shared.idempotency.exception.IdempotencyKeyReusedException;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -82,7 +87,7 @@ class IdempotencyServiceTest {
     void execute_rejectsDifferentFingerprint() throws Exception {
         when(valueOperations.get(REDIS_KEY)).thenReturn(completedSuccessRecord(new TestResult("OK", 42)));
 
-        AppException exception = assertThrows(AppException.class, () ->
+        IdempotencyKeyReusedException exception = assertThrows(IdempotencyKeyReusedException.class, () ->
                 idempotencyService.execute(
                         REDIS_KEY,
                         "different-fingerprint",
@@ -92,8 +97,8 @@ class IdempotencyServiceTest {
                         () -> new TestResult("NEW", 0)
                 ));
 
-        assertEquals("IDEMPOTENCY_KEY_REUSED", exception.getErrorCode());
-        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatus());
+        assertEquals("IDEMPOTENCY_KEY_REUSED", exception.getErrorCode().code());
+        assertEquals(ErrorType.CONFLICT, exception.getErrorCode().type());
     }
 
     @Test
@@ -168,6 +173,49 @@ class IdempotencyServiceTest {
         assertEquals("PER_USER_LIMIT_EXCEEDED", thrown.getErrorCode());
         assertEquals(HttpStatus.CONFLICT, thrown.getStatus());
         verify(stringRedisTemplate).execute(any(DefaultRedisScript.class), eq(List.of(REDIS_KEY)), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Caches and replays a typed business exception without storing HTTP status")
+    void execute_cachesAndReplaysBusinessException() throws Exception {
+        when(valueOperations.get(REDIS_KEY)).thenReturn(null);
+        when(valueOperations.setIfAbsent(eq(REDIS_KEY), anyString(), eq(TTL))).thenReturn(true);
+        when(stringRedisTemplate.execute(any(DefaultRedisScript.class), anyList(), any(), any(), any()))
+                .thenReturn(1L);
+
+        OrderNotSettlableException thrown = assertThrows(OrderNotSettlableException.class, () ->
+                idempotencyService.execute(REDIS_KEY, FINGERPRINT, TTL, TestResult.class,
+                        () -> Optional.empty(), () -> { throw new OrderNotSettlableException(); }));
+
+        assertEquals("ORDER_NOT_SETTLABLE", thrown.getErrorCode().code());
+        org.mockito.ArgumentCaptor<String> storedValue = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(stringRedisTemplate).execute(any(DefaultRedisScript.class), eq(List.of(REDIS_KEY)),
+                anyString(), storedValue.capture(), anyString());
+        var status = objectMapper.readTree(storedValue.getValue()).get("http_status");
+        assertTrue(status == null || status.isNull());
+        assertEquals("CONFLICT", objectMapper.readTree(storedValue.getValue()).get("error_type").asText());
+    }
+
+    @Test
+    @DisplayName("Replays a stored business error as a BusinessException")
+    void execute_replaysStoredBusinessError() throws Exception {
+        ObjectNode record = objectMapper.createObjectNode();
+        record.put("state", "COMPLETED");
+        record.put("outcome", "ERROR");
+        record.put("fingerprint", FINGERPRINT);
+        record.put("error_code", "ORDER_NOT_SETTLABLE");
+        record.put("error_type", "CONFLICT");
+        record.put("message", "Order is not eligible for payment settlement");
+        record.set("details", objectMapper.createObjectNode());
+        when(valueOperations.get(REDIS_KEY)).thenReturn(objectMapper.writeValueAsString(record));
+
+        ReplayedBusinessException exception = assertThrows(ReplayedBusinessException.class, () ->
+                idempotencyService.execute(REDIS_KEY, FINGERPRINT, TTL, TestResult.class,
+                        () -> Optional.empty(), () -> new TestResult("NEW", 0)));
+
+        assertEquals("ORDER_NOT_SETTLABLE", exception.getErrorCode().code());
+        assertEquals(ErrorType.CONFLICT, exception.getErrorCode().type());
+        verify(valueOperations, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
     }
 
     private String completedSuccessRecord(TestResult testResult) throws Exception {

@@ -1,7 +1,7 @@
 package com.ticketbox.api.module.catalog.services;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.ticketbox.api.infrastructure.exception.AppException;
+import com.ticketbox.api.module.catalog.domain.exception.ConcertNotFoundException;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.catalog.domain.dtos.*;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
@@ -24,7 +24,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -103,7 +102,7 @@ public class CatalogServiceImpl implements CatalogService {
         return cacheService.getOrFetch(cacheKey, Duration.ofMinutes(30), ConcertDetailResponse.class, () -> {
             Concert concert = concertRepository.findById(concertId)
                     .filter(c -> c.getStatus() == ConcertStatus.PUBLISHED)
-                    .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "CONCERT_NOT_FOUND", "Concert not found or not published with ID: " + concertId));
+                    .orElseThrow(() -> new ConcertNotFoundException(concertId));
 
             return mapToConcertDetailResponse(concert);
         });
@@ -115,7 +114,7 @@ public class CatalogServiceImpl implements CatalogService {
         return cacheService.getOrFetch(cacheKey, Duration.ofHours(24), ConcertMetadataResponse.class, () -> {
             Concert concert = concertRepository.findById(concertId)
                     .filter(c -> c.getStatus() == ConcertStatus.PUBLISHED)
-                    .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "CONCERT_NOT_FOUND", "Concert not found with ID: " + concertId));
+                    .orElseThrow(() -> new ConcertNotFoundException(concertId));
 
             List<SeatZone> seatZones = seatZoneRepository.findByConcertIdOrderBySortOrderAsc(concertId);
             List<TicketType> ticketTypes = ticketTypeRepository.findByConcertId(concertId);
@@ -144,7 +143,7 @@ public class CatalogServiceImpl implements CatalogService {
         return cacheService.getOrFetch(cacheKey, Duration.ofHours(1), SeatMapResponse.class, () -> {
             Concert concert = concertRepository.findById(concertId)
                     .filter(c -> c.getStatus() == ConcertStatus.PUBLISHED)
-                    .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "CONCERT_NOT_FOUND", "Concert not found with ID: " + concertId));
+                    .orElseThrow(() -> new ConcertNotFoundException(concertId));
 
             List<SeatZone> seatZones = seatZoneRepository.findByConcertIdOrderBySortOrderAsc(concertId);
             List<SeatZoneResponse> zoneResponses = seatZones.stream().map(this::mapToSeatZoneResponse).collect(Collectors.toList());
@@ -166,7 +165,7 @@ public class CatalogServiceImpl implements CatalogService {
         return cacheService.getOrFetch(cacheKey, Duration.ofMinutes(30), typeRef, () -> {
             Concert concert = concertRepository.findById(concertId)
                     .filter(c -> c.getStatus() == ConcertStatus.PUBLISHED)
-                    .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "CONCERT_NOT_FOUND", "Concert not found with ID: " + concertId));
+                    .orElseThrow(() -> new ConcertNotFoundException(concertId));
 
             List<TicketType> ticketTypes = ticketTypeRepository.findByConcertId(concert.getId());
 
@@ -186,7 +185,7 @@ public class CatalogServiceImpl implements CatalogService {
         return cacheService.getOrFetch(cacheKey, Duration.ofMinutes(5), InventoryResponse.class, () -> {
             Concert concert = concertRepository.findById(concertId)
                     .filter(c -> c.getStatus() == ConcertStatus.PUBLISHED)
-                    .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "CONCERT_NOT_FOUND", "Concert not found with ID: " + concertId));
+                    .orElseThrow(() -> new ConcertNotFoundException(concertId));
 
             List<TicketType> ticketTypes = ticketTypeRepository.findByConcertId(concert.getId());
             List<InventoryResponse.InventoryItem> items = new ArrayList<>();
@@ -228,7 +227,7 @@ public class CatalogServiceImpl implements CatalogService {
     public ConcertQuotaResponse getQuota(User currentUser, UUID concertId) {
         Concert concert = concertRepository.findById(concertId)
                 .filter(c -> c.getStatus() == ConcertStatus.PUBLISHED)
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "CONCERT_NOT_FOUND", "Concert not found with ID: " + concertId));
+                .orElseThrow(() -> new ConcertNotFoundException(concertId));
 
         Map<UUID, UserTicketTypeCounter> countersByTicketTypeId = counterRepository
                 .findByUserIdAndConcertId(currentUser.getId(), concertId)

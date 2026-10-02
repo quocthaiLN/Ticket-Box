@@ -3,6 +3,7 @@ package com.ticketbox.api.module.shared.idempotency;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketbox.api.infrastructure.exception.AppException;
+import com.ticketbox.api.module.shared.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -85,6 +86,10 @@ public class IdempotencyService {
                     idempotencyHelper.completedValue(fingerprint, result), ttl);
             return result;
         } catch (AppException exception) {
+            idempotencyHelper.storeCompletedIfProcessing(redisKey, processingValue,
+                    idempotencyHelper.errorValue(fingerprint, exception), ttl);
+            throw exception;
+        } catch (BusinessException exception) {
             idempotencyHelper.storeCompletedIfProcessing(redisKey, processingValue,
                     idempotencyHelper.errorValue(fingerprint, exception), ttl);
             throw exception;

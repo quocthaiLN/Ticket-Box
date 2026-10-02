@@ -1,39 +1,35 @@
-import { apiGet, type ApiResponse } from "../lib/api-client";
+import { apiGet, type ApiCollectionResponse, type ApiResponse } from "../lib/api-client";
 
-export type TicketStatus = "ISSUED" | "CHECKED_IN" | "CANCELLED" | "REFUNDED";
+export type TicketStatus = "ISSUED" | "CHECKED_IN" | "CANCELLED" | "EXPIRED";
 
 export type TicketListItem = {
   id: string;
-  concert_id: string;
-  concert_title: string;
-  ticket_type_id: string;
-  ticket_type_name: string;
-  seat_zone_id: string;
-  zone_code: string;
   status: TicketStatus;
-  issued_at: string;
-};
-
-export type TicketDetail = {
-  id: string;
-  order_id: string;
+  issuedAt: string;
   concert: {
     id: string;
     title: string;
-    starts_at: string;
+    artistName: string;
+    venue: string;
+    startsAt: string;
+    endsAt: string;
+    coverImageUrl: string | null;
   };
-  ticket_type: {
+  ticketType: {
     id: string;
     name: string;
+    price: number;
+    currency: string;
   };
-  seat_zone: {
+  seatZone: {
     id: string;
     code: string;
     name: string;
   };
-  status: TicketStatus;
-  issued_at: string;
-  checked_in_at: string | null;
+  qr: {
+    available: boolean;
+    displayUrl: string | null;
+  };
 };
 
 export type TicketQr = {
@@ -41,30 +37,30 @@ export type TicketQr = {
   content: string;
 };
 
-type TicketListResponse = {
-  data: TicketListItem[];
-  pagination: {
-    next_cursor: string | null;
-    has_more: boolean;
-    limit: number;
-  };
-  meta: {
-    request_id: string;
-  };
-};
+export type TicketErrorCode = "TICKET_NOT_FOUND" | "TICKET_QR_UNAVAILABLE";
 
-export async function listMyTickets(input: { status?: TicketStatus | "all"; limit?: number } = {}) {
-  const params = new URLSearchParams();
-  params.set("limit", String(input.limit ?? 100));
-  if (input.status && input.status !== "all") params.set("status", input.status);
-
-  const response = await apiGet<TicketListResponse>(`/me/tickets?${params}`);
-  return response.data;
+export function getTicketErrorMessage(code?: string) {
+  if (code === "TICKET_NOT_FOUND") return "Không tìm thấy vé này.";
+  if (code === "TICKET_QR_UNAVAILABLE") return "Mã QR không còn khả dụng cho vé này.";
+  return "Không thể tải mã QR. Vui lòng thử lại sau.";
 }
 
-export async function getMyTicket(ticketId: string) {
-  const response = await apiGet<ApiResponse<TicketDetail>>(`/me/tickets/${ticketId}`);
-  return response.data;
+export async function listMyTickets() {
+  const pageSize = 100;
+  const tickets: TicketListItem[] = [];
+  let page = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const response = await apiGet<ApiCollectionResponse<TicketListItem>>(
+      `/my-tickets?page=${page}&size=${pageSize}`,
+    );
+    tickets.push(...response.data);
+    hasMore = response.pagination.has_more ?? false;
+    page += 1;
+  }
+
+  return tickets;
 }
 
 export async function getMyTicketQr(ticketId: string) {

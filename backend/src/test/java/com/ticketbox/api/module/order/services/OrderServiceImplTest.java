@@ -1,6 +1,5 @@
 package com.ticketbox.api.module.order.services;
 
-import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.auth.domain.entities.UserRole;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
@@ -12,9 +11,12 @@ import com.ticketbox.api.module.order.domain.dtos.CreateOrderItemRequest;
 import com.ticketbox.api.module.order.domain.dtos.CreateOrderRequest;
 import com.ticketbox.api.module.order.domain.dtos.OrderResponse;
 import com.ticketbox.api.module.order.domain.entities.Order;
+import com.ticketbox.api.module.order.domain.exception.PerUserLimitExceededException;
+import com.ticketbox.api.module.order.domain.exception.TicketSoldOutException;
 import com.ticketbox.api.module.order.repositories.OrderRepository;
 import com.ticketbox.api.module.order.repositories.UserTicketTypeCounterRepository;
 import com.ticketbox.api.module.shared.cache.CacheService;
+import com.ticketbox.api.module.shared.validation.RequestValidationException;
 import com.ticketbox.api.module.shared.idempotency.IdempotencyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -185,10 +187,10 @@ class OrderServiceImplTest {
                 .items(List.of(item(firstTicketType.getId(), 1), item(firstTicketType.getId(), 2)))
                 .build();
 
-        AppException exception = assertThrows(AppException.class,
+        RequestValidationException exception = assertThrows(RequestValidationException.class,
                 () -> orderService.createHeldOrder(user, "c41e9a00-1111-4111-8111-111111111111", request));
 
-        assertEquals("INVALID_CHECKOUT_REQUEST", exception.getErrorCode());
+        assertEquals("INVALID_CHECKOUT_REQUEST", exception.getCode());
         verify(ticketTypeRepository, never()).findByIdForUpdate(any());
         verify(orderRepository, never()).save(any());
     }
@@ -206,10 +208,10 @@ class OrderServiceImplTest {
         when(ticketTypeRepository.findByIdForUpdate(firstTicketType.getId())).thenReturn(Optional.of(firstTicketType));
         when(counterRepository.findByUserIdAndTicketTypeIdForUpdate(user.getId(), firstTicketType.getId())).thenReturn(Optional.empty());
 
-        AppException exception = assertThrows(AppException.class,
+        PerUserLimitExceededException exception = assertThrows(PerUserLimitExceededException.class,
                 () -> orderService.createHeldOrder(user, "c41e9a00-1111-4111-8111-111111111111", request));
 
-        assertEquals("PER_USER_LIMIT_EXCEEDED", exception.getErrorCode());
+        assertEquals("PER_USER_LIMIT_EXCEEDED", exception.getErrorCode().code());
         assertEquals(0, firstTicketType.getHeldQuantity());
         verify(orderRepository, never()).save(any());
     }
@@ -226,10 +228,10 @@ class OrderServiceImplTest {
         when(concertRepository.findById(concert.getId())).thenReturn(Optional.of(concert));
         when(ticketTypeRepository.findByIdForUpdate(firstTicketType.getId())).thenReturn(Optional.of(firstTicketType));
 
-        AppException exception = assertThrows(AppException.class,
+        TicketSoldOutException exception = assertThrows(TicketSoldOutException.class,
                 () -> orderService.createHeldOrder(user, "c41e9a00-1111-4111-8111-111111111111", request));
 
-        assertEquals("TICKET_SOLD_OUT", exception.getErrorCode());
+        assertEquals("TICKET_SOLD_OUT", exception.getErrorCode().code());
         assertEquals(0, firstTicketType.getHeldQuantity());
         verify(orderRepository, never()).save(any());
     }

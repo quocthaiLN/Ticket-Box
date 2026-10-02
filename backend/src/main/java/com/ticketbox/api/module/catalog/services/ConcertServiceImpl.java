@@ -1,6 +1,7 @@
 package com.ticketbox.api.module.catalog.services;
 
-import com.ticketbox.api.infrastructure.exception.AppException;
+import com.ticketbox.api.module.shared.validation.RequestValidationException;
+import com.ticketbox.api.module.catalog.domain.exception.*;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.auth.domain.entities.UserRole;
 import com.ticketbox.api.module.catalog.domain.dtos.*;
@@ -25,7 +26,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.http.HttpStatus;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,7 +33,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -67,7 +66,7 @@ public class ConcertServiceImpl implements ConcertService {
                     try {
                         predicates.add(cb.equal(root.get("status"), ConcertStatus.valueOf(status)));
                     } catch (IllegalArgumentException e) {
-                        throw new AppException(HttpStatus.BAD_REQUEST, "INVALID_STATUS", "Invalid concert status: " + statusStr);
+                        throw new RequestValidationException("INVALID_STATUS", "Invalid concert status: " + statusStr);
                     }
                 }
             }
@@ -88,18 +87,12 @@ public class ConcertServiceImpl implements ConcertService {
 
     @Override
     public AdminConcertResponse createConcert(User currentUser, CreateConcertRequest request) {
-        if (request.getSlug() == null || request.getSlug().isBlank() || request.getTitle() == null || request.getTitle().isBlank()
-                || request.getVenue() == null || request.getVenue().isBlank() || request.getArtistName() == null || request.getArtistName().isBlank()
-                || request.getSlug().length() > 255 || request.getTitle().length() > 255 || request.getVenue().length() > 255 || request.getArtistName().length() > 255
-                || request.getStartsAt() == null || request.getEndsAt() == null) {
-            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", "Required concert fields are invalid");
-        }
         if (concertRepository.existsBySlug(request.getSlug())) {
-            throw new AppException(HttpStatus.CONFLICT, "SLUG_ALREADY_EXISTS", "Concert slug already exists: " + request.getSlug());
+            throw new ConcertSlugAlreadyExistsException(request.getSlug());
         }
 
         if (request.getEndsAt() != null && request.getStartsAt() != null && !request.getEndsAt().isAfter(request.getStartsAt())) {
-            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "INVALID_CONCERT_TIME_RANGE", "Ends at time must be strictly after starts at time");
+            throw new InvalidConcertTimeRangeException();
         }
 
         Concert concert = Concert.builder()
@@ -122,7 +115,7 @@ public class ConcertServiceImpl implements ConcertService {
             savedConcert = concertRepository.saveAndFlush(concert);
         } catch (DataIntegrityViolationException exception) {
             if (exception.getMessage() != null && exception.getMessage().toLowerCase().contains("slug")) {
-                throw new AppException(HttpStatus.CONFLICT, "SLUG_ALREADY_EXISTS", "Concert slug already exists");
+                throw new ConcertSlugAlreadyExistsException(request.getSlug());
             }
             throw exception;
         }
@@ -163,7 +156,7 @@ public class ConcertServiceImpl implements ConcertService {
             concert.setEndsAt(request.getEndsAt());
         }
         if (!concert.getEndsAt().isAfter(concert.getStartsAt())) {
-            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "INVALID_CONCERT_TIME_RANGE", "Concert end date must be strictly after start date");
+            throw new InvalidConcertTimeRangeException();
         }
 
         if (sameConcert(before, concert)) return mapToConcertDetailResponse(concert);
@@ -181,20 +174,19 @@ public class ConcertServiceImpl implements ConcertService {
 
         List<SeatZone> seatZones = seatZoneRepository.findByConcertIdOrderBySortOrderAsc(concertId);
         if (seatZones.isEmpty()) {
-            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "CANNOT_PUBLISH_CONCERT", "Concert requires at least one seat zone");
+            throw new CannotPublishConcertException("Concert requires at least one seat zone");
         }
 
         List<TicketType> ticketTypes = ticketTypeRepository.findByConcertId(concertId);
         if (ticketTypes.isEmpty()) {
-            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "CANNOT_PUBLISH_CONCERT", "Concert requires at least one ticket type");
+            throw new CannotPublishConcertException("Concert requires at least one ticket type");
         }
 
         // Validate zone capacity vs total ticket types quantity per zone
         for (SeatZone zone : seatZones) {
             Long totalAllocated = ticketTypeRepository.sumTotalQuantityByConcertIdAndSeatZoneId(concertId, zone.getId());
             if (totalAllocated != null && totalAllocated > zone.getCapacity()) {
-                throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "CANNOT_PUBLISH_CONCERT",
-                        String.format("Zone '%s' (capacity %d) has %d total ticket types quantity allocated, exceeding capacity",
+                throw new CannotPublishConcertException(String.format("Zone '%s' (capacity %d) has %d total ticket types quantity allocated, exceeding capacity",
                                 zone.getName(), zone.getCapacity(), totalAllocated));
             }
         }
@@ -202,8 +194,7 @@ public class ConcertServiceImpl implements ConcertService {
         // Check ticket type sale windows
         for (TicketType tt : ticketTypes) {
             if (!tt.getSaleEndAt().isAfter(tt.getSaleStartAt())) {
-                throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "CANNOT_PUBLISH_CONCERT",
-                        "Ticket type '" + tt.getName() + "' has invalid sale window (saleEndAt must be after saleStartAt)");
+                throw new CannotPublishConcertException("Ticket type '" + tt.getName() + "' has invalid sale window (saleEndAt must be after saleStartAt)");
             }
             if (tt.getStatus() == TicketTypeStatus.DRAFT) {
                 tt.setStatus(TicketTypeStatus.ON_SALE);
@@ -247,8 +238,7 @@ public class ConcertServiceImpl implements ConcertService {
         String code = request.getCode().trim().toUpperCase(java.util.Locale.ROOT);
 
         if (seatZoneRepository.existsByConcertIdAndCode(concertId, code)) {
-            throw new AppException(HttpStatus.CONFLICT, "SEAT_ZONE_CODE_ALREADY_EXISTS",
-                    "Seat zone code already exists for this concert");
+            throw new SeatZoneCodeAlreadyExistsException(request.getCode() == null ? "" : request.getCode().trim().toUpperCase(java.util.Locale.ROOT));
         }
 
         SeatZone zone = SeatZone.builder()
@@ -266,7 +256,7 @@ public class ConcertServiceImpl implements ConcertService {
             savedZone = seatZoneRepository.saveAndFlush(zone);
         } catch (DataIntegrityViolationException exception) {
             if (exception.getMessage() != null && exception.getMessage().toLowerCase().contains("code")) {
-                throw new AppException(HttpStatus.CONFLICT, "SEAT_ZONE_CODE_ALREADY_EXISTS", "Seat zone code already exists");
+                throw new SeatZoneCodeAlreadyExistsException(request.getCode() == null ? "" : request.getCode().trim().toUpperCase(java.util.Locale.ROOT));
             }
             throw exception;
         }
@@ -278,11 +268,11 @@ public class ConcertServiceImpl implements ConcertService {
     @Override
     public AdminSeatZoneResponse updateSeatZone(User currentUser, UUID seatZoneId, UpdateSeatZoneRequest request) {
         SeatZone initial = seatZoneRepository.findById(seatZoneId)
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "SEAT_ZONE_NOT_FOUND", "Seat zone not found with ID: " + seatZoneId));
+                .orElseThrow(() -> new SeatZoneNotFoundException(seatZoneId));
         Concert concert = lockConcertAndCheckOwnership(currentUser, initial.getConcert().getId());
         checkEditable(concert);
         SeatZone zone = seatZoneRepository.findById(seatZoneId).orElseThrow(
-                () -> new AppException(HttpStatus.NOT_FOUND, "SEAT_ZONE_NOT_FOUND", "Seat zone not found"));
+                () -> new SeatZoneNotFoundException(seatZoneId));
         Map<String, Object> before = savedZoneSnapshot(zone);
 
         if (request.wasSupplied("name") || request.getName() != null) zone.setName(requireText(request.getName(), "name", 100));
@@ -303,7 +293,7 @@ public class ConcertServiceImpl implements ConcertService {
 
         Long allocated = ticketTypeRepository.sumTotalQuantityByConcertIdAndSeatZoneId(concert.getId(), zone.getId());
         if (zone.getCapacity() == null || zone.getCapacity() <= 0 || allocated != null && allocated > zone.getCapacity()) {
-            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "ZONE_CAPACITY_EXCEEDED", "Capacity is below configured ticket quantities");
+            throw new ZoneCapacityExceededException();
         }
         if (java.util.Objects.equals(before, savedZoneSnapshot(zone))) return mapToSeatZoneResponse(zone);
         SeatZone updatedZone = seatZoneRepository.save(zone);
@@ -318,22 +308,20 @@ public class ConcertServiceImpl implements ConcertService {
         checkEditable(concert);
 
         SeatZone seatZone = seatZoneRepository.findByIdAndConcertId(request.getSeatZoneId(), concertId)
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "SEAT_ZONE_NOT_FOUND",
-                        "Seat zone not found with ID " + request.getSeatZoneId() + " for this concert"));
+                .orElseThrow(() -> new SeatZoneNotFoundException(request.getSeatZoneId()));
 
         if (request.getName() == null || request.getName().isBlank() || request.getName().length() > 100) throw validation("Invalid ticket type name");
         if (ticketTypeRepository.existsByConcertIdAndName(concertId, request.getName())) {
-            throw new AppException(HttpStatus.CONFLICT, "TICKET_TYPE_NAME_ALREADY_EXISTS",
-                    "Ticket type with name '" + request.getName() + "' already exists for this concert");
+            throw new TicketTypeNameAlreadyExistsException(request.getName());
         }
 
         if (!request.getSaleEndAt().isAfter(request.getSaleStartAt())) {
-            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "INVALID_SALE_WINDOW", "Sale end time must be strictly after sale start time");
+            throw new InvalidSaleWindowException();
         }
         validatePriceAndQuantity(request.getPrice(), request.getTotalQuantity(), request.getMaxPerUser());
         Long allocated = ticketTypeRepository.sumTotalQuantityByConcertIdAndSeatZoneId(concertId, seatZone.getId());
         if (allocated != null && allocated + request.getTotalQuantity() > seatZone.getCapacity()) {
-            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "ZONE_CAPACITY_EXCEEDED", "Ticket quantities exceed zone capacity");
+            throw new ZoneCapacityExceededException();
         }
 
         TicketType ticketType = TicketType.builder()
@@ -357,7 +345,7 @@ public class ConcertServiceImpl implements ConcertService {
             savedTicketType = ticketTypeRepository.saveAndFlush(ticketType);
         } catch (DataIntegrityViolationException exception) {
             if (exception.getMessage() != null && exception.getMessage().toLowerCase().contains("name")) {
-                throw new AppException(HttpStatus.CONFLICT, "TICKET_TYPE_NAME_ALREADY_EXISTS", "Ticket type name already exists");
+                throw new TicketTypeNameAlreadyExistsException(request.getName());
             }
             throw exception;
         }
@@ -369,17 +357,17 @@ public class ConcertServiceImpl implements ConcertService {
     @Override
     public AdminTicketTypeResponse updateTicketType(User currentUser, UUID ticketTypeId, UpdateTicketTypeRequest request) {
         TicketType initial = ticketTypeRepository.findById(ticketTypeId)
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "TICKET_TYPE_NOT_FOUND", "Ticket type not found with ID: " + ticketTypeId));
+                .orElseThrow(() -> new TicketTypeNotFoundException(ticketTypeId));
         Concert concert = lockConcertAndCheckOwnership(currentUser, initial.getConcert().getId());
         checkEditable(concert);
         TicketType ticketType = ticketTypeRepository.findByIdForUpdate(ticketTypeId)
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "TICKET_TYPE_NOT_FOUND", "Ticket type not found with ID: " + ticketTypeId));
+                .orElseThrow(() -> new TicketTypeNotFoundException(ticketTypeId));
         Map<String, Object> before = ticketSnapshot(ticketType);
 
         if (request.wasSupplied("name") || request.getName() != null) ticketType.setName(requireText(request.getName(), "name", 100));
         if (!ticketType.getName().equals(before.get("name"))
                 && ticketTypeRepository.existsByConcertIdAndNameAndIdNot(concert.getId(), ticketType.getName(), ticketTypeId)) {
-            throw new AppException(HttpStatus.CONFLICT, "TICKET_TYPE_NAME_ALREADY_EXISTS", "Ticket type name already exists for this concert");
+            throw new TicketTypeNameAlreadyExistsException(request.getName());
         }
         if (request.wasSupplied("description") || request.getDescription() != null) {
             ticketType.setDescription(request.getDescription());
@@ -391,8 +379,7 @@ public class ConcertServiceImpl implements ConcertService {
         if (request.wasSupplied("total_quantity") || request.getTotalQuantity() != null) {
             if (request.getTotalQuantity() == null) throw validation("total_quantity cannot be null");
             if (request.getTotalQuantity() < (ticketType.getHeldQuantity() + ticketType.getSoldQuantity())) {
-                throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "INVALID_QUANTITY",
-                        "Total quantity cannot be set lower than the sum of held (" + ticketType.getHeldQuantity() + ") and sold (" + ticketType.getSoldQuantity() + ")");
+                throw new InvalidTicketQuantityException("Total quantity cannot be set lower than the sum of held (" + ticketType.getHeldQuantity() + ") and sold (" + ticketType.getSoldQuantity() + ")");
             }
             ticketType.setTotalQuantity(request.getTotalQuantity());
         }
@@ -410,11 +397,11 @@ public class ConcertServiceImpl implements ConcertService {
             ticketType.setSaleEndAt(request.getSaleEndAt());
         }
         if (!ticketType.getSaleEndAt().isAfter(ticketType.getSaleStartAt())) {
-            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "INVALID_SALE_WINDOW", "Sale end time must be strictly after sale start time");
+            throw new InvalidSaleWindowException();
         }
         Long allocated = ticketTypeRepository.sumTotalQuantityByConcertIdAndSeatZoneId(concert.getId(), ticketType.getSeatZone().getId());
         if (allocated != null && allocated > ticketType.getSeatZone().getCapacity()) {
-            throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "ZONE_CAPACITY_EXCEEDED", "Ticket quantities exceed zone capacity");
+            throw new ZoneCapacityExceededException();
         }
         if (request.wasSupplied("status") || request.getStatus() != null) {
             if (request.getStatus() == null) throw validation("status cannot be null");
@@ -422,7 +409,7 @@ public class ConcertServiceImpl implements ConcertService {
                 TicketTypeStatus statusEnum = TicketTypeStatus.valueOf(request.getStatus().toUpperCase());
                 ticketType.setStatus(statusEnum);
             } catch (IllegalArgumentException e) {
-                throw new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", "Invalid ticket type status: " + request.getStatus());
+                throw new RequestValidationException("VALIDATION_ERROR", "Invalid ticket type status: " + request.getStatus());
             }
         }
 
@@ -432,7 +419,7 @@ public class ConcertServiceImpl implements ConcertService {
             updatedTicketType = ticketTypeRepository.saveAndFlush(ticketType);
         } catch (DataIntegrityViolationException exception) {
             if (exception.getMessage() != null && exception.getMessage().toLowerCase().contains("name")) {
-                throw new AppException(HttpStatus.CONFLICT, "TICKET_TYPE_NAME_ALREADY_EXISTS", "Ticket type name already exists");
+                throw new TicketTypeNameAlreadyExistsException(request.getName());
             }
             throw exception;
         }
@@ -443,14 +430,14 @@ public class ConcertServiceImpl implements ConcertService {
 
     private Concert getConcertAndCheckOwnership(User currentUser, UUID concertId) {
         Concert concert = concertRepository.findById(concertId)
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "CONCERT_NOT_FOUND", "Concert not found with ID: " + concertId));
+                .orElseThrow(() -> new ConcertNotFoundException(concertId));
         checkConcertOwnership(currentUser, concert);
         return concert;
     }
 
     private Concert lockConcertAndCheckOwnership(User currentUser, UUID concertId) {
         Concert concert = concertRepository.findByIdForUpdate(concertId)
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "CONCERT_NOT_FOUND", "Concert not found"));
+                .orElseThrow(() -> new ConcertNotFoundException(concertId));
         checkConcertOwnership(currentUser, concert);
         return concert;
     }
@@ -461,12 +448,12 @@ public class ConcertServiceImpl implements ConcertService {
         }
     }
 
-    private AppException invalidState() {
-        return new AppException(HttpStatus.CONFLICT, "INVALID_CONCERT_STATE", "Concert state does not allow this operation");
+    private ConcertStateConflictException invalidState() {
+        return new ConcertStateConflictException();
     }
 
-    private AppException validation(String message) {
-        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", message);
+    private RequestValidationException validation(String message) {
+        return new RequestValidationException("VALIDATION_ERROR", message);
     }
 
     private String requireText(String value, String field, int maxLength) {
@@ -573,7 +560,7 @@ public class ConcertServiceImpl implements ConcertService {
             return; // Admin has full access
         }
         if (concert.getOrganizer() == null || !concert.getOrganizer().getId().equals(currentUser.getId())) {
-            throw new AppException(HttpStatus.FORBIDDEN, "FORBIDDEN", "You do not have permission to access or modify this concert");
+            throw new CatalogAccessDeniedException();
         }
     }
 

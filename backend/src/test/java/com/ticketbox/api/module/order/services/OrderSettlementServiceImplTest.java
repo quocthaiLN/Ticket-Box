@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
 import com.ticketbox.api.module.catalog.domain.entities.TicketType;
@@ -13,6 +12,7 @@ import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
 import com.ticketbox.api.module.order.domain.entities.Order;
 import com.ticketbox.api.module.order.domain.entities.OrderItem;
 import com.ticketbox.api.module.order.domain.entities.OrderStatus;
+import com.ticketbox.api.module.order.domain.exception.OrderNotSettlableException;
 import com.ticketbox.api.module.order.domain.entities.UserTicketTypeCounter;
 import com.ticketbox.api.module.order.domain.entities.UserTicketTypeCounterId;
 import com.ticketbox.api.module.order.repositories.OrderRepository;
@@ -147,10 +147,10 @@ class OrderInventoryServiceImplTest {
                                 .holdExpiresAt(deadline).build();
                 when(orderRepository.findByIdForTicketIssuance(orderId)).thenReturn(Optional.of(order));
 
-                AppException exception = assertThrows(AppException.class,
+                OrderNotSettlableException exception = assertThrows(OrderNotSettlableException.class,
                                 () -> settlementService.settlePaidOrder(orderId, deadline));
 
-                assertEquals("ORDER_NOT_SETTLABLE", exception.getErrorCode());
+                assertEquals("ORDER_NOT_SETTLABLE", exception.getErrorCode().code());
                 verifyNoInteractions(ticketTypeRepository, counterRepository);
         }
 }

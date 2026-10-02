@@ -11,6 +11,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import com.ticketbox.api.module.shared.validation.RequestValidationException;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -41,20 +42,17 @@ public class ConcertController {
             @RequestParam java.util.Map<String, String> allParams) {
 
         if (!Set.of("status", "q", "page", "size", "sortBy", "sortOrder").containsAll(allParams.keySet())) {
-            throw new com.ticketbox.api.infrastructure.exception.AppException(HttpStatus.BAD_REQUEST,
-                    "INVALID_QUERY", "Unsupported query parameter");
+            throw new RequestValidationException("INVALID_QUERY", "Unsupported query parameter");
         }
         if (page < 0 || size < 1 || size > 100) {
-            throw new com.ticketbox.api.infrastructure.exception.AppException(HttpStatus.BAD_REQUEST,
-                    "INVALID_QUERY", "page must be >= 0 and size must be between 1 and 100");
+            throw new RequestValidationException("INVALID_QUERY",
+                    "page must be >= 0 and size must be between 1 and 100");
         }
         if (!Set.of("createdAt", "startsAt", "title").contains(sortBy)) {
-            throw new com.ticketbox.api.infrastructure.exception.AppException(HttpStatus.BAD_REQUEST,
-                    "INVALID_SORT", "Unsupported sortBy field");
+            throw new RequestValidationException("INVALID_SORT", "Unsupported sortBy field");
         }
         if (!sortOrder.equalsIgnoreCase("asc") && !sortOrder.equalsIgnoreCase("desc")) {
-            throw new com.ticketbox.api.infrastructure.exception.AppException(HttpStatus.BAD_REQUEST,
-                    "INVALID_SORT", "sortOrder must be asc or desc");
+            throw new RequestValidationException("INVALID_SORT", "sortOrder must be asc or desc");
         }
 
         Sort.Direction direction = sortOrder.equalsIgnoreCase("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;

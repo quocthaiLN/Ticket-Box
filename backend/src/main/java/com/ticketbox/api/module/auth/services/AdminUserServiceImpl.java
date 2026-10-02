@@ -1,16 +1,15 @@
 package com.ticketbox.api.module.auth.services;
 
-import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.audit.services.AuditLogService;
 import com.ticketbox.api.module.auth.domain.dtos.UserResponse;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.auth.domain.entities.UserStatus;
 import com.ticketbox.api.module.auth.domain.entities.UserAccountStatus;
+import com.ticketbox.api.module.auth.domain.exception.UserNotFoundException;
 import com.ticketbox.api.module.auth.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +35,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     public UserResponse updateUserStatus(UUID userId, UserStatus newStatus, UUID adminId, String ipAddress,
             String userAgent) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User not found"));
+                .orElseThrow(UserNotFoundException::new);
 
         UserStatus oldStatus = user.getStatus();
         user.setStatus(newStatus);

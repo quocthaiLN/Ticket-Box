@@ -2,14 +2,15 @@ import { Loader2, QrCode } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { ApiClientError } from "../../lib/api-client";
-import { getMyTicketQr } from "../../services/ticket.service";
+import { ApiClientError, getApiErrorCode } from "../../lib/api-client";
+import { getMyTicketQr, getTicketErrorMessage } from "../../services/ticket.service";
 
 export function TicketQrPage() {
   const { ticketId } = useParams<{ ticketId: string }>();
   const location = useLocation();
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "auth-required" | "error">("loading");
+  const [errorMessage, setErrorMessage] = useState("Không thể tải mã QR của vé. Vui lòng thử lại sau.");
 
   useEffect(() => {
     if (!ticketId) {
@@ -31,6 +32,7 @@ export function TicketQrPage() {
           setStatus("auth-required");
           return;
         }
+        setErrorMessage(getTicketErrorMessage(getApiErrorCode(error)));
         setStatus("error");
       });
     return () => {
@@ -48,7 +50,7 @@ export function TicketQrPage() {
         {status === "loading" && <Loader2 className="mx-auto my-10 h-8 w-8 animate-spin text-[#F5C842]" />}
         {status === "ready" && qrImageUrl && <img className="mx-auto my-8 rounded-xl bg-white p-3" src={qrImageUrl} alt="Mã QR vé" />}
         {status === "auth-required" && <p className="my-8 text-sm text-[#E8315B]">Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại để mở vé này.</p>}
-        {status === "error" && <p className="my-8 text-sm text-[#E8315B]">Không thể tải mã QR của vé. Vui lòng thử lại sau.</p>}
+        {status === "error" && <p className="my-8 text-sm text-[#E8315B]">{errorMessage}</p>}
         {status === "auth-required" ? (
           <Link className="inline-block rounded-lg bg-[#E8315B] px-4 py-2 text-sm font-semibold text-white" to="/login">
             Đăng nhập lại

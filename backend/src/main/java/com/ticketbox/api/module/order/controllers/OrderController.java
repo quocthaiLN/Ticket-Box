@@ -1,6 +1,5 @@
 package com.ticketbox.api.module.order.controllers;
 
-import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.infrastructure.response.ApiResponse;
 import com.ticketbox.api.module.auth.services.CustomUserDetails;
 import com.ticketbox.api.module.order.domain.dtos.CreateOrderRequest;
@@ -10,6 +9,7 @@ import com.ticketbox.api.module.payment.domain.dtos.CreateOrderPaymentRequest;
 import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentRequest;
 import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentResponse;
 import com.ticketbox.api.module.payment.services.PaymentService;
+import com.ticketbox.api.module.shared.validation.RequestValidationException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -49,7 +49,7 @@ public class OrderController {
 
     private UUID parseIdempotencyKey(String header) {
         if (header == null || header.isBlank()) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "MISSING_IDEMPOTENCY_KEY",
+            throw new RequestValidationException("MISSING_IDEMPOTENCY_KEY",
                     "Idempotency-Key header is required");
         }
         try {
@@ -93,8 +93,8 @@ public class OrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
     
-    private AppException invalidIdempotencyKey() {
-        return new AppException(HttpStatus.BAD_REQUEST, "INVALID_IDEMPOTENCY_KEY",
+    private RequestValidationException invalidIdempotencyKey() {
+        return new RequestValidationException("INVALID_IDEMPOTENCY_KEY",
                 "Idempotency-Key must be a UUID v4");
     }
 }

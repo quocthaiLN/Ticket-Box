@@ -1,12 +1,13 @@
 package com.ticketbox.api.module.order.services;
 
-import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.catalog.domain.entities.TicketType;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
 import com.ticketbox.api.module.order.domain.entities.Order;
 import com.ticketbox.api.module.order.domain.entities.OrderItem;
 import com.ticketbox.api.module.order.domain.entities.OrderStatus;
 import com.ticketbox.api.module.order.domain.entities.UserTicketTypeCounter;
+import com.ticketbox.api.module.order.domain.exception.OrderNotFoundException;
+import com.ticketbox.api.module.order.domain.exception.OrderNotSettlableException;
 import com.ticketbox.api.module.order.repositories.OrderRepository;
 import com.ticketbox.api.module.order.repositories.UserTicketTypeCounterRepository;
 import java.time.LocalDateTime;
@@ -14,7 +15,6 @@ import java.util.Comparator;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,11 +30,10 @@ public class OrderInventoryServiceImpl implements OrderInventoryService {
     @Transactional
     public void settlePaidOrder(UUID orderId, LocalDateTime settledAt) {
         Order order = orderRepository.findByIdForTicketIssuance(orderId)
-                .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "ORDER_NOT_FOUND", "Order not found"));
+                .orElseThrow(OrderNotFoundException::new);
         if (order.getStatus() != OrderStatus.HELD || order.getHoldExpiresAt() == null
                 || !LocalDateTime.now().isBefore(order.getHoldExpiresAt())) {
-            throw new AppException(HttpStatus.CONFLICT, "ORDER_NOT_SETTLABLE",
-                    "Order is not eligible for payment settlement");
+            throw new OrderNotSettlableException();
         }
 
         for (OrderItem orderItem : order.getOrderItems()) {
