@@ -49,6 +49,27 @@ public class ConcertServiceImpl implements ConcertService {
 
     @Override
     @Transactional(readOnly = true)
+    public Concert getConcertForArtistBioUpload(User currentUser, UUID concertId) {
+        Concert concert = getConcertAndCheckOwnership(currentUser, concertId);
+        checkEditable(concert);
+        return concert;
+    }
+
+    @Override
+    public Concert getConcertForArtistBioUploadForUpdate(User currentUser, UUID concertId) {
+        Concert concert = lockConcertAndCheckOwnership(currentUser, concertId);
+        checkEditable(concert);
+        return concert;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void checkArtistBioAccess(User currentUser, UUID concertId) {
+        getConcertAndCheckOwnership(currentUser, concertId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<AdminConcertResponse> getConcerts(User currentUser, String statusStr, String q, Pageable pageable) {
         Specification<Concert> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();

@@ -7,6 +7,11 @@ spring:
   profiles:
     active: api
 
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
+
   security:
     oauth2:
       client:
@@ -83,6 +88,10 @@ jwt:
   refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:2592000000}
 
 app:
+  artist-bio:
+    gemini:
+      api-key: ${GEMINI_API_KEY:}
+      model: ${GEMINI_MODEL:gemini-2.5-flash}
   frontend:
     base-url: ${FRONTEND_BASE_URL:http://localhost:3001}
   oauth2:

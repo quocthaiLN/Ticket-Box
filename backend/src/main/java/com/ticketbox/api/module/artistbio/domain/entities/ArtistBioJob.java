@@ -28,7 +28,6 @@ public class ArtistBioJob {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
-    @NotNull(message = "Id cannot be null")
     private UUID id;
 
     @NotNull(message = "Concert cannot be null")
@@ -58,6 +57,18 @@ public class ArtistBioJob {
 
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
+
+    @Column(nullable = false)
+    private int attempts;
+
+    @Column(name = "next_attempt_at")
+    private LocalDateTime nextAttemptAt;
+
+    @Column(name = "processing_token")
+    private UUID processingToken;
+
+    @Column(name = "lease_until")
+    private LocalDateTime leaseUntil;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

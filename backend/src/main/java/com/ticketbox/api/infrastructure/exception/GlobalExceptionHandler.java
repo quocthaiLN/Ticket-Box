@@ -87,6 +87,28 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(
+            org.springframework.web.multipart.MaxUploadSizeExceededException exception,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        return problem(HttpStatus.PAYLOAD_TOO_LARGE, "FILE_TOO_LARGE", "Upload exceeds the size limit",
+                Map.of(), request, headers);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleMissingServletRequestPart(
+            org.springframework.web.multipart.support.MissingServletRequestPartException exception,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "INVALID_UPLOAD", "Required multipart part is missing",
+                Map.of(), request, headers);
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MultipartException.class)
+    public ResponseEntity<Object> handleInvalidMultipart(
+            org.springframework.web.multipart.MultipartException exception, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "INVALID_UPLOAD", "Malformed multipart upload", Map.of(), request);
+    }
+
+    @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException exception,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         List<Map<String, String>> errors = new ArrayList<>();

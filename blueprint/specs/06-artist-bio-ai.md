@@ -1,54 +1,39 @@
 # Đặc tả: AI Artist Bio
 
-## 1. Mô tả
+## Mục tiêu
 
-Đặc tả xử lý PDF/Press Kit bất đồng bộ để sinh Artist Bio bằng AI. Kết quả lưu trong `artist_bio_jobs.generated_bio` và được publish vào `concerts.artist_bio`.
+Organizer/Admin gửi PDF press kit để tạo bản nháp Artist Bio bất đồng bộ. Module `artistbio` sở hữu job, storage, RabbitMQ và worker; Catalog cung cấp concert qua quan hệ hiện có và đặt hai HTTP route trong `ConcertController`.
 
-## 2. Actor / Thành phần tham gia
+## API
 
-- Admin/Organizer
-- Catalog Module
-- AI Worker
-- Object Storage
-- AI Model API
-- PostgreSQL
+| Method | Endpoint | Hành vi |
+| --- | --- | --- |
+| `POST` | `/admin/concerts/{concertId}/artist-bio-jobs` | Nhận multipart field `file`, trả `202` và thông tin job. |
+| `GET` | `/admin/concerts/{concertId}/artist-bio-jobs/{jobId}` | Poll trạng thái và bản nháp; response không bao gồm file gốc hoặc extracted text. |
 
-## 3. Bảng dữ liệu liên quan
+Chỉ Admin hoặc Organizer sở hữu concert được truy cập. Upload hợp lệ khi concert ở `DRAFT` hoặc `PUBLISHED`; polling vẫn cho phép khi concert đã đóng. File phải là PDF tối đa 10 MiB.
 
-- `artist_bio_jobs`
-- `concerts`
-- `audit_logs`
+Trạng thái theo schema: `PENDING → PROCESSING → DONE | FAILED`. Upload tạo job `PENDING`. Bio `DONE` chỉ là bản nháp; người tổ chức duyệt rồi cập nhật `concerts.artist_bio` bằng API sửa concert hiện có.
 
-## 4. Luồng chính
+## Xử lý nền
 
-1. Admin/Organizer upload PDF/Press Kit cho một concert.
-2. Backend validate file type, file size và quyền organizer/admin.
-3. Backend lưu file vào object storage, tạo `artist_bio_jobs` trạng thái `PENDING`.
-4. Worker lấy job, chuyển sang `PROCESSING`, tải file và trích xuất text.
-5. Worker làm sạch text, cắt/chuẩn hóa nội dung theo giới hạn token.
-6. Worker gọi AI Model API với prompt chuẩn để sinh bio ngắn gọn.
-7. Nếu thành công, worker cập nhật `artist_bio_jobs.generated_bio`, `status = DONE`, `completed_at`.
-8. Worker hoặc Admin publish kết quả vào `concerts.artist_bio`; cache concert detail bị invalidate.
-9. Nếu lỗi, worker cập nhật job `FAILED` và `error_message`.
+1. API kiểm tra quyền và PDF, upload file vào MinIO, lưu URI `s3://<bucket>/press-kits/<concertId>/<objectId>.pdf`, tạo job và audit `CREATE_ARTIST_BIO_JOB`.
+2. API gửi message chỉ chứa `jobId` vào `artist-bio.exchange` / `q.artist.bio-generation`. Bản ghi `PENDING` được giữ để scheduler worker có thể khôi phục nếu broker tạm lỗi.
+3. Worker claim job bằng transaction, số lần thử và lease token; tải PDF, giới hạn 50 trang và 30.000 ký tự, trích xuất bằng PDFBox.
+4. Gemini `generateContent` sinh JSON `{ "bio": "..." }`. Bio yêu cầu tiếng Việt khoảng 150–200 từ và dựa trên press kit. Kết quả lưu trong `artist_bio_jobs.generated_bio`, job chuyển `DONE`; không tự publish vào concert.
+5. Worker ACK sau khi DB commit. Lỗi tạm thời retry tối đa 3 lần qua queue TTL 30 giây; lỗi vĩnh viễn hoặc hết lượt chuyển `FAILED`. Scheduler mỗi 30 giây phục hồi job đến hạn hoặc lease đã hết.
 
-## 5. Kịch bản lỗi
+## Cấu hình và giới hạn
 
-- File sai định dạng/quá lớn: reject trước khi tạo job.
-- PDF không extract được text: job `FAILED`, admin có thể upload lại.
-- AI API timeout/rate limit: retry theo queue policy; hết retry thì job `FAILED`.
-- Bio sinh ra rỗng/không đạt policy: job `FAILED` hoặc yêu cầu admin chỉnh tay.
+- Gemini dùng `GEMINI_API_KEY`; model `GEMINI_MODEL`, mặc định `gemini-2.5-flash`.
+- Upload/request giới hạn 10/11 MiB tại Servlet và 11 MiB tại Nginx.
+- Message dùng exchange, queue, retry queue và DLX/DLQ riêng của Artist Bio; listener dùng manual ACK.
+- Migration V4 thêm attempts, lịch retry, processing token và lease; V1 không sửa đổi.
+- Bio thủ công tiếp tục đi qua Catalog để audit và invalidate cache.
 
-## 6. Ràng buộc nghiệp vụ và kỹ thuật
+## Lỗi và tiêu chí nghiệm thu
 
-- `concerts.artist_bio` là nguồn hiển thị public trong MVP.
-- AI xử lý bất đồng bộ, không chặn request tạo/cập nhật concert.
-- File gốc lưu object storage, DB chỉ lưu URL/metadata.
-- Worker lỗi không ảnh hưởng luồng mua vé/check-in.
-- Publish hoặc chỉnh sửa bio phải ghi audit.
-
-## 7. Tiêu chí chấp nhận
-
-- Upload tạo job `PENDING`.
-- Worker thành công tạo `generated_bio`.
-- Publish cập nhật `concerts.artist_bio`.
-- AI lỗi được ghi rõ, admin có thể retry hoặc nhập tay.
+- Upload sai định dạng/trống: `400`; vượt dung lượng: `413`; không có quyền: `403`; không thấy concert/job: `404`; concert không nhận upload: `409`; storage không khả dụng: `503`.
+- PDF hỏng, mã hóa, scan không có text, Gemini từ chối hoặc output rỗng: job `FAILED` với thông báo an toàn; timeout, rate limit và lỗi server Gemini có thể retry.
+- Mọi retry/redelivery chỉ được ghi kết quả nếu processing token còn hiệu lực. Job `DONE` không bị chạy lại; worker không cập nhật `concerts.artist_bio`.
+- Test tự động dùng mock Gemini; triển khai cần RabbitMQ, PostgreSQL, MinIO và cấu hình `GEMINI_API_KEY`.

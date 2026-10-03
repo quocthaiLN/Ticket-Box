@@ -13,6 +13,20 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class RabbitMqConfig {
 
+    @Bean(name = RabbitMqConstants.ARTIST_BIO_LISTENER_FACTORY)
+    public org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory artistBioListenerFactory(
+            ConnectionFactory connectionFactory, MessageConverter jsonMessageConverter) {
+        var factory = new org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory();
+        factory.setConnectionFactory(connectionFactory);
+        factory.setMessageConverter(jsonMessageConverter);
+        factory.setAcknowledgeMode(org.springframework.amqp.core.AcknowledgeMode.MANUAL);
+        factory.setPrefetchCount(1);
+        factory.setConcurrentConsumers(2);
+        factory.setMaxConcurrentConsumers(2);
+        factory.setDefaultRequeueRejected(false);
+        return factory;
+    }
+
     @Bean
     public MessageConverter jsonMessageConverter(ObjectMapper objectMapper) {
         return new Jackson2JsonMessageConverter(objectMapper);

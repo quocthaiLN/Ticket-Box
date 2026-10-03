@@ -1,6 +1,10 @@
 package com.ticketbox.api.module.catalog.controllers;
 
 import com.ticketbox.api.infrastructure.response.ApiResponse;
+import com.ticketbox.api.module.artistbio.services.ArtistBioService;
+import com.ticketbox.api.module.artistbio.domain.dtos.ArtistBioJobResponse;
+import org.springframework.web.multipart.MultipartFile;
+import java.net.URI;
 import com.ticketbox.api.module.auth.services.CustomUserDetails;
 import com.ticketbox.api.module.catalog.domain.dtos.*;
 import com.ticketbox.api.module.catalog.services.ConcertService;
@@ -29,6 +33,26 @@ import java.util.Set;
 public class ConcertController {
 
     private final ConcertService concertService;
+    private final ArtistBioService artistBioService;
+
+    @PostMapping(value = "/{concertId}/artist-bio-jobs", consumes = "multipart/form-data")
+    public ResponseEntity<ApiResponse<ArtistBioJobResponse>> uploadArtistBio(
+            @AuthenticationPrincipal CustomUserDetails userDetails, @PathVariable UUID concertId,
+            @RequestPart("file") MultipartFile file) {
+        var job = artistBioService.upload(userDetails.getUser(), concertId, file);
+        return ResponseEntity.accepted().location(URI.create(
+                "/admin/concerts/" + concertId + "/artist-bio-jobs/" + job.id()))
+                .cacheControl(CacheControl.noStore()).body(ApiResponse.success(job));
+    }
+
+    @GetMapping("/{concertId}/artist-bio-jobs/{jobId}")
+    public ResponseEntity<ApiResponse<ArtistBioJobResponse>> getArtistBioJob(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable UUID concertId, @PathVariable UUID jobId) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(ApiResponse.success(artistBioService.get(userDetails.getUser(), concertId, jobId)));
+    }
+
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<AdminConcertResponse>>> getConcerts(

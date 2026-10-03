@@ -16,6 +16,17 @@ public final class RabbitMqConstants {
     public static final String CATALOG_CACHE_WARMUP_QUEUE = "catalog.cache-warmup.queue";
     public static final String CATALOG_CACHE_WARMUP_ROUTING_KEY = "inventory.cache-warmup";
 
+    // Artist Bio Module Constants
+    public static final String ARTIST_BIO_EXCHANGE = "artist-bio.exchange";
+    public static final String ARTIST_BIO_QUEUE = "q.artist.bio-generation";
+    public static final String ARTIST_BIO_ROUTING_KEY = "artist-bio.generate";
+    public static final String ARTIST_BIO_RETRY_QUEUE = "q.artist.bio-generation.retry";
+    public static final String ARTIST_BIO_RETRY_KEY = "artist-bio.retry";
+    public static final String ARTIST_BIO_DLX = "artist-bio.dlx";
+    public static final String ARTIST_BIO_DLQ = "q.artist.bio-generation.dead";
+    public static final String ARTIST_BIO_DEAD_KEY = "artist-bio.dead";
+    public static final String ARTIST_BIO_LISTENER_FACTORY = "artistBioListenerFactory";
+
     // Payment Module Constants
     public static final String PAYMENT_EXCHANGE = "payment.exchange";
 
