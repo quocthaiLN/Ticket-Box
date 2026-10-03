@@ -89,7 +89,7 @@ export function toOrganizerConcertView(concert: OrganizerConcert): OrganizerConc
     status: concert.status,
     statusLabel: concertStatusLabel(concert.status),
     startsAt: concert.starts_at,
-    venueName: concert.venue.name,
+    venueName: concert.venue,
     coverImageUrl: concert.cover_image_url,
   };
 }

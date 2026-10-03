@@ -18,6 +18,8 @@ public interface ConcertService {
 
     Page<AdminConcertResponse> getConcerts(User currentUser, String status, String q, Pageable pageable);
 
+    AdminConcertMetadataResponse getConcertMetadata(User currentUser, UUID concertId);
+
     AdminConcertResponse createConcert(User currentUser, CreateConcertRequest request);
 
     AdminConcertResponse updateConcert(User currentUser, UUID concertId, UpdateConcertRequest request);

@@ -95,6 +95,54 @@ class ConcertServiceTest {
     }
 
     @Test
+    void metadata_ownerCanReadDraftWithEmptyCollections() {
+        when(concertRepository.findById(concertId)).thenReturn(Optional.of(concert));
+        var result = concertService.getConcertMetadata(organizerUser, concertId);
+        assertEquals(concertId, result.concert().getId());
+        assertEquals("DRAFT", result.concert().getStatus());
+        assertTrue(result.seatZones().isEmpty());
+        assertTrue(result.ticketTypes().isEmpty());
+        verifyNoInteractions(cacheService);
+    }
+
+    @Test
+    void metadata_adminCanReadPublishedWithInventory() {
+        concert.setStatus(ConcertStatus.PUBLISHED);
+        var zone = com.ticketbox.api.module.catalog.domain.entities.SeatZone.builder()
+                .id(UUID.randomUUID()).concert(concert).code("VIP").name("VIP")
+                .capacity(100).sortOrder(0).build();
+        var ticket = com.ticketbox.api.module.catalog.domain.entities.TicketType.builder()
+                .id(UUID.randomUUID()).concert(concert).seatZone(zone).name("VIP ticket")
+                .price(java.math.BigDecimal.TEN).currency("VND").totalQuantity(50)
+                .heldQuantity(3).soldQuantity(7).maxPerUser(2)
+                .saleStartAt(concert.getStartsAt().minusDays(2)).saleEndAt(concert.getStartsAt())
+                .status(com.ticketbox.api.module.catalog.domain.entities.TicketTypeStatus.ON_SALE).build();
+        when(concertRepository.findById(concertId)).thenReturn(Optional.of(concert));
+        when(seatZoneRepository.findByConcertIdOrderBySortOrderAsc(concertId)).thenReturn(java.util.List.of(zone));
+        when(ticketTypeRepository.findByConcertId(concertId)).thenReturn(java.util.List.of(ticket));
+        var result = concertService.getConcertMetadata(adminUser, concertId);
+        assertEquals("PUBLISHED", result.concert().getStatus());
+        assertEquals(zone.getId(), result.seatZones().getFirst().getId());
+        assertEquals(40, result.ticketTypes().getFirst().getAvailableQuantity());
+        assertEquals(3, result.ticketTypes().getFirst().getHeldQuantity());
+    }
+
+    @Test
+    void metadata_otherOrganizerCannotReadChildren() {
+        when(concertRepository.findById(concertId)).thenReturn(Optional.of(concert));
+        assertThrows(com.ticketbox.api.module.catalog.domain.exception.CatalogAccessDeniedException.class,
+                () -> concertService.getConcertMetadata(otherOrganizerUser, concertId));
+        verifyNoInteractions(seatZoneRepository, ticketTypeRepository);
+    }
+
+    @Test
+    void metadata_missingConcertIsNotFound() {
+        when(concertRepository.findById(concertId)).thenReturn(Optional.empty());
+        assertThrows(com.ticketbox.api.module.catalog.domain.exception.ConcertNotFoundException.class,
+                () -> concertService.getConcertMetadata(organizerUser, concertId));
+    }
+
+    @Test
     @DisplayName("Create concert successfully by Organizer")
     void createConcert_success() {
         CreateConcertRequest request = CreateConcertRequest.builder()

@@ -17,9 +17,12 @@ public class ArtistBioJobStateService {
     public static final int LEASE_SECONDS = 300;
     private final ArtistBioJobRepository jobs;
 
+    // Trạng thái của Message
     public enum Outcome { SKIP, PROCESS, RETRY, DEAD, DONE }
+    // Kết quả xin xử lý
     public record Claim(Outcome outcome, UUID token, String source) {}
 
+    // Khóa bản ghi Job trong DB và kiểm tra trạng thái và gắn Outcome -> trả về Claim
     @Transactional
     public Claim claim(UUID id) {
         ArtistBioJob job = jobs.findForUpdate(id).orElse(null);
@@ -44,6 +47,7 @@ public class ArtistBioJobStateService {
         return new Claim(Outcome.PROCESS, token, job.getSourceFileUrl());
     }
 
+    // Xác nhận Message sau xử lý thành công
     @Transactional
     public Outcome complete(UUID id, UUID token, String text, String bio) {
         ArtistBioJob job = jobs.findForUpdate(id).orElse(null);
@@ -54,6 +58,7 @@ public class ArtistBioJobStateService {
         return Outcome.DONE;
     }
 
+    // Xác nhận Message sau xử lý thất bại -> về DLX hoặc Retry Queue
     @Transactional
     public Outcome fail(UUID id, UUID token, String message, boolean retryable) {
         ArtistBioJob job = jobs.findForUpdate(id).orElse(null);
@@ -64,12 +69,14 @@ public class ArtistBioJobStateService {
         return retry ? Outcome.RETRY : Outcome.DEAD;
     }
 
+    // Kiểm tra worker đc xử lý hay không 
     private boolean owns(ArtistBioJob job, UUID token) {
         return job != null && token != null && job.getStatus() == ArtistBioJobStatus.PROCESSING
                 && token.equals(job.getProcessingToken()) && job.getLeaseUntil() != null
                 && job.getLeaseUntil().isAfter(LocalDateTime.now(ZoneOffset.UTC));
     }
 
+    
     private void finish(ArtistBioJob job, ArtistBioJobStatus status, String error) {
         job.setStatus(status);
         job.setErrorMessage(error);

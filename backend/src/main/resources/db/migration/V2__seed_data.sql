@@ -14,11 +14,11 @@ INSERT INTO users (id, email, full_name, phone, role, status, created_at, update
 ('55555555-5555-5555-5555-555555555555', 'audience2@ticketbox.com', 'Tran Thi Fan', '+84902222222', 'AUDIENCE', 'ACTIVE', NOW(), NOW());
 
 INSERT INTO user_accounts (id, user_id, password_hash, provider, provider_user_id, created_at, updated_at) VALUES
-('11111111-1111-1111-1111-11111111111a', '11111111-1111-1111-1111-111111111111', '$2a$10$E2UPv7arXnm9X/O.n0bF3u8/P1807y1zV8aYVf8d.XJ7iXpWpP69W', 'LOCAL', 'admin@ticketbox.com', NOW(), NOW()),
-('22222222-2222-2222-2222-22222222222b', '22222222-2222-2222-2222-222222222222', '$2a$10$E2UPv7arXnm9X/O.n0bF3u8/P1807y1zV8aYVf8d.XJ7iXpWpP69W', 'LOCAL', 'organizer@ticketbox.com', NOW(), NOW()),
-('33333333-3333-3333-3333-33333333333c', '33333333-3333-3333-3333-333333333333', '$2a$10$E2UPv7arXnm9X/O.n0bF3u8/P1807y1zV8aYVf8d.XJ7iXpWpP69W', 'LOCAL', 'checker@ticketbox.com', NOW(), NOW()),
-('44444444-4444-4444-4444-44444444444d', '44444444-4444-4444-4444-444444444444', '$2a$10$E2UPv7arXnm9X/O.n0bF3u8/P1807y1zV8aYVf8d.XJ7iXpWpP69W', 'LOCAL', 'audience1@ticketbox.com', NOW(), NOW()),
-('55555555-5555-5555-5555-55555555555e', '55555555-5555-5555-5555-555555555555', '$2a$10$E2UPv7arXnm9X/O.n0bF3u8/P1807y1zV8aYVf8d.XJ7iXpWpP69W', 'LOCAL', 'audience2@ticketbox.com', NOW(), NOW());
+('11111111-1111-1111-1111-11111111111a', '11111111-1111-1111-1111-111111111111', '$2a$12$fe.c8Bqg/sqs0JXOvX.09uK.IMayKpejRY6ePEvmHxoU50Xyui0MG', 'LOCAL', 'admin@ticketbox.com', NOW(), NOW()),
+('22222222-2222-2222-2222-22222222222b', '22222222-2222-2222-2222-222222222222', '$2a$12$fe.c8Bqg/sqs0JXOvX.09uK.IMayKpejRY6ePEvmHxoU50Xyui0MG', 'LOCAL', 'organizer@ticketbox.com', NOW(), NOW()),
+('33333333-3333-3333-3333-33333333333c', '33333333-3333-3333-3333-333333333333', '$2a$12$fe.c8Bqg/sqs0JXOvX.09uK.IMayKpejRY6ePEvmHxoU50Xyui0MG', 'LOCAL', 'checker@ticketbox.com', NOW(), NOW()),
+('44444444-4444-4444-4444-44444444444d', '44444444-4444-4444-4444-444444444444', '$2a$12$fe.c8Bqg/sqs0JXOvX.09uK.IMayKpejRY6ePEvmHxoU50Xyui0MG', 'LOCAL', 'audience1@ticketbox.com', NOW(), NOW()),
+('55555555-5555-5555-5555-55555555555e', '55555555-5555-5555-5555-555555555555', '$2a$12$fe.c8Bqg/sqs0JXOvX.09uK.IMayKpejRY6ePEvmHxoU50Xyui0MG', 'LOCAL', 'audience2@ticketbox.com', NOW(), NOW());
 
 -- =============================================================================
 -- 2. CONCERTS SEED

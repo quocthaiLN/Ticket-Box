@@ -19,6 +19,7 @@ public class ArtistBioRecoveryScheduler {
     private final ArtistBioJobRepository jobs;
     private final ArtistBioProducer producer;
 
+    // Duyệt DB tìm Job đã quá lâu chưa xử lý
     @Scheduled(fixedDelay = 30_000, initialDelay = 30_000)
     public void recover() {
         for (var id : jobs.findRecoverable(LocalDateTime.now(ZoneOffset.UTC), PageRequest.of(0, 100))) {

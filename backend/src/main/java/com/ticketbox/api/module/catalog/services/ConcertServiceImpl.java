@@ -107,6 +107,23 @@ public class ConcertServiceImpl implements ConcertService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public AdminConcertMetadataResponse getConcertMetadata(User currentUser, UUID concertId) {
+        Concert concert = getConcertAndCheckOwnership(currentUser, concertId);
+        return new AdminConcertMetadataResponse(
+                mapToConcertDetailResponse(concert),
+                seatZoneRepository.findByConcertIdOrderBySortOrderAsc(concertId).stream()
+                        .map(this::mapToSeatZoneResponse).toList(),
+                ticketTypeRepository.findByConcertId(concertId).stream()
+                        .map(this::mapToTicketTypeResponse).toList(),
+                ConcertMetadataResponse.SeatMapInfo.builder()
+                        .svgUrl(storageService.buildPublicUrl(concert.getSeatMapUrl()))
+                        .fallbackImageUrl(storageService.buildPublicUrl(concert.getCoverImageUrl()))
+                        .build(),
+                concert.getArtistBio());
+    }
+
+    @Override
     public AdminConcertResponse createConcert(User currentUser, CreateConcertRequest request) {
         if (concertRepository.existsBySlug(request.getSlug())) {
             throw new ConcertSlugAlreadyExistsException(request.getSlug());

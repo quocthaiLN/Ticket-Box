@@ -1,3 +1,7 @@
+import { ConcertCreateForm } from "./ConcertCreateForm";
+import { ArtistBioPanel } from "./ArtistBioPanel";
+import { listCatalogConcerts, patchCatalogZone, patchCatalogTicket, publishCatalogConcert, cancelCatalogConcert, changedConcertFields, type ConcertPatch, type TicketStatus } from "../../services/organizer-catalog.service";
+import { getOrganizerConcert, toOrganizerConcert, toOrganizerTicket } from "../../services/organizer.service";
 import {
   AlertCircle,
   BarChart3,
@@ -26,13 +30,12 @@ import {
   Users,
   XCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { getStoredAuthSession } from "../../lib/auth-session";
 import { LongText } from "../../components/LongText";
 import type { Venue } from "../../lib/api-client";
 import {
-  createOrganizerDeletionRequest,
   createOrganizerRequest,
   createOrganizerSeatZone,
   createOrganizerTicketType,
@@ -98,14 +101,53 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
   const [editingConcertId, setEditingConcertId] = useState<string | null>(null);
   const [deletingConcertId, setDeletingConcertId] = useState<string | null>(null);
 
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [catalogRetry, setCatalogRetry] = useState(0);
+  const [showConcertForm, setShowConcertForm] = useState(false);
+  const openSequence = useRef(0);
+
   const canUseOrganizer = session?.user.role === "ORGANIZER";
 
   useEffect(() => {
-    if (!canUseOrganizer) return;
-    void reload();
-  }, [canUseOrganizer]);
+    if (!canUseOrganizer || view === "concerts") return;
+    let cancelled = false;
+    void reload(() => cancelled);
+    return () => { cancelled = true; };
+  }, [canUseOrganizer, view]);
 
-  async function reload() {
+  useEffect(() => {
+    if (!canUseOrganizer || view !== "concerts") return;
+    let ignore = false;
+    setLoadState("loading"); setConcerts([]); setMessage("");
+    const timer = setTimeout(() => {
+      listCatalogConcerts({ page, q: concertSearch, status: concertFilter }).then(result => {
+        if (ignore) return;
+        setConcerts(result.data.map(concert => toOrganizerConcert(concert)));
+        setHasMore(result.pagination.has_more ?? false);
+        setLoadState("ready");
+      }).catch(err => {
+        if (ignore) return;
+        setLoadState("error"); setConcerts([]);
+        setMessage(err instanceof Error ? err.message : "Không tải được concert.");
+      });
+    }, 250);
+    return () => { ignore = true; clearTimeout(timer); };
+  }, [canUseOrganizer, view, page, concertSearch, concertFilter, catalogRetry]);
+
+  async function openConcert(id: string | null) {
+    const sequence = ++openSequence.current;
+    if (!id) { setEditingConcertId(null); return; }
+    setMessage("Đang tải concert...");
+    try {
+      const detail = await getOrganizerConcert(id);
+      if (sequence !== openSequence.current) return;
+      setConcerts(current => current.map(item => item.id === id ? detail : item));
+      setEditingConcertId(id); setMessage("");
+    } catch (err) { setMessage(err instanceof Error ? err.message : "Không tải được concert."); }
+  }
+
+  async function reload(isCancelled = () => false) {
     setLoadState("loading");
     setMessage("");
     try {
@@ -116,6 +158,7 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
         listOrganizerOrders(),
         listOrganizerCheckerAccounts(),
       ]);
+      if (isCancelled()) return;
       setVenues(venueData);
       setRequests(requestData);
       setConcerts(concertData);
@@ -126,6 +169,7 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
       const analyticsEntries = await Promise.allSettled(
         concertData.map(async (concert) => [concert.id, await getOrganizerAnalytics(concert.id)] as const),
       );
+      if (isCancelled()) return;
       setAnalytics(
         Object.fromEntries(
           analyticsEntries
@@ -134,6 +178,7 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
         ),
       );
     } catch (err) {
+      if (isCancelled()) return;
       setLoadState("error");
       setMessage(err instanceof Error ? err.message : "Không thể tải không gian ban tổ chức.");
     }
@@ -158,12 +203,12 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
     await reload();
   }
 
-  async function submitConcertUpdate(concertId: string, input: Record<string, string>) {
+  async function submitConcertUpdate(concertId: string, input: ConcertPatch) {
     setMessage("");
-    await updateOrganizerConcert(concertId, emptyToUndefined(input));
-    setEditingConcertId(null);
-    setMessage("Đã cập nhật bản nháp concert.");
-    await reload();
+    const saved = await updateOrganizerConcert(concertId, input);
+    setConcerts(current => current.map(item => item.id === concertId
+      ? { ...item, ...toOrganizerConcert(saved), seat_zones: item.seat_zones, ticket_types: item.ticket_types } : item));
+    setMessage("Đã cập nhật concert.");
   }
 
   async function submitSeatZoneCreate(concertId: string, input: CreateOrganizerSeatZoneInput) {
@@ -171,7 +216,7 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
     try {
       const zone = await createOrganizerSeatZone(concertId, input);
       setMessage("Đã lưu zone mới.");
-      await reload();
+      setConcerts(current => current.map(item => item.id === concertId ? { ...item, seat_zones: [...item.seat_zones, zone] } : item));
       return zone;
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Không thể lưu zone mới.");
@@ -184,7 +229,7 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
     try {
       const ticketType = await createOrganizerTicketType(concertId, input);
       setMessage("Đã lưu loại vé mới.");
-      await reload();
+      setConcerts(current => current.map(item => item.id === concertId ? { ...item, ticket_types: [...item.ticket_types, ticketType] } : item));
       return ticketType;
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Không thể lưu loại vé mới.");
@@ -194,9 +239,10 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
 
   async function submitDeletionRequest(concertId: string, reason: string) {
     setMessage("");
-    await createOrganizerDeletionRequest(concertId, reason);
+    const saved = await cancelCatalogConcert(concertId, reason);
+    setConcerts(current => current.map(item => item.id === concertId ? { ...item, status: saved.status === "CANCELED" ? "CANCELLED" : saved.status } : item));
     setDeletingConcertId(null);
-    setMessage("Đã gửi yêu cầu hủy concert cho admin.");
+    setMessage("Đã hủy concert.");
   }
 
   const stats = useMemo(() => {
@@ -208,18 +254,6 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
     [requests, requestFilter],
   );
 
-  const visibleConcerts = useMemo(() => {
-    const needle = concertSearch.trim().toLowerCase();
-    return concerts.filter((concert) => {
-      const matchesStatus = concertFilter === "all" || concert.status === concertFilter;
-      const matchesSearch =
-        !needle ||
-        concert.title.toLowerCase().includes(needle) ||
-        concert.artist_name.toLowerCase().includes(needle) ||
-        concert.venue.name.toLowerCase().includes(needle);
-      return matchesStatus && matchesSearch;
-    });
-  }, [concertFilter, concertSearch, concerts]);
 
   if (!canUseOrganizer) {
     return <OrganizerAccessState role={session?.user.role} />;
@@ -245,11 +279,25 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
 
       <main className="min-w-0 flex-1 p-4 sm:p-6 md:ml-56">
         <section className="mx-auto max-w-7xl">
-          <Header view={view} onNewRequest={() => setShowRequestForm(true)} />
+          {view === "concerts" ? <div className="mb-6 flex items-center justify-between gap-3">
+            <h1 className="text-3xl font-bold">Sự kiện của tôi</h1>
+            <button type="button" disabled={loadState === "loading"} onClick={() => setShowConcertForm(true)} className="rounded-lg bg-[#7B61FF] px-4 py-2">Tạo concert</button>
+          </div> : <Header view={view} onNewRequest={() => setShowRequestForm(true)} />}
+          {view === "concerts" && showConcertForm && <ConcertCreateForm onClose={() => setShowConcertForm(false)} onCreated={concert => {
+            setConcerts(current => [toOrganizerConcert(concert), ...current]);
+            setShowConcertForm(false); setEditingConcertId(concert.id); setMessage("Đã tạo concert.");
+          }} />}
+          {view === "concerts" && !editingConcertId && <div className="mb-4 flex items-center gap-3">
+            <button type="button" disabled={page === 0 || loadState === "loading"} onClick={() => setPage(value => value - 1)} className="disabled:opacity-40">Trang trước</button>
+            <span>Trang {page + 1}</span>
+            <button type="button" disabled={!hasMore || loadState === "loading"} onClick={() => setPage(value => value + 1)} className="disabled:opacity-40">Trang sau</button>
+          </div>}
 
+          {view === "concerts" && loadState === "loading" && <p role="status" className="mb-4 text-sm">Đang tải concert...</p>}
+          {view === "concerts" && loadState === "error" && <button type="button" className="mb-4 underline" onClick={() => setCatalogRetry(value => value + 1)}>Thử tải lại concert</button>}
           {message && <Message text={message} error={loadState === "error" || message.toLowerCase().includes("không thể")} />}
 
-          {loadState === "loading" ? (
+          {loadState === "loading" && view !== "concerts" ? (
             <LoadingState />
           ) : (
             <>
@@ -280,20 +328,21 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
               {view === "concerts" && (
                 <ConcertsView
                   venues={venues}
-                  concerts={visibleConcerts}
+                  concerts={concerts}
                   analytics={analytics}
                   filter={concertFilter}
                   search={concertSearch}
                   editingId={editingConcertId}
                   deletingId={deletingConcertId}
-                  onFilter={setConcertFilter}
-                  onSearch={setConcertSearch}
-                  onEdit={setEditingConcertId}
+                  onFilter={value => { setPage(0); setConcertFilter(value); }}
+                  onSearch={value => { setPage(0); setConcertSearch(value); }}
+                  onEdit={id => void openConcert(id)}
                   onDelete={setDeletingConcertId}
                   onUpdate={submitConcertUpdate}
                   onCreateSeatZone={submitSeatZoneCreate}
                   onCreateTicketType={submitTicketTypeCreate}
                   onDeletionRequest={submitDeletionRequest}
+                  onStatusChange={(id, status) => setConcerts(current => current.map(item => item.id === id ? { ...item, status } : item))}
                 />
               )}
             </>
@@ -1523,7 +1572,9 @@ function ConcertsView({
   onCreateSeatZone,
   onCreateTicketType,
   onDeletionRequest,
+  onStatusChange,
 }: {
+  onStatusChange: (id: string, status: OrganizerConcert["status"]) => void;
   venues: Venue[];
   concerts: OrganizerConcert[];
   analytics: Record<string, OrganizerAnalytics>;
@@ -1535,7 +1586,7 @@ function ConcertsView({
   onSearch: (value: string) => void;
   onEdit: (value: string | null) => void;
   onDelete: (value: string | null) => void;
-  onUpdate: (concertId: string, input: Record<string, string>) => Promise<void>;
+  onUpdate: (concertId: string, input: ConcertPatch) => Promise<void>;
   onCreateSeatZone: (concertId: string, input: CreateOrganizerSeatZoneInput) => Promise<OrganizerSeatZone>;
   onCreateTicketType: (concertId: string, input: CreateOrganizerTicketTypeInput) => Promise<OrganizerConcert["ticket_types"][number]>;
   onDeletionRequest: (concertId: string, reason: string) => Promise<void>;
@@ -1545,6 +1596,8 @@ function ConcertsView({
   if (editingConcert) {
     return (
       <OrganizerConcertEditor
+        onStatusChange={status => onStatusChange(editingConcert.id, status)}
+        key={editingConcert.id}
         concert={editingConcert}
         venues={venues}
         onBack={() => onEdit(null)}
@@ -1617,8 +1670,10 @@ type EditableTicketType = {
   saleStartAt: string;
   saleEndAt: string;
   soldQuantity: string;
+  status: TicketStatus;
   availableQuantity: string;
   isNew: boolean;
+  editing?: boolean;
   saving?: boolean;
 };
 
@@ -1629,7 +1684,9 @@ type EditableZone = {
   description: string;
   capacity: string;
   sortOrder: string;
+  svgPath: string;
   isNew: boolean;
+  editing?: boolean;
   saving?: boolean;
 };
 
@@ -1637,19 +1694,21 @@ function OrganizerConcertEditor({
   concert,
   venues,
   onBack,
+  onStatusChange,
   onSave,
   onCreateSeatZone,
   onCreateTicketType,
 }: {
+  onStatusChange: (status: OrganizerConcert["status"]) => void;
   concert: OrganizerConcert;
   venues: Venue[];
   onBack: () => void;
-  onSave: (input: Record<string, string>) => Promise<void>;
+  onSave: (input: ConcertPatch) => Promise<void>;
   onCreateSeatZone: (input: CreateOrganizerSeatZoneInput) => Promise<OrganizerSeatZone>;
   onCreateTicketType: (input: CreateOrganizerTicketTypeInput) => Promise<OrganizerConcert["ticket_types"][number]>;
 }) {
-  const [activeSection, setActiveSection] = useState<"basic" | "zones" | "tickets" | "guests">(
-    concert.status === "PUBLISHED" ? "guests" : "basic",
+  const [activeSection, setActiveSection] = useState<"basic" | "zones" | "tickets" | "bio" | "guests">(
+    "basic",
   );
   const [submitting, setSubmitting] = useState(false);
   const [zoneError, setZoneError] = useState("");
@@ -1657,17 +1716,14 @@ function OrganizerConcertEditor({
   const [form, setForm] = useState({
     title: concert.title,
     artistName: concert.artist_name,
-    genre: "",
     description: concert.description ?? "",
     startsAt: toDateTimeLocal(concert.starts_at),
     endsAt: toDateTimeLocal(concert.ends_at),
-    venueId: concert.venue.id,
+    venue: concert.venue,
     coverImageUrl: concert.cover_image_url ?? "",
     seatMapUrl: concert.seat_map_url ?? "",
-    seatMapImageUrl: concert.seat_map_image_url ?? "",
   });
-  const [seatMapUploading, setSeatMapUploading] = useState(false);
-  const [seatMapError, setSeatMapError] = useState("");
+  const savedForm = useRef(form);
   const [tickets, setTickets] = useState<EditableTicketType[]>(
     (concert.ticket_types ?? []).map((ticket) => ({
       id: ticket.id,
@@ -1680,6 +1736,7 @@ function OrganizerConcertEditor({
       saleStartAt: toDateTimeLocal(ticket.sale_start_at),
       saleEndAt: toDateTimeLocal(ticket.sale_end_at),
       soldQuantity: String(ticket.sold_quantity),
+      status: ticket.status as TicketStatus,
       availableQuantity: String(ticket.available_quantity),
       isNew: false,
     })),
@@ -1692,6 +1749,7 @@ function OrganizerConcertEditor({
       description: zone.description ?? "",
       capacity: String(zone.capacity),
       sortOrder: String(zone.sort_order),
+      svgPath: zone.svg_path ?? "",
       isNew: false,
     })),
   );
@@ -1707,89 +1765,31 @@ function OrganizerConcertEditor({
     { id: "basic" as const, label: "Thông tin cơ bản" },
     { id: "zones" as const, label: "Zone" },
     { id: "tickets" as const, label: "Loại vé" },
+    { id: "bio" as const, label: "Bio nghệ sĩ" },
     { id: "guests" as const, label: "Khách mời" },
   ];
 
-  // Concert đã PUBLISHED: thông tin/zone/vé khoá (chỉ đọc), chỉ sửa được khu Khách mời.
-  const readOnly = concert.status === "PUBLISHED";
+  const readOnly = concert.status !== "DRAFT" && concert.status !== "PUBLISHED";
+  const [saveError, setSaveError] = useState("");
+  const [publishBusy, setPublishBusy] = useState(false);
+  const [published, setPublished] = useState(false);
 
   async function handleSave() {
-    setSubmitting(true);
+    if (submitting) return;
+    setSubmitting(true); setSaveError("");
     try {
-      await onSave({
-        title: form.title,
-        artist_name: form.artistName,
-        description: form.description,
-        starts_at: dateTimeToIso(form.startsAt),
-        ends_at: dateTimeToIso(form.endsAt),
-        venue_id: form.venueId,
-        cover_image_url: form.coverImageUrl,
+      if (!form.title.trim() || !form.artistName.trim() || !form.venue.trim()) throw new Error("Nhập tên concert, nghệ sĩ và địa điểm.");
+      if (new Date(form.endsAt) <= new Date(form.startsAt)) throw new Error("Giờ kết thúc phải sau giờ bắt đầu.");
+      const payload = (value: typeof form): ConcertPatch => ({
+        title: value.title, artist_name: value.artistName, description: value.description,
+        starts_at: dateTimeToIso(value.startsAt), ends_at: dateTimeToIso(value.endsAt),
+        venue: value.venue, cover_image_url: value.coverImageUrl, seat_map_url: value.seatMapUrl,
       });
-    } finally {
+      const patch = changedConcertFields(payload(savedForm.current), payload(form));
+      if (Object.keys(patch).length) await onSave(patch);
+      savedForm.current = form;
+    } catch (err) { setSaveError(err instanceof Error ? err.message : "Không lưu được concert."); } finally {
       setSubmitting(false);
-    }
-  }
-
-  // Upload xong lưu URL vào concert luôn (gọi API trực tiếp, không đi qua nút
-  // "Lưu thay đổi" của tab Thông tin cơ bản — luồng đó lọc bỏ chuỗi rỗng nên
-  // không thể dùng để gỡ file). Ảnh → seat_map_image_url; SVG → seat_map_url.
-  async function handleSeatMapImageUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    setSeatMapError("");
-    setSeatMapUploading(true);
-    try {
-      const upload = await uploadOrganizerSeatMapImage(file);
-      await updateOrganizerConcert(concert.id, { seat_map_image_url: upload.url });
-      setForm((current) => ({ ...current, seatMapImageUrl: upload.url }));
-    } catch (err) {
-      setSeatMapError(err instanceof Error ? err.message : "Không thể upload ảnh sơ đồ.");
-    } finally {
-      setSeatMapUploading(false);
-    }
-  }
-
-  async function handleSeatMapImageRemove() {
-    setSeatMapError("");
-    setSeatMapUploading(true);
-    try {
-      await updateOrganizerConcert(concert.id, { seat_map_image_url: null });
-      setForm((current) => ({ ...current, seatMapImageUrl: "" }));
-    } catch (err) {
-      setSeatMapError(err instanceof Error ? err.message : "Không thể gỡ ảnh sơ đồ.");
-    } finally {
-      setSeatMapUploading(false);
-    }
-  }
-
-  async function handleSeatMapSvgUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    setSeatMapError("");
-    setSeatMapUploading(true);
-    try {
-      const upload = await uploadOrganizerSeatMapSvg(file);
-      await updateOrganizerConcert(concert.id, { seat_map_url: upload.url });
-      setForm((current) => ({ ...current, seatMapUrl: upload.url }));
-    } catch (err) {
-      setSeatMapError(err instanceof Error ? err.message : "Không thể upload file SVG sơ đồ.");
-    } finally {
-      setSeatMapUploading(false);
-    }
-  }
-
-  async function handleSeatMapSvgRemove() {
-    setSeatMapError("");
-    setSeatMapUploading(true);
-    try {
-      await updateOrganizerConcert(concert.id, { seat_map_url: null });
-      setForm((current) => ({ ...current, seatMapUrl: "" }));
-    } catch (err) {
-      setSeatMapError(err instanceof Error ? err.message : "Không thể gỡ file SVG sơ đồ.");
-    } finally {
-      setSeatMapUploading(false);
     }
   }
 
@@ -1804,6 +1804,7 @@ function OrganizerConcertEditor({
         description: "",
         capacity: "100",
         sortOrder: String(nextIndex),
+        svgPath: "",
         isNew: true,
       },
     ]);
@@ -1814,16 +1815,19 @@ function OrganizerConcertEditor({
   }
 
   async function saveZone(zone: EditableZone) {
+    if (zone.saving) return;
     setZoneError("");
     updateZone(zone.id, { saving: true });
     try {
-      const saved = await onCreateSeatZone({
-        code: zone.code,
+      if (!zone.name.trim() || !zone.code.trim() || !Number.isInteger(Number(zone.capacity)) || Number(zone.capacity) < 1) throw new Error("Nhập tên/mã zone và sức chứa nguyên dương.");
+      const input = {
         name: zone.name,
-        description: zone.description || undefined,
+        description: zone.description,
         capacity: Number(zone.capacity),
         sort_order: Number(zone.sortOrder || 0),
-      });
+        svg_path: zone.svgPath || null,
+      };
+      const saved = zone.isNew ? await onCreateSeatZone({ ...input, svg_path: zone.svgPath || undefined, code: zone.code }) : await patchCatalogZone(zone.id, input);
       setZones((current) =>
         current.map((item) =>
           item.id === zone.id
@@ -1834,6 +1838,7 @@ function OrganizerConcertEditor({
               description: saved.description ?? "",
               capacity: String(saved.capacity),
               sortOrder: String(saved.sort_order),
+              svgPath: saved.svg_path ?? "",
               isNew: false,
             }
             : item,
@@ -1865,6 +1870,7 @@ function OrganizerConcertEditor({
         saleStartAt: toDateTimeLocal(new Date().toISOString()),
         saleEndAt: form.startsAt,
         soldQuantity: "0",
+        status: "DRAFT",
         availableQuantity: "0",
         isNew: true,
       },
@@ -1876,19 +1882,25 @@ function OrganizerConcertEditor({
   }
 
   async function saveTicketType(ticket: EditableTicketType) {
+    if (ticket.saving) return;
     setTicketError("");
     updateTicketType(ticket.id, { saving: true });
     try {
-      const saved = await onCreateTicketType({
-        seat_zone_id: ticket.seatZoneId,
+      if (!ticket.name.trim() || !ticket.price.trim() || Number(ticket.price) < 0 || !Number.isFinite(Number(ticket.price))) throw new Error("Tên và giá vé không hợp lệ.");
+      if (!ticket.totalQuantity.trim() || !Number.isInteger(Number(ticket.totalQuantity)) || Number(ticket.totalQuantity) < 0 || !Number.isInteger(Number(ticket.maxPerUser)) || Number(ticket.maxPerUser) < 1) throw new Error("Số lượng vé không hợp lệ.");
+      if (new Date(ticket.saleEndAt) <= new Date(ticket.saleStartAt)) throw new Error("Giờ đóng bán phải sau giờ mở bán.");
+      const input = {
         name: ticket.name,
-        description: ticket.description || undefined,
-        price: { amount: Number(ticket.price), currency: "VND" },
+        description: ticket.description,
+        price: Number(ticket.price),
         total_quantity: Number(ticket.totalQuantity),
         max_per_user: Number(ticket.maxPerUser),
         sale_start_at: dateTimeToIso(ticket.saleStartAt),
         sale_end_at: dateTimeToIso(ticket.saleEndAt),
-      });
+      };
+      const saved = ticket.isNew
+        ? await onCreateTicketType({ ...input, seat_zone_id: ticket.seatZoneId, price: { amount: input.price, currency: "VND" } })
+        : toOrganizerTicket(await patchCatalogTicket(ticket.id, { ...input, status: ticket.status }));
       setTickets((current) =>
         current.map((item) =>
           item.id === ticket.id
@@ -1903,6 +1915,7 @@ function OrganizerConcertEditor({
               saleStartAt: toDateTimeLocal(saved.sale_start_at),
               saleEndAt: toDateTimeLocal(saved.sale_end_at),
               soldQuantity: String(saved.sold_quantity),
+              status: saved.status as TicketStatus,
               availableQuantity: String(saved.available_quantity),
               isNew: false,
             }
@@ -1923,7 +1936,7 @@ function OrganizerConcertEditor({
   return (
     <div>
       <div className="mb-6 flex items-center gap-3">
-        <button type="button" onClick={onBack} className="rounded-lg p-2 text-[#F0EDEB] transition-colors hover:bg-white/5">
+        <button type="button" aria-label="Quay lại danh sách concert" onClick={onBack} className="rounded-lg p-2 text-[#F0EDEB] transition-colors hover:bg-white/5">
           <ChevronLeft className="h-5 w-5" />
         </button>
         <div>
@@ -1954,11 +1967,23 @@ function OrganizerConcertEditor({
 
       {readOnly && (
         <div className="mb-4 max-w-5xl rounded-xl border border-[#F5C842]/25 bg-[#F5C842]/10 px-4 py-2.5 text-xs text-[#F5C842]">
-          Concert đã publish — thông tin sự kiện đã khoá, chỉ chỉnh sửa được khu <b>Khách mời</b>.
+          Concert đã kết thúc hoặc bị hủy — chỉ xem thông tin.
         </div>
       )}
 
+      {saveError && <p role="alert" className="mb-4 text-[#E8315B]">{saveError}</p>}
+      {concert.status === "DRAFT" && !published && <button type="button" disabled={publishBusy} className="mb-4 rounded-lg bg-[#2DBE6C] px-4 py-2 text-black disabled:opacity-50" onClick={async () => {
+        setPublishBusy(true); setSaveError("");
+        try {
+          await publishCatalogConcert(concert.id); setPublished(true); onStatusChange("PUBLISHED");
+          setTickets(current => current.map(ticket => !ticket.isNew && ticket.status === "DRAFT" ? { ...ticket, status: "ON_SALE" } : ticket));
+        }
+        catch (err) { setSaveError(err instanceof Error ? err.message : "Không publish được concert."); }
+        finally { setPublishBusy(false); }
+      }}>{publishBusy ? "Đang publish..." : "Publish concert"}</button>}
+      {published && <p role="status" className="mb-4 text-[#2DBE6C]">Đã publish concert.</p>}
       <div className="max-w-5xl space-y-6">
+        <div hidden={activeSection !== "bio"}><ArtistBioPanel key={concert.id} concertId={concert.id} initialBio={concert.artist_bio} readOnly={readOnly} /></div>
         {activeSection === "guests" && (
           <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#111118]">
             <GuestSection concert={concert} />
@@ -1975,9 +2000,7 @@ function OrganizerConcertEditor({
                   <EditorRow label="Nghệ sĩ *">
                     <input className={editorInputClass} style={editorInputStyle} value={form.artistName} onChange={(event) => setForm({ ...form, artistName: event.target.value })} />
                   </EditorRow>
-                  <EditorRow label="Thể loại">
-                    <input className={editorInputClass} style={editorInputStyle} placeholder="VD: Indie/R&B" value={form.genre} onChange={(event) => setForm({ ...form, genre: event.target.value })} />
-                  </EditorRow>
+
                 </div>
                 <EditorRow label="Mô tả">
                   <textarea
@@ -1997,27 +2020,22 @@ function OrganizerConcertEditor({
                   </EditorRow>
                 </div>
                 <EditorRow label="Địa điểm">
-                  <select className={editorInputClass} style={editorInputStyle} value={form.venueId} onChange={(event) => setForm({ ...form, venueId: event.target.value })}>
-                    <option value="">Chọn địa điểm</option>
-                    {venues.map((venue) => (
-                      <option key={venue.id} value={venue.id}>{venue.name} - {venue.city}</option>
-                    ))}
-                  </select>
+                  <input className={editorInputClass} maxLength={255} value={form.venue} onChange={event => setForm({ ...form, venue: event.target.value })} />
                 </EditorRow>
                 <EditorRow label="Ảnh bìa (URL)">
-                  {/* Ảnh bìa lấy tự động từ press kit (ảnh trang 1); ô URL chỉ là phương án chữa cháy. */}
-                  <input className={editorInputClass} style={editorInputStyle} placeholder="Tự tách từ press kit — chỉ nhập URL khi cần thay thế" value={form.coverImageUrl} onChange={(event) => setForm({ ...form, coverImageUrl: event.target.value })} />
+                  <input className={editorInputClass} style={editorInputStyle} placeholder="https://..." value={form.coverImageUrl} onChange={(event) => setForm({ ...form, coverImageUrl: event.target.value })} />
                   {form.coverImageUrl && (
                     <div className="mt-2 h-24 w-40 overflow-hidden rounded-lg bg-[#0D0D15]">
                       <img src={form.coverImageUrl} alt="" className="h-full w-full object-cover" />
                     </div>
                   )}
                 </EditorRow>
+                <EditorRow label="Sơ đồ chỗ ngồi (URL SVG)"><input className={editorInputClass} value={form.seatMapUrl} onChange={event => setForm({ ...form, seatMapUrl: event.target.value })} /></EditorRow>
                 <div className="flex gap-3">
                   <button type="button" disabled={submitting} onClick={handleSave} className="rounded-xl bg-[#7B61FF] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
                     {submitting ? "Đang lưu..." : "Lưu thay đổi"}
                   </button>
-                  <button type="button" onClick={onBack} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-[#8585A0]">
+                  <button type="button" aria-label="Quay lại danh sách concert" onClick={onBack} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-[#8585A0]">
                     Hủy
                   </button>
                 </div>
@@ -2027,52 +2045,6 @@ function OrganizerConcertEditor({
 
           {activeSection === "zones" && (
             <EditorCard title="Cấu hình zone">
-              <div className="mb-5 rounded-xl border border-white/[0.07] bg-[#0A0A12] p-4">
-                <div className="mb-1 flex items-center gap-2">
-                  <h4 className="text-sm font-semibold text-[#F0EDEB]">Ảnh sơ đồ chỗ ngồi (trang thông tin concert)</h4>
-                  {seatMapUploading && <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8585A0]" />}
-                </div>
-                <p className="mb-3 text-xs text-[#8585A0]">
-                  Ảnh nên chú thích rõ màu và tên từng khu/hạng vé để khán giả đối chiếu với bảng giá. Ảnh được lưu ngay khi tải lên hoặc gỡ, và được đính kèm trong email mời khách.
-                </p>
-                <div className="flex flex-wrap items-center gap-3">
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#7B61FF]/30 bg-[#7B61FF]/10 px-4 py-2 text-sm text-[#C9BCFF] transition-colors hover:bg-[#7B61FF]/20">
-                    <Upload className="h-4 w-4" />
-                    {seatMapUploading ? "Đang xử lý..." : form.seatMapImageUrl ? "Đổi ảnh sơ đồ" : "Chọn ảnh sơ đồ"}
-                    <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={seatMapUploading} onChange={handleSeatMapImageUpload} />
-                  </label>
-                  {form.seatMapImageUrl && (
-                    <button type="button" disabled={seatMapUploading} onClick={() => void handleSeatMapImageRemove()} className="text-xs text-[#8585A0] underline-offset-2 hover:text-[#E8315B] hover:underline disabled:opacity-50">
-                      Gỡ ảnh
-                    </button>
-                  )}
-                </div>
-                {form.seatMapImageUrl && (
-                  <div className="mt-3 max-w-md overflow-hidden rounded-lg bg-[#0D0D15]">
-                    <img src={form.seatMapImageUrl} alt="Sơ đồ hạng vé" className="w-full object-contain" />
-                  </div>
-                )}
-                <div className="mt-4 border-t border-white/[0.06] pt-4">
-                  <h4 className="mb-1 text-sm font-semibold text-[#F0EDEB]">Sơ đồ SVG tương tác (trang mua vé)</h4>
-                  <p className="mb-3 text-xs text-[#8585A0]">
-                    SVG với id khu vực dạng <code>zone-&lt;mã zone&gt;</code>; khán giả bấm chọn khu trực tiếp trên sơ đồ ở trang mua vé.
-                  </p>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#7B61FF]/30 bg-[#7B61FF]/10 px-4 py-2 text-sm text-[#C9BCFF] transition-colors hover:bg-[#7B61FF]/20">
-                      <Upload className="h-4 w-4" />
-                      {seatMapUploading ? "Đang xử lý..." : form.seatMapUrl ? "Đổi file SVG" : "Chọn file SVG"}
-                      <input type="file" accept="image/svg+xml,.svg" className="hidden" disabled={seatMapUploading} onChange={handleSeatMapSvgUpload} />
-                    </label>
-                    {form.seatMapUrl && (
-                      <button type="button" disabled={seatMapUploading} onClick={() => void handleSeatMapSvgRemove()} className="text-xs text-[#8585A0] underline-offset-2 hover:text-[#E8315B] hover:underline disabled:opacity-50">
-                        Gỡ file SVG
-                      </button>
-                    )}
-                  </div>
-                </div>
-                {seatMapError && <p className="mt-2 text-xs text-[#E8315B]">{seatMapError}</p>}
-              </div>
-
               {zoneError && (
                 <div className="mb-4 rounded-xl border border-[#E8315B]/25 bg-[#E8315B]/10 px-3 py-2 text-sm text-[#E8315B]">
                   {zoneError}
@@ -2090,18 +2062,19 @@ function OrganizerConcertEditor({
                 )}
 
                 {zones.map((zone) => (
-                  zone.isNew ? (
+                  (zone.isNew || zone.editing) ? (
                     <div key={zone.id} className="rounded-xl border border-[#F5C842]/20 bg-[#0D0D15] p-3.5">
                       <div className="mb-3 flex items-center justify-between gap-3">
-                        <span className="text-sm font-semibold text-[#F5C842]">Zone mới</span>
-                        <button type="button" onClick={() => removeZone(zone.id)} className="rounded p-1 text-[#8585A0] transition-colors hover:bg-red-500/10 hover:text-[#E8315B]">
+                        <span className="text-sm font-semibold text-[#F5C842]">{zone.isNew ? "Zone mới" : "Chỉnh sửa zone"}</span>
+                        <button type="button" hidden={!zone.isNew} aria-label="Bỏ zone chưa lưu" disabled={zone.saving} onClick={() => removeZone(zone.id)} className="rounded p-1 text-[#8585A0] transition-colors hover:bg-red-500/10 hover:text-[#E8315B]">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
                       <div className="grid gap-3 lg:grid-cols-4">
-                        <TicketTextField label="Mã zone" value={zone.code} onChange={(value) => updateZone(zone.id, { code: value.toUpperCase() })} />
+                        <TicketTextField disabled={!zone.isNew} label="Mã zone" value={zone.code} onChange={(value) => updateZone(zone.id, { code: value.toUpperCase() })} />
                         <TicketTextField label="Tên zone" value={zone.name} onChange={(value) => updateZone(zone.id, { name: value })} />
                         <TicketNumberField label="Sức chứa" value={zone.capacity} onChange={(value) => updateZone(zone.id, { capacity: value })} />
+                        <TicketTextField label="SVG path" value={zone.svgPath} onChange={value => updateZone(zone.id, { svgPath: value })} />
                         <TicketNumberField label="Thứ tự" value={zone.sortOrder} onChange={(value) => updateZone(zone.id, { sortOrder: value })} />
                         <label className="lg:col-span-4">
                           <span className="mb-1 block text-xs text-[#8585A0]">Mô tả</span>
@@ -2127,6 +2100,7 @@ function OrganizerConcertEditor({
                           <div className="mb-2 flex items-center gap-2">
                             <span className="rounded-lg bg-[#F5C842]/10 px-2 py-1 text-xs font-semibold text-[#F5C842]">{zone.code}</span>
                             <h4 className="break-words text-sm font-semibold text-[#F0EDEB]">{zone.name}</h4>
+                            <button type="button" onClick={() => updateZone(zone.id, { editing: true })}>Chỉnh sửa zone</button>
                           </div>
                           {zone.description && <p className="text-xs leading-5 text-[#8585A0]">{zone.description}</p>}
                         </div>
@@ -2176,11 +2150,11 @@ function OrganizerConcertEditor({
               ) : (
                 <div className="space-y-3">
                   {tickets.map((ticket, index) => (
-                    ticket.isNew ? (
+                    (ticket.isNew || ticket.editing) ? (
                       <div key={ticket.id} className="rounded-xl border border-[#F5C842]/20 bg-[#0D0D15] p-3.5">
                         <div className="mb-3 flex items-center justify-between gap-3">
-                          <span className="text-sm font-semibold text-[#F5C842]">Loại vé mới</span>
-                          <button type="button" onClick={() => removeTicketType(ticket.id)} className="rounded p-1 text-[#8585A0] transition-colors hover:bg-red-500/10 hover:text-[#E8315B]">
+                          <span className="text-sm font-semibold text-[#F5C842]">{ticket.isNew ? "Loại vé mới" : "Chỉnh sửa loại vé"}</span>
+                          <button type="button" hidden={!ticket.isNew} aria-label="Bỏ loại vé chưa lưu" disabled={ticket.saving} onClick={() => removeTicketType(ticket.id)} className="rounded p-1 text-[#8585A0] transition-colors hover:bg-red-500/10 hover:text-[#E8315B]">
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
@@ -2190,7 +2164,7 @@ function OrganizerConcertEditor({
                             <select
                               className={`${editorInputClass} min-h-9`}
                               style={editorInputStyle}
-                              value={ticket.seatZoneId}
+                              disabled={!ticket.isNew} value={ticket.seatZoneId}
                               onChange={(event) => updateTicketType(ticket.id, { seatZoneId: event.target.value })}
                             >
                               {seatZoneOptions.map((zone) => (
@@ -2210,6 +2184,9 @@ function OrganizerConcertEditor({
                             <span className="mb-1 block text-xs text-[#8585A0]">Đóng bán</span>
                             <input type="datetime-local" className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={ticket.saleEndAt} onChange={(event) => updateTicketType(ticket.id, { saleEndAt: event.target.value })} />
                           </label>
+                          {!ticket.isNew && <label className="text-xs">Trạng thái<select className={editorInputClass} value={ticket.status} onChange={event => updateTicketType(ticket.id, { status: event.target.value as TicketStatus })}>
+                            {["DRAFT", "ACTIVE", "ON_SALE", "SUSPENDED", "CLOSED", "SOLD_OUT"].map(status => <option key={status}>{status}</option>)}
+                          </select></label>}
                           <label className="lg:col-span-4">
                             <span className="mb-1 block text-xs text-[#8585A0]">Mô tả</span>
                             <input className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={ticket.description} onChange={(event) => updateTicketType(ticket.id, { description: event.target.value })} />
@@ -2235,12 +2212,10 @@ function OrganizerConcertEditor({
                             <span className="break-words text-sm font-semibold text-[#F0EDEB]">{ticket.name}</span>
                           </div>
                           <div className="flex shrink-0 gap-2 text-[#8585A0]">
-                            <button type="button" className="rounded p-1 transition-colors hover:bg-white/10 hover:text-[#7B61FF]" title="Chỉnh sửa loại vé">
+                            <button type="button" onClick={() => updateTicketType(ticket.id, { editing: true })} className="rounded p-1 transition-colors hover:bg-white/10 hover:text-[#7B61FF]" title="Chỉnh sửa loại vé">
                               <Edit2 className="h-3.5 w-3.5" />
                             </button>
-                            <button type="button" onClick={() => removeTicketType(ticket.id)} className="rounded p-1 transition-colors hover:bg-red-500/10 hover:text-[#E8315B]" title="Xóa loại vé">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -2287,14 +2262,15 @@ function OrganizerConcertCard({
   deleting: boolean;
   onEdit: () => void;
   onDelete: () => void;
-  onUpdate: (input: Record<string, string>) => Promise<void>;
+  onUpdate: (input: ConcertPatch) => Promise<void>;
   onDeletionRequest: (reason: string) => Promise<void>;
 }) {
+  const [actionError, setActionError] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const view = toOrganizerConcertPerformanceView(concert, analytics);
   const canEdit = concert.status === "DRAFT" || concert.status === "PUBLISHED";
-  const canDelete = concert.status !== "CANCELLED";
+  const canDelete = canEdit;
   const ticketTypeLabel = `${(concert.ticket_types ?? []).length.toLocaleString("vi-VN")} loại vé`;
 
   async function handleUpdate(event: FormEvent<HTMLFormElement>) {
@@ -2307,20 +2283,20 @@ function OrganizerConcertCard({
         artist_name: text(data, "artist_name"),
         starts_at: optionalDateTimeToIso(text(data, "starts_at")) ?? "",
         ends_at: optionalDateTimeToIso(text(data, "ends_at")) ?? "",
-        planned_publish_at: optionalDateTimeToIso(text(data, "planned_publish_at")) ?? "",
         cover_image_url: text(data, "cover_image_url"),
       });
-    } finally {
+    } catch (err) { setActionError(err instanceof Error ? err.message : "Thao tác thất bại."); } finally {
       setSubmitting(false);
     }
   }
 
   async function handleDeletionRequest() {
-    setSubmitting(true);
+    if (submitting) return;
+    setSubmitting(true); setActionError("");
     try {
       await onDeletionRequest(reason);
       setReason("");
-    } finally {
+    } catch (err) { setActionError(err instanceof Error ? err.message : "Thao tác thất bại."); } finally {
       setSubmitting(false);
     }
   }
@@ -2343,7 +2319,7 @@ function OrganizerConcertCard({
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status={view.status} />
               {deleting && (
-                <span className="rounded-full bg-[#E8315B]/10 px-2 py-0.5 text-xs text-[#E8315B]">Đang xin hủy</span>
+                <span className="rounded-full bg-[#E8315B]/10 px-2 py-0.5 text-xs text-[#E8315B]">Xác nhận hủy</span>
               )}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
@@ -2356,7 +2332,7 @@ function OrganizerConcertCard({
                 </button>
               )}
               {canDelete && (
-                <button type="button" onClick={onDelete} className="rounded-lg p-1.5 text-[#E8315B] transition-colors hover:bg-white/10" title="Xin hủy concert">
+                <button type="button" onClick={onDelete} className="rounded-lg p-1.5 text-[#E8315B] transition-colors hover:bg-white/10" title="Hủy concert">
                   <Trash2 className="h-4 w-4" />
                 </button>
               )}
@@ -2368,13 +2344,13 @@ function OrganizerConcertCard({
             {view.artistName} · {formatDate(view.startsAt)} · {view.venueName}
           </p>
 
-          <div className="flex flex-wrap items-center gap-4">
+          {analytics && <div className="flex flex-wrap items-center gap-4">
             <InlineMetric icon={<Ticket className="h-3.5 w-3.5" />} label={`${view.ticketsSold.toLocaleString("vi-VN")}/${view.ticketsTotal.toLocaleString("vi-VN")} vé (${view.soldPercent}%)`} tone="#7B61FF" />
             <InlineMetric icon={<TrendingUp className="h-3.5 w-3.5" />} label={formatMoney(view.revenue)} tone="#2DBE6C" />
             <InlineMetric icon={<Users className="h-3.5 w-3.5" />} label={ticketTypeLabel} tone="#F5C842" />
-          </div>
+          </div>}
 
-          {view.ticketsTotal > 0 && (
+          {analytics && view.ticketsTotal > 0 && (
             <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
               <div
                 className="h-full rounded-full transition-all"
@@ -2403,14 +2379,15 @@ function OrganizerConcertCard({
         </form>
       )}
 
+      {actionError && <p role="alert" className="px-5 text-[#E8315B]">{actionError}</p>}
       {deleting && (
         <div className="border-t border-[#E8315B]/20 bg-[#E8315B]/[0.03] px-5 pb-5">
           <div className="pt-4">
-            <p className="mb-2 text-xs font-semibold text-[#E8315B]">Xin hủy concert - lý do</p>
+            <p className="mb-2 text-xs font-semibold text-[#E8315B]">Hủy concert - lý do</p>
             <textarea
               value={reason}
               onChange={(event) => setReason(event.target.value)}
-              placeholder="Nhập lý do xin hủy concert này..."
+              placeholder="Nhập lý do hủy concert này (tùy chọn)..."
               rows={2}
               className="mb-3 w-full resize-none rounded-lg px-3 py-2 text-sm outline-none placeholder:text-[#8585A0]"
               style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#F0EDEB" }}
@@ -2418,12 +2395,12 @@ function OrganizerConcertCard({
             <div className="flex gap-3">
               <button
                 type="button"
-                disabled={submitting || !reason.trim()}
+                disabled={submitting}
                 onClick={handleDeletionRequest}
                 className="rounded-lg px-4 py-2 text-xs font-medium transition-transform hover:scale-105 disabled:opacity-40"
                 style={{ background: "rgba(232,49,91,0.15)", color: "#E8315B", border: "1px solid rgba(232,49,91,0.3)" }}
               >
-                {submitting ? "Đang gửi..." : "Gửi yêu cầu"}
+                {submitting ? "Đang gửi..." : "Xác nhận hủy concert"}
               </button>
               <button type="button" onClick={onDelete} className="rounded-lg px-3 py-2 text-xs text-[#8585A0] transition-colors hover:bg-white/5">
                 Hủy
@@ -2875,11 +2852,11 @@ function TicketNumberField({ label, value, onChange }: { label: string; value: s
   );
 }
 
-function TicketTextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function TicketTextField({ label, value, onChange, disabled }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean }) {
   return (
     <label>
       <span className="mb-1 block text-xs text-[#8585A0]">{label}</span>
-      <input className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={value} onChange={(event) => onChange(event.target.value)} />
+      <input disabled={disabled} className={`${editorInputClass} min-h-9`} style={editorInputStyle} value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }

@@ -14,16 +14,21 @@ import org.springframework.beans.factory.annotation.Qualifier;
 
 @Configuration
 public class ArtistBioRabbitConfig {
+
+    // Tao Exchange chính
     @Bean
     public TopicExchange artistBioExchange() {
         return new TopicExchange(RabbitMqConstants.ARTIST_BIO_EXCHANGE, true, false);
     }
 
+    // Tạo Dead Letter Exchange
     @Bean
     public DirectExchange artistBioDeadLetterExchange() {
         return new DirectExchange(RabbitMqConstants.ARTIST_BIO_DLX, true, false);
     }
 
+    // Tạo Queue chính
+    // Message bị lỗi/từ chối -> đưa vào DLX
     @Bean
     public Queue artistBioQueue() {
         return QueueBuilder.durable(RabbitMqConstants.ARTIST_BIO_QUEUE)
@@ -32,6 +37,8 @@ public class ArtistBioRabbitConfig {
                 .build();
     }
 
+    // Tạo Retry Queue
+    // Message bị lỗi/từ chối -> đưa ngược vào Exchange chính
     @Bean
     public Queue artistBioRetryQueue() {
         return QueueBuilder.durable(RabbitMqConstants.ARTIST_BIO_RETRY_QUEUE)
@@ -41,11 +48,13 @@ public class ArtistBioRabbitConfig {
                 .build();
     }
 
+    // Dead Letter Queue
     @Bean
     public Queue artistBioDeadLetterQueue() {
         return QueueBuilder.durable(RabbitMqConstants.ARTIST_BIO_DLQ).build();
     }
 
+    // Gắn Queue chính và Exchange chính
     @Bean
     public Binding artistBioBinding(@Qualifier("artistBioQueue") Queue artistBioQueue,
             @Qualifier("artistBioExchange") TopicExchange artistBioExchange) {
@@ -53,6 +62,7 @@ public class ArtistBioRabbitConfig {
                 .with(RabbitMqConstants.ARTIST_BIO_ROUTING_KEY);
     }
 
+    // Gắn Retry Queue vào Exchange chính
     @Bean
     public Binding artistBioRetryBinding(@Qualifier("artistBioRetryQueue") Queue artistBioRetryQueue,
             @Qualifier("artistBioExchange") TopicExchange artistBioExchange) {
@@ -60,10 +70,13 @@ public class ArtistBioRabbitConfig {
                 .with(RabbitMqConstants.ARTIST_BIO_RETRY_KEY);
     }
 
+    // Gán Dead Letter Queue vào DLX
     @Bean
     public Binding artistBioDeadLetterBinding(@Qualifier("artistBioDeadLetterQueue") Queue artistBioDeadLetterQueue,
             @Qualifier("artistBioDeadLetterExchange") DirectExchange artistBioDeadLetterExchange) {
         return BindingBuilder.bind(artistBioDeadLetterQueue).to(artistBioDeadLetterExchange)
                 .with(RabbitMqConstants.ARTIST_BIO_DEAD_KEY);
     }
+
+    // Nguồn cung Message cho Retry Queue là Consumer đẩy ngược Message có count <= max vào Exchange chính
 }

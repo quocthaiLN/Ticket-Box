@@ -11,8 +11,7 @@ import {
 } from "../../lib/api-client";
 import { mapDetailConcert, type UiConcert } from "../../lib/catalog-ui";
 import {
-  listOrganizerConcerts,
-  type OrganizerConcert,
+  getOrganizerConcert,
 } from "../../services/organizer.service";
 import { ConcertDetailView } from "../audience/ConcertDetailPage";
 
@@ -112,11 +111,9 @@ async function loadAdminPreview(concertId: string): Promise<UiConcert> {
   return mapDetailConcert(detail, metadata, emptyInventory(detail.id));
 }
 
-// Organizer: tái dùng list concerts của BTC (đã kèm seat zones + ticket types).
+// Organizer: đọc metadata theo ID, gồm cả concert nháp theo quyền sở hữu.
 async function loadOrganizerPreview(concertId: string): Promise<UiConcert> {
-  const concerts = await listOrganizerConcerts();
-  const concert = concerts.find((item) => item.id === concertId);
-  if (!concert) throw new Error(`Organizer concert not found: ${concertId}`);
+  const concert = await getOrganizerConcert(concertId);
 
   const detail: ConcertDetail = {
     id: concert.id,
@@ -133,7 +130,7 @@ async function loadOrganizerPreview(concertId: string): Promise<UiConcert> {
     seat_map_url: concert.seat_map_url,
     seat_map_image_url: concert.seat_map_image_url,
     artists: concert.artists ?? undefined,
-    venue: { ...concert.venue, address: "" },
+    venue: concert.venue,
   };
   const metadata: ConcertMetadata = {
     concert: detail,

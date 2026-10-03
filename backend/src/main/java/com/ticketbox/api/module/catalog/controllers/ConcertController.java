@@ -96,6 +96,14 @@ public class ConcertController {
                 .body(ApiResponse.success(result.getContent(), paginationMeta));
     }
 
+    @GetMapping("/{concertId}/metadata")
+    public ResponseEntity<ApiResponse<AdminConcertMetadataResponse>> getConcertMetadata(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable UUID concertId) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(ApiResponse.success(concertService.getConcertMetadata(userDetails.getUser(), concertId)));
+    }
+
     @PostMapping
     public ResponseEntity<ApiResponse<AdminConcertResponse>> createConcert(
             @AuthenticationPrincipal CustomUserDetails userDetails,

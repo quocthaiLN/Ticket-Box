@@ -1,4 +1,8 @@
 import {
+  listCatalogConcerts, getCatalogMetadata, patchCatalogConcert, createCatalogZone, createCatalogTicket,
+  type CatalogConcert, type CatalogMetadata, type CatalogTicket, type ConcertPatch,
+} from "./organizer-catalog.service";
+import {
   apiGet,
   apiPost,
   apiPut,
@@ -72,7 +76,7 @@ export type OrganizerConcert = {
   cover_image_url?: string;
   seat_map_url?: string;
   seat_map_image_url?: string;
-  venue: Pick<Venue, "id" | "name" | "city">;
+  venue: string;
   seat_zones: OrganizerSeatZone[];
   ticket_types: Array<{
     id: string;
@@ -279,47 +283,45 @@ export async function uploadOrganizerArtistImage(file: File) {
   return response.data;
 }
 
+// Keep the existing Organizer view model at the UI boundary; the wire DTO uses strings/numeric prices.
+export function toOrganizerTicket(ticket: CatalogTicket): OrganizerConcert["ticket_types"][number] {
+  return { ...ticket, description: ticket.description ?? undefined, zone_name: ticket.zone_code,
+    price: { amount: ticket.price, currency: "VND" } };
+}
+
+export function toOrganizerConcert(concert: CatalogConcert, metadata?: CatalogMetadata): OrganizerConcert {
+  return {
+    id: concert.id, title: concert.title, slug: concert.slug, artist_name: concert.artist_name,
+    description: concert.description ?? undefined, artist_bio: concert.artist_bio ?? undefined,
+    starts_at: concert.starts_at, ends_at: concert.ends_at,
+    status: concert.status === "CANCELED" ? "CANCELLED" : concert.status,
+    venue: concert.venue,
+    cover_image_url: concert.cover_image_url ?? undefined, seat_map_url: concert.seat_map_url ?? undefined,
+    seat_zones: metadata?.seat_zones.map(zone => ({ ...zone, description: zone.description ?? undefined, svg_path: zone.svg_path ?? undefined })) ?? [],
+    ticket_types: metadata?.ticket_types.map(toOrganizerTicket) ?? [],
+  };
+}
+
 export async function listOrganizerConcerts(params: { q?: string; status?: string } = {}) {
-  const search = new URLSearchParams({ limit: "100" });
-  if (params.q) search.set("q", params.q);
-  if (params.status && params.status !== "all") search.set("status", params.status);
-  const response = await apiGet<ApiCollectionResponse<OrganizerConcert>>(
-    `/organizer/concerts?${search}`,
-  );
-  return response.data;
+  return (await listCatalogConcerts(params)).data.map(concert => toOrganizerConcert(concert));
 }
 
-export async function updateOrganizerConcert(
-  concertId: string,
-  input: UpdateOrganizerConcertInput,
-) {
-  const response = await apiPost<ApiResponse<{ id: string; status: string; updated_at: string }>>(
-    `/organizer/concerts/${concertId}`,
-    input,
-  );
-  return response.data;
+export async function getOrganizerConcert(concertId: string) {
+  const metadata = await getCatalogMetadata(concertId);
+  return toOrganizerConcert(metadata.concert, metadata);
 }
 
-export async function createOrganizerSeatZone(
-  concertId: string,
-  input: CreateOrganizerSeatZoneInput,
-) {
-  const response = await apiPost<ApiResponse<OrganizerSeatZone>>(
-    `/organizer/concerts/${concertId}/seat-zones`,
-    input,
-  );
-  return response.data;
+export async function updateOrganizerConcert(concertId: string, input: ConcertPatch) {
+  return patchCatalogConcert(concertId, input);
 }
 
-export async function createOrganizerTicketType(
-  concertId: string,
-  input: CreateOrganizerTicketTypeInput,
-) {
-  const response = await apiPost<ApiResponse<OrganizerConcert["ticket_types"][number]>>(
-    `/organizer/concerts/${concertId}/ticket-types`,
-    input,
-  );
-  return response.data;
+export async function createOrganizerSeatZone(concertId: string, input: CreateOrganizerSeatZoneInput): Promise<OrganizerSeatZone> {
+  const zone = await createCatalogZone(concertId, input);
+  return { ...zone, description: zone.description ?? undefined, svg_path: zone.svg_path ?? undefined };
+}
+
+export async function createOrganizerTicketType(concertId: string, input: CreateOrganizerTicketTypeInput) {
+  return toOrganizerTicket(await createCatalogTicket(concertId, { ...input, price: input.price.amount, currency: input.price.currency }));
 }
 
 export async function createOrganizerDeletionRequest(concertId: string, reason: string) {

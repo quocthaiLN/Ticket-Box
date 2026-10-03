@@ -194,6 +194,10 @@ export async function apiPost<TData>(
   return apiRequest<TData>(path, jsonInit("POST", body, init));
 }
 
+export async function apiPostFormData<TData>(path: string, body: FormData): Promise<TData> {
+  return apiRequest<TData>(path, { method: "POST", body });
+}
+
 export async function apiPatch<TData>(
   path: string,
   body?: unknown,
