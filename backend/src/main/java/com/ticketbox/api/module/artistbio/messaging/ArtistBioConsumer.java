@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 
 @Component
-@Profile("worker")
+@Profile({"api", "worker"})
 @RequiredArgsConstructor
 @Slf4j
 public class ArtistBioConsumer {

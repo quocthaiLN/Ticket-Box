@@ -12,7 +12,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
-@Profile("worker")
+@Profile({"api", "worker"})
 @RequiredArgsConstructor
 @Slf4j
 public class ArtistBioRecoveryScheduler {

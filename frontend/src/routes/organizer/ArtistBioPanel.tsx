@@ -43,7 +43,6 @@ export function ArtistBioPanel({ concertId, initialBio, readOnly }: { concertId:
     } catch (err) { setError(err instanceof Error ? err.message : "Không lưu được bio."); }
     finally { setBusy(false); }
   }
-  const pending = !!jobId && (!job || job.status === "PENDING" || job.status === "PROCESSING");
   return <section className="space-y-3 rounded-2xl border border-white/10 bg-[#111118] p-5">
     <h3 className="font-semibold">Bio nghệ sĩ</h3>
     {error && <p role="alert" className="text-sm text-[#E8315B]">{error}</p>}
@@ -52,7 +51,7 @@ export function ArtistBioPanel({ concertId, initialBio, readOnly }: { concertId:
     {error && jobId && <button type="button" onClick={() => { setError(""); setRetry(value => value + 1); }} className="text-sm underline">Thử tải lại trạng thái</button>}
     <fieldset disabled={readOnly || busy} className="space-y-3">
       <label className="grid gap-2 text-sm">Upload PDF (tối đa 10 MiB)
-        <input type="file" accept="application/pdf,.pdf" disabled={pending} onChange={upload} />
+        <input type="file" accept="application/pdf,.pdf" onChange={upload} />
       </label>
       {job?.status === "DONE" && job.generated_bio && <div className="space-y-2">
         <p className="whitespace-pre-wrap text-sm">{job.generated_bio}</p>

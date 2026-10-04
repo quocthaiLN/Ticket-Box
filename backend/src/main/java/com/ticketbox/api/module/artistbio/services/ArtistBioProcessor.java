@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 @Service
-@Profile("worker")
+@Profile({"api", "worker"})
 @RequiredArgsConstructor
 @Slf4j
 public class ArtistBioProcessor {
