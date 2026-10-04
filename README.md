@@ -1,7 +1,5 @@
 # TicketBox
 
-Ứng dụng quản lý sự kiện và bán vé trực tuyến.
-
 ## Tech stack
 
 - **Backend:** Java 21, Spring Boot 4.0.6, Maven, Spring Data JPA, Spring Security (JWT/OAuth2), Flyway.
@@ -17,7 +15,7 @@ Yêu cầu: JDK 21, Node.js 22 LTS + npm, Docker + Docker Compose. Từ thư m�
 cp -n backend/.env.example backend/.env
 ```
 
-Chỉnh `backend/.env` (không commit thông tin bí mật):
+Chỉnh `backend/.env`:
 
 | Nhóm biến | Cấu hình local |
 | --- | --- |
