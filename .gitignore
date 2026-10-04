@@ -97,3 +97,9 @@ logs/
 *.tmp
 *.swp
 *.swo
+
+## Agents
+.agents/
+SKILL.md
+skills-lock.json
+AGENT.md
