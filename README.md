@@ -39,7 +39,7 @@ Chạy các dịch vụ hỗ trợ từ thư mục gốc:
 docker compose up -d
 ```
 
-Dừng các container bằng .
+Dừng các container bằng
 ```bash
 docker compose down
 ```
