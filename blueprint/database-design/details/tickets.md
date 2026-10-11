@@ -1,6 +1,6 @@
 # Bảng `tickets`
 
-> [← `payments`](payments.md) · [Mục lục](../database-design.md#2-phụ-lục-danh-sách-bảng-chính) · [`guest_import_jobs` →](guest_import_jobs.md)
+> [← `payments`](payments.md) · [Mục lục](../database-design.md#2-phụ-lục-danh-sách-bảng-chính) · [`artist_bio_jobs` →](artist_bio_jobs.md)
 
 **Mục đích:** Vé điện tử đã phát hành sau khi thanh toán, kèm mã QR (lưu dạng băm và chữ ký) và thông tin check-in.
 
@@ -58,4 +58,4 @@
 
 ---
 
-[← `payments`](payments.md) · [Mục lục](../database-design.md#2-phụ-lục-danh-sách-bảng-chính) · [`guest_import_jobs` →](guest_import_jobs.md)
+[← `payments`](payments.md) · [Mục lục](../database-design.md#2-phụ-lục-danh-sách-bảng-chính) · [`artist_bio_jobs` →](artist_bio_jobs.md)

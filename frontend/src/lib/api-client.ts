@@ -49,7 +49,6 @@ export type ConcertSummary = {
   ends_at: string;
   status: ConcertStatus;
   cover_image_url?: string;
-  guest_drive_folder_id?: string;
   venue: string | Pick<Venue, "id" | "name" | "city">;
   organizer_id?: string;
   organizer_name?: string;

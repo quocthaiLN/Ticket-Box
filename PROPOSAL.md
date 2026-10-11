@@ -65,16 +65,6 @@ Hệ thống tự động xử lý (ngầm qua Worker), tách nội dung, làm s
 
 ---
 
-### Đồng bộ danh sách khách mời VIP
-
-Một số concert có khu vực Guest List dành cho khách mời của nhãn hàng tài trợ.
-
-Hệ thống quản lý khách mời của nhãn hàng không có API — cách duy nhất là nhận file CSV mà nhãn hàng gửi vào ban đêm trước ngày diễn.
-
-TicketBox cần định kỳ nhập danh sách này qua Worker ngầm.
-
----
-
 ## Các vấn đề cần giải quyết
 
 ### Tranh chấp vé
@@ -106,17 +96,6 @@ Nếu cổng thanh toán (VNPAY/MoMo) gặp sự cố:
 Luồng mua vé có phí cần xử lý tình huống thanh toán timeout mà không gây ra trừ tiền hai lần (Payment Idempotency).
 
 Các tính năng không liên quan đến thanh toán vẫn phải hoạt động bình thường khi cổng thanh toán gặp sự cố kéo dài.
-
----
-
-### Tích hợp một chiều
-
-Không thể gọi API hệ thống quản lý khách mời của nhãn hàng — chỉ có thể đọc CSV được gửi theo lịch cố định.
-
-Luồng nhập dữ liệu qua Worker phải xử lý được:
-* File lỗi.
-* Dữ liệu trùng.
-* Không làm gián đoạn hệ thống API đang chạy.
 
 ---
 

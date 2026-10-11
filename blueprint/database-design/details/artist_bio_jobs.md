@@ -1,6 +1,6 @@
 # Bảng `artist_bio_jobs`
 
-> [← `guest_import_errors`](guest_import_errors.md) · [Mục lục](../database-design.md#2-phụ-lục-danh-sách-bảng-chính) · [`notifications` →](notifications.md)
+> [← `tickets`](tickets.md) · [Mục lục](../database-design.md#2-phụ-lục-danh-sách-bảng-chính) · [`notifications` →](notifications.md)
 
 **Mục đích:** Tác vụ nền tạo tiểu sử nghệ sĩ bằng AI từ file nguồn. Từ V4, bảng hỗ trợ **thử lại** và **cơ chế thuê xử lý (lease)** để phục hồi khi worker bị treo hoặc chết giữa chừng.
 
@@ -48,4 +48,4 @@
 
 ---
 
-[← `guest_import_errors`](guest_import_errors.md) · [Mục lục](../database-design.md#2-phụ-lục-danh-sách-bảng-chính) · [`notifications` →](notifications.md)
+[← `tickets`](tickets.md) · [Mục lục](../database-design.md#2-phụ-lục-danh-sách-bảng-chính) · [`notifications` →](notifications.md)

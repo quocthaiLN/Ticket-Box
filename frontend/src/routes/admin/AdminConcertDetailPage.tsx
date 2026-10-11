@@ -6,7 +6,6 @@ import {
   Loader2,
   MapPin,
   Music,
-  Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -14,28 +13,24 @@ import { getStoredAuthSession } from "../../lib/auth-session";
 import {
   apiGet,
   cancelConcert,
-  listAdminConcerts,
   publishConcert,
   type ApiResponse,
   type ConcertMetadata,
 } from "../../lib/api-client";
 import { formatCurrency, formatDate, formatTime } from "../../lib/catalog-ui";
 import { AdminAccessState, AdminShell } from "./AdminShell";
-import { GuestListPanel } from "./GuestListPanel";
 
-type TabId = "info" | "guests" | "bio";
+type TabId = "info" | "bio";
 
 type LoadStatus = "loading" | "ready" | "error";
 
-// Trang chi tiết concert của Admin: gộp Thông tin / Khách mời / Bio vào một chỗ
-// (thay cho trang "Khách mời" độc lập trước đây).
+// Trang chi tiết concert của Admin: gộp Thông tin / Bio vào một chỗ
 export function ConcertDetailPage() {
   const { concertId } = useParams<{ concertId: string }>();
   const session = getStoredAuthSession();
   const canUseAdmin = session?.user.role === "ADMIN";
 
   const [metadata, setMetadata] = useState<ConcertMetadata | null>(null);
-  const [driveFolderId, setDriveFolderId] = useState<string | undefined>(undefined);
   const [status, setStatus] = useState<LoadStatus>("loading");
   const [tab, setTab] = useState<TabId>("info");
   const [actionBusy, setActionBusy] = useState(false);
@@ -46,17 +41,10 @@ export function ConcertDetailPage() {
     let mounted = true;
     setStatus("loading");
 
-    Promise.all([
-      apiGet<ApiResponse<ConcertMetadata>>(`/admin/concerts/${concertId}/metadata`),
-      // Metadata không mang guest_drive_folder_id → lấy từ danh sách admin.
-      listAdminConcerts().catch(() => []),
-    ])
-      .then(([metadataResponse, concerts]) => {
+    apiGet<ApiResponse<ConcertMetadata>>(`/admin/concerts/${concertId}/metadata`)
+      .then((metadataResponse) => {
         if (!mounted) return;
         setMetadata(metadataResponse.data);
-        setDriveFolderId(
-          concerts.find((concert) => concert.id === concertId)?.guest_drive_folder_id,
-        );
         setStatus("ready");
       })
       .catch(() => {
@@ -157,7 +145,6 @@ export function ConcertDetailPage() {
               {(
                 [
                   { id: "info", label: "Thông tin concert", icon: <Info className="h-4 w-4" /> },
-                  { id: "guests", label: "Khách mời", icon: <Users className="h-4 w-4" /> },
                   { id: "bio", label: "Bio", icon: <FileText className="h-4 w-4" /> },
                 ] as const
               ).map((item) => (
@@ -180,7 +167,6 @@ export function ConcertDetailPage() {
             </div>
 
             {tab === "info" && <InfoTab metadata={metadata} />}
-            {tab === "guests" && <GuestListPanel concertId={concertId} driveFolderId={driveFolderId} />}
             {tab === "bio" && <BioTab metadata={metadata} />}
           </>
         )}

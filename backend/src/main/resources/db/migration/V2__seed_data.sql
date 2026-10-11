@@ -127,33 +127,3 @@ INSERT INTO ticket_types (id, concert_id, seat_zone_id, name, description, price
     NOW() - INTERVAL '1 day', NOW() + INTERVAL '40 days',
     'ON_SALE', NOW(), NOW()
 );
-
--- =============================================================================
--- 5. GUEST LIST SEED
--- =============================================================================
-
-INSERT INTO guest_list (id, concert_id, seat_zone_id, full_name, phone, email, code, status, created_at, updated_at) VALUES
-(
-    'd1111111-1111-1111-1111-111111111111',
-    'a1111111-1111-1111-1111-111111111111',
-    'b1111111-1111-1111-1111-111111111111',
-    'Nha Báo Tran Van A',
-    '+84901234567',
-    'press.a@newspaper.vn',
-    'GUEST-ATS-001',
-    'INVITED',
-    NOW(),
-    NOW()
-),
-(
-    'd2222222-2222-2222-2222-222222222222',
-    'a2222222-2222-2222-2222-222222222222',
-    'b4444444-4444-4444-4444-444444444444',
-    'Nha Tai Troc Nguyen Thi B',
-    '+84909876543',
-    'sponsor.b@company.com',
-    'GUEST-SKY-001',
-    'INVITED',
-    NOW(),
-    NOW()
-);

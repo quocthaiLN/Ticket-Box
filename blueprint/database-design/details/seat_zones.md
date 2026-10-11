@@ -26,14 +26,13 @@
 | [`concerts`](concerts.md) | n–1 | Nhiều khu vực thuộc một concert |
 | [`ticket_types`](ticket_types.md) | 1–n | Một khu vực có thể có nhiều loại vé |
 | [`tickets`](tickets.md) | 1–n | Vé gắn với khu vực |
-| [`guest_list`](guest_list.md) | 1–n | Khách mời có thể được gán khu vực (nullable) |
 
 **Indexing**
 
 | Index | Cột | Ghi chú |
 |---|---|---|
 | `uk_seat_zones_concert_code` (unique) | `(concert_id, code)` | Mã khu vực duy nhất theo concert |
-| `uk_seat_zones_id_concert` (unique) | `(id, concert_id)` | Làm đích cho **FK kép** từ `ticket_types`, `tickets`, `guest_list` để đảm bảo khu vực cùng concert |
+| `uk_seat_zones_id_concert` (unique) | `(id, concert_id)` | Làm đích cho **FK kép** từ `ticket_types`, `tickets` để đảm bảo khu vực cùng concert |
 | `idx_seat_zones_concert_id` | `concert_id` | Khu vực của một concert |
 | `idx_seat_zones_code` | `code` | Tìm theo mã |
 | `idx_seat_zones_name` | `name` | Tìm theo tên |

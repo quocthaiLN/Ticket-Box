@@ -365,77 +365,7 @@ CREATE INDEX idx_tickets_order_id ON tickets(order_id);
 CREATE INDEX idx_tickets_order_item_id ON tickets(order_item_id);
 
 -- =============================================================================
--- 7. GUEST CSV IMPORT
--- =============================================================================
-
-CREATE TABLE guest_import_jobs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    concert_id UUID NOT NULL,
-    uploaded_by UUID NOT NULL,
-    file_url TEXT NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
-    total_rows INT NOT NULL DEFAULT 0,
-    success_rows INT NOT NULL DEFAULT 0,
-    error_rows INT NOT NULL DEFAULT 0,
-    started_at TIMESTAMPTZ,
-    completed_at TIMESTAMPTZ,
-    error_message TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_guest_import_jobs_concert FOREIGN KEY (concert_id) REFERENCES concerts(id) ON DELETE CASCADE,
-    CONSTRAINT fk_guest_import_jobs_user FOREIGN KEY (uploaded_by) REFERENCES users(id),
-    CONSTRAINT chk_gij_total_rows CHECK (total_rows >= 0),
-    CONSTRAINT chk_gij_success_rows CHECK (success_rows >= 0),
-    CONSTRAINT chk_gij_error_rows CHECK (error_rows >= 0),
-    CONSTRAINT chk_gij_status CHECK (status IN ('PENDING', 'PROCESSING', 'DONE', 'PARTIAL', 'FAILED'))
-);
-
-CREATE INDEX idx_guest_import_jobs_concert_status ON guest_import_jobs(concert_id, status);
-
-CREATE TABLE guest_list (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    concert_id UUID NOT NULL,
-    seat_zone_id UUID,
-    import_job_id UUID,
-    full_name VARCHAR(255) NOT NULL,
-    phone VARCHAR(20) NOT NULL,
-    email VARCHAR(255),
-    code VARCHAR(100),
-    status VARCHAR(20) NOT NULL DEFAULT 'INVITED',
-    checked_in_at TIMESTAMPTZ,
-    checked_in_by UUID,
-    note TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_guest_list_concert FOREIGN KEY (concert_id) REFERENCES concerts(id) ON DELETE CASCADE,
-    CONSTRAINT fk_guest_list_seat_zone_composite FOREIGN KEY (seat_zone_id, concert_id) REFERENCES seat_zones(id, concert_id),
-    CONSTRAINT fk_guest_list_import_job FOREIGN KEY (import_job_id) REFERENCES guest_import_jobs(id) ON DELETE SET NULL,
-    CONSTRAINT fk_guest_list_checker FOREIGN KEY (checked_in_by) REFERENCES users(id),
-    CONSTRAINT uk_guest_list_concert_phone UNIQUE (concert_id, phone),
-    CONSTRAINT uk_guest_list_concert_code UNIQUE (concert_id, code),
-    CONSTRAINT chk_guest_list_status CHECK (status IN ('INVITED', 'CHECKED_IN', 'CANCELLED'))
-);
-
-CREATE INDEX idx_guest_list_concert_status ON guest_list(concert_id, status);
-CREATE INDEX idx_guest_list_phone ON guest_list(phone);
-
-CREATE TABLE guest_import_errors (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    job_id UUID NOT NULL,
-    row_number INT NOT NULL,
-    raw_data JSONB,
-    error_code VARCHAR(100) NOT NULL,
-    error_message TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_guest_import_errors_job FOREIGN KEY (job_id) REFERENCES guest_import_jobs(id) ON DELETE CASCADE,
-    CONSTRAINT uk_guest_import_errors_job_row_code UNIQUE (job_id, row_number, error_code),
-    CONSTRAINT chk_gie_row_number CHECK (row_number > 0)
-);
-
-CREATE INDEX idx_guest_import_errors_job_id ON guest_import_errors(job_id);
-
--- =============================================================================
--- 8. AI ARTIST BIO
+-- 7. AI ARTIST BIO
 -- =============================================================================
 
 CREATE TABLE artist_bio_jobs (
@@ -467,7 +397,7 @@ CREATE INDEX idx_abj_processing_lease ON artist_bio_jobs(lease_until)
     WHERE status = 'PROCESSING';
 
 -- =============================================================================
--- 9. NOTIFICATION LOG / QUEUE
+-- 8. NOTIFICATION LOG / QUEUE
 -- =============================================================================
 
 CREATE TABLE notifications (
@@ -499,7 +429,7 @@ CREATE INDEX idx_notifications_concert_status ON notifications(concert_id, statu
 CREATE INDEX idx_notifications_ticket_id ON notifications(ticket_id);
 
 -- =============================================================================
--- 10. AUDIT LOGS
+-- 9. AUDIT LOGS
 -- =============================================================================
 
 CREATE TABLE audit_logs (

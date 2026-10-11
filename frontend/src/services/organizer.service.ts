@@ -68,7 +68,6 @@ export type OrganizerConcert = {
   artist_bio?: string;
   artist_bio_image_url?: string;
   artists?: ConcertArtist[] | null;
-  guest_drive_folder_id?: string;
   status: OrganizerConcertStatus;
   starts_at: string;
   ends_at: string;
@@ -169,21 +168,7 @@ export type UpdateOrganizerConcertInput = Partial<{
   cover_image_url: string;
   seat_map_url: string | null;
   seat_map_image_url: string | null;
-  guest_drive_folder_id: string;
 }>;
-
-export type OrganizerGuest = {
-  id: string;
-  concert_id: string;
-  seat_zone_id: string | null;
-  full_name: string;
-  phone: string;
-  email: string;
-  code: string | null;
-  status: "INVITED" | "CHECKED_IN" | "CANCELLED";
-  checked_in_at?: string;
-  created_at: string;
-};
 
 export type CreateOrganizerTicketTypeInput = {
   seat_zone_id: string;
@@ -339,22 +324,6 @@ export async function getOrganizerAnalytics(concertId: string) {
   return response.data;
 }
 
-// Danh sách khách mời đã nhập của concert (BTC xem).
-export async function listOrganizerConcertGuests(concertId: string) {
-  const response = await apiGet<ApiCollectionResponse<OrganizerGuest>>(
-    `/organizer/concerts/${concertId}/guests?limit=100`,
-  );
-  return response.data;
-}
-
-// BTC gán/sửa thư mục Drive khách mời (mọi trạng thái concert, chỉ trước 0h ngày diễn).
-export async function setOrganizerConcertDriveFolder(concertId: string, folder: string) {
-  const response = await apiPut<ApiResponse<{ id: string; guest_drive_folder_id: string | null }>>(
-    `/organizer/concerts/${concertId}/guest-drive-folder`,
-    { guest_drive_folder_id: folder },
-  );
-  return response.data;
-}
 
 export async function listOrganizerOrders() {
   const response = await apiGet<ApiCollectionResponse<OrganizerOrder>>(

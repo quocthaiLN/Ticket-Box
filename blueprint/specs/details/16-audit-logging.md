@@ -4,7 +4,7 @@
 
 Đặc tả ghi log các thao tác quan trọng để truy vết lỗi, bảo mật và đối soát nghiệp vụ.
 
-Trong MVP, audit nghiệp vụ tập trung ở `audit_logs`; check-in, guest import và payment webhook cũng có dữ liệu truy vết trong bảng nghiệp vụ tương ứng.
+Trong MVP, audit nghiệp vụ tập trung ở `audit_logs`; check-in và payment webhook cũng có dữ liệu truy vết trong bảng nghiệp vụ tương ứng.
 
 ## 2. Actor / Thành phần tham gia
 
@@ -17,7 +17,6 @@ Trong MVP, audit nghiệp vụ tập trung ở `audit_logs`; check-in, guest imp
 ## 3. Bảng dữ liệu liên quan
 
 - `audit_logs`
-- `guest_import_errors`
 - `payments`
 - `notifications`
 
@@ -28,7 +27,6 @@ Trong MVP, audit nghiệp vụ tập trung ở `audit_logs`; check-in, guest imp
 3. Admin tạo/sửa/hủy concert, cấu hình vé, thay đổi role đều phải audit.
 4. Inventory admin adjustment hoặc thao tác nghiệp vụ quan trọng ghi `audit_logs`; MVP không có bảng `ticket_inventory_events` riêng.
 5. Payment webhook lưu raw payload cuối trong `payments.webhook_payload`, `webhook_received_at`, `webhook_signature_valid`.
-7. Import CSV lỗi từng dòng ghi `guest_import_errors`.
 
 ## 5. Kịch bản lỗi
 
@@ -50,4 +48,4 @@ Trong MVP, audit nghiệp vụ tập trung ở `audit_logs`; check-in, guest imp
 - Có thể truy vết ai đã đổi cấu hình vé/concert.
 - Có thể đối soát thao tác tồn kho quan trọng qua `audit_logs`.
 - Có thể xem raw webhook cuối và trạng thái verify trong `payments`.
-- Có thể tra lịch sử check-in và import CSV lỗi.
+- Có thể tra lịch sử check-in.

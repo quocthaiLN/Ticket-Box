@@ -38,7 +38,7 @@
 | [`orders`](orders.md) | 1–n | Một người dùng có nhiều đơn hàng |
 | [`tickets`](tickets.md) | 1–n | Là chủ sở hữu vé (`tickets.user_id`); còn là người soát vé qua `tickets.checked_in_by` |
 | [`ticket_types`](ticket_types.md) | n–n | Qua bảng [`user_ticket_type_counters`](user_ticket_type_counters.md) |
-| [`guest_import_jobs`](guest_import_jobs.md), [`guest_list`](guest_list.md), [`artist_bio_jobs`](artist_bio_jobs.md), [`notifications`](notifications.md), [`audit_logs`](audit_logs.md) | 1–n | Là người tải lên / soát vé / yêu cầu / nhận thông báo / thực hiện hành động |
+| [`artist_bio_jobs`](artist_bio_jobs.md), [`notifications`](notifications.md), [`audit_logs`](audit_logs.md) | 1–n | Là người yêu cầu / nhận thông báo / thực hiện hành động |
 
 **Indexing**
 

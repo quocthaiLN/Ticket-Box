@@ -20,10 +20,10 @@ File này ghi nhận tiến độ thực hiện các task, trạng thái kiểm 
 - [x] Khảo sát cây thư mục codebase backend Java (`com.ticketbox.api`), cấu trúc tài nguyên `src/main/resources` và `frontend`.
 - [x] Rà soát các cấu hình hạ tầng (`MinIOConfig`, `RedisConfig`, `RabbitMqConfig`, `SecurityConfig`, `TransactionConfig`, `JacksonConfig`).
 - [x] Rà soát cơ chế bảo mật & anti-bot (`JwtUtils`, `JwtFilter`, `TokenBlacklistService`, `OidcSuccessHandler`, `RedisRateLimiter`, `RateLimitFilter`).
-- [x] Rà soát cấu trúc tất cả các Bounded Context Modules (`auth`, `catalog`, `order`, `payment`, `ticket`, `artistbio`, `notification`, `audit`, `guestlist`).
+- [x] Rà soát cấu trúc tất cả các Bounded Context Modules (`auth`, `catalog`, `order`, `payment`, `ticket`, `artistbio`, `notification`, `audit`).
 - [x] Rà soát module `shared` (`CacheService`, `SingleFlight`, `IdempotencyService`, `StorageService`, v.v.) và package `worker` (`WarmUpWorkerListener`).
 - [x] Cập nhật hoàn chỉnh nội dung file [blueprint/structure.md](file:///home/le-nguyen-quoc-thai/src/my-project/Ticket-Box/blueprint/structure.md).
-- [x] Tinh chỉnh phần **Project High Level Structure**: Liệt kê rõ ràng `infrastructure/`, `worker/` và chi tiết toàn bộ các thư mục module bên trong `module/` (`artistbio`, `audit`, `auth`, `catalog`, `guestlist`, `notification`, `order`, `payment`, `shared`, `ticket`).
+- [x] Tinh chỉnh phần **Project High Level Structure**: Liệt kê rõ ràng `infrastructure/`, `worker/` và chi tiết toàn bộ các thư mục module bên trong `module/` (`artistbio`, `audit`, `auth`, `catalog`, `notification`, `order`, `payment`, `shared`, `ticket`).
 
 ---
 

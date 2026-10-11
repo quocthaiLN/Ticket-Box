@@ -46,12 +46,9 @@
 | 8 | Đặt vé | [`order_items`](details/order_items.md) | Các dòng của đơn hàng (loại vé, số lượng, đơn giá) |
 | 9 | Thanh toán | [`payments`](details/payments.md) | Giao dịch thanh toán của đơn hàng qua cổng thanh toán, kèm dữ liệu webhook và đối soát |
 | 10 | Vé | [`tickets`](details/tickets.md) | Vé điện tử đã phát hành, mã QR, trạng thái check-in |
-| 11 | Khách mời | [`guest_import_jobs`](details/guest_import_jobs.md) | Tác vụ nhập danh sách khách mời từ file CSV |
-| 12 | Khách mời | [`guest_list`](details/guest_list.md) | Danh sách khách mời của concert và trạng thái check-in |
-| 13 | Khách mời | [`guest_import_errors`](details/guest_import_errors.md) | Chi tiết từng dòng lỗi khi nhập CSV |
-| 14 | AI | [`artist_bio_jobs`](details/artist_bio_jobs.md) | Tác vụ nền tạo tiểu sử nghệ sĩ bằng AI từ file nguồn |
-| 15 | Thông báo | [`notifications`](details/notifications.md) | Nhật ký/hàng đợi thông báo (app, email, SMS, Zalo) |
-| 16 | Kiểm toán | [`audit_logs`](details/audit_logs.md) | Nhật ký hành động để truy vết |
+| 11 | AI | [`artist_bio_jobs`](details/artist_bio_jobs.md) | Tác vụ nền tạo tiểu sử nghệ sĩ bằng AI từ file nguồn |
+| 12 | Thông báo | [`notifications`](details/notifications.md) | Nhật ký/hàng đợi thông báo (app, email, SMS, Zalo) |
+| 13 | Kiểm toán | [`audit_logs`](details/audit_logs.md) | Nhật ký hành động để truy vết |
 
 ---
 
@@ -60,12 +57,10 @@
 | FK | Hành vi |
 |---|---|
 | `user_accounts.user_id`, `concerts.organizer_id`, `user_ticket_type_counters.user_id` → `users` | CASCADE |
-| `seat_zones`, `ticket_types`, `guest_import_jobs`, `guest_list`, `artist_bio_jobs` → `concerts` | CASCADE |
+| `seat_zones`, `ticket_types`, `artist_bio_jobs` → `concerts` | CASCADE |
 | `ticket_types (seat_zone_id, concert_id)` → `seat_zones` | CASCADE |
 | `user_ticket_type_counters.ticket_type_id` → `ticket_types` | CASCADE |
 | `order_items.order_id`, `payments.order_id` → `orders` | CASCADE |
-| `guest_import_errors.job_id` → `guest_import_jobs` | CASCADE |
-| `guest_list.import_job_id` → `guest_import_jobs` | SET NULL |
 | `orders`, `tickets`, `notifications`, `audit_logs`, `order_items.ticket_type_id` và các FK còn lại | Không khai báo (mặc định `NO ACTION` — chặn xóa nếu còn bản ghi tham chiếu) |
 
 Hệ quả: dữ liệu giao dịch (đơn hàng, vé, thông báo, nhật ký) được bảo vệ khỏi việc xóa nhầm bản ghi cha như `users` hay `concerts`.
@@ -74,8 +69,8 @@ Hệ quả: dữ liệu giao dịch (đơn hàng, vé, thông báo, nhật ký) 
 
 ## 4. Ghi chú & điểm cần lưu ý
 
-1. **Trạng thái hủy trong `concerts.status`:** Đã thống nhất chỉ dùng `CANCELLED`, đồng bộ với các bảng khác (`orders`, `payments`, `tickets`, `guest_list`).
+1. **Trạng thái hủy trong `concerts.status`:** Đã thống nhất chỉ dùng `CANCELLED`, đồng bộ với các bảng khác (`orders`, `payments`, `tickets`).
 2. **`ticket_types.status` có cả `ACTIVE` và `ON_SALE`**, và **`notifications.type` có cả `CONCERT_REMINDER` và `EVENT_REMINDER`**: các giá trị này có ý nghĩa gần nhau; schema không phân biệt rõ, cần theo quy ước của tầng ứng dụng.
-4. **FK kép bảo vệ tính nhất quán theo concert:** `ticket_types → seat_zones`, `tickets → ticket_types/seat_zones`, `guest_list → seat_zones` đều tham chiếu `(id, concert_id)`, nên không thể gắn khu vực/loại vé của concert này vào dữ liệu của concert khác.
-5. **UNIQUE với cột nullable:** trong PostgreSQL, nhiều dòng có giá trị NULL không vi phạm UNIQUE; điều này áp dụng cho `payments(provider, provider_transaction_id)` và `guest_list(concert_id, code)`.
+4. **FK kép bảo vệ tính nhất quán theo concert:** `ticket_types → seat_zones`, `tickets → ticket_types/seat_zones` đều tham chiếu `(id, concert_id)`, nên không thể gắn khu vực/loại vé của concert này vào dữ liệu của concert khác.
+5. **UNIQUE với cột nullable:** trong PostgreSQL, nhiều dòng có giá trị NULL không vi phạm UNIQUE; điều này áp dụng cho `payments(provider, provider_transaction_id)`.
 7. **Hai nhóm cơ chế phục hồi (V3, V4):** `payments` có đối soát (`next_reconcile_at`) và hoàn tiền (`refund_required`) dùng *partial index* để việc quét chỉ chạm vào các dòng cần xử lý.

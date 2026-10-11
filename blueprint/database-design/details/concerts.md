@@ -40,7 +40,6 @@
 | [`ticket_types`](ticket_types.md) | 1–n | Một concert có nhiều loại vé |
 | [`orders`](orders.md) | 1–n | Một concert có nhiều đơn hàng |
 | [`tickets`](tickets.md) | 1–n | Một concert có nhiều vé đã phát hành |
-| [`guest_import_jobs`](guest_import_jobs.md), [`guest_list`](guest_list.md) | 1–n | Khách mời và các lần nhập CSV của concert |
 | [`artist_bio_jobs`](artist_bio_jobs.md) | 1–n | Các tác vụ tạo bio của concert |
 | [`notifications`](notifications.md) | 1–n | Thông báo liên quan đến concert (nullable) |
 

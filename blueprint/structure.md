@@ -25,7 +25,6 @@ Ticket-Box/
 │       │   │   │   ├── audit/                       # Ghi nhận và lưu vết audit log hệ thống
 │       │   │   │   ├── auth/                        # Xác thực, phân quyền RBAC, OAuth2/OIDC, OTP
 │       │   │   │   ├── catalog/                     # Quản lý sự kiện, concert, sơ đồ khu vực & loại vé
-│       │   │   │   ├── guestlist/                   # Danh sách khách mời & import dữ liệu
 │       │   │   │   ├── notification/                # Thông báo và gửi email bất đồng bộ qua RabbitMQ
 │       │   │   │   ├── order/                       # Đặt chỗ, giữ vé, quản lý đơn hàng & hết hạn đơn
 │       │   │   │   ├── payment/                     # Tích hợp cổng thanh toán (VNPay, MoMo), đối soát & retry
