@@ -25,8 +25,6 @@ CREATE TABLE users (
     CONSTRAINT chk_users_status CHECK (status IN ('ACTIVE', 'PENDING', 'SUSPENDED', 'DELETED'))
 );
 
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_phone ON users(phone);
 CREATE INDEX idx_users_role ON users(role);
 CREATE INDEX idx_users_status ON users(status);
 
@@ -72,7 +70,7 @@ CREATE TABLE concerts (
     CONSTRAINT uk_concerts_slug UNIQUE (slug),
     CONSTRAINT fk_concerts_organizer FOREIGN KEY (organizer_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT chk_concerts_dates CHECK (ends_at > starts_at),
-    CONSTRAINT chk_concerts_status CHECK (status IN ('DRAFT', 'PUBLISHED', 'CANCELED', 'CANCELLED', 'COMPLETED'))
+    CONSTRAINT chk_concerts_status CHECK (status IN ('DRAFT', 'PUBLISHED', 'CANCELLED', 'COMPLETED'))
 );
 
 CREATE INDEX idx_concerts_title ON concerts(title);
@@ -156,6 +154,53 @@ CREATE TABLE user_ticket_type_counters (
 
 CREATE INDEX idx_uttc_ticket_type_id ON user_ticket_type_counters(ticket_type_id);
 
+CREATE OR REPLACE FUNCTION fn_check_user_ticket_limit()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_max_per_user INT;
+BEGIN
+    SELECT max_per_user INTO v_max_per_user
+    FROM ticket_types
+    WHERE id = NEW.ticket_type_id;
+
+    IF (NEW.held_quantity + NEW.paid_quantity) > v_max_per_user THEN
+        RAISE EXCEPTION 'Constraint violation: User % exceeds max_per_user (%) for ticket_type % (current: %)',
+            NEW.user_id, v_max_per_user, NEW.ticket_type_id, (NEW.held_quantity + NEW.paid_quantity);
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER trg_check_uttc_limit
+AFTER INSERT OR UPDATE OF held_quantity, paid_quantity ON user_ticket_type_counters
+DEFERRABLE INITIALLY IMMEDIATE
+FOR EACH ROW
+EXECUTE FUNCTION fn_check_user_ticket_limit();
+
+CREATE OR REPLACE FUNCTION fn_check_ticket_type_max_reduction()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.max_per_user < OLD.max_per_user THEN
+        IF EXISTS (
+            SELECT 1 
+            FROM user_ticket_type_counters
+            WHERE ticket_type_id = NEW.id 
+              AND (held_quantity + paid_quantity) > NEW.max_per_user
+        ) THEN
+            RAISE EXCEPTION 'Cannot reduce max_per_user to %: existing users exceed this limit', NEW.max_per_user;
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_check_ticket_type_max_reduction
+BEFORE UPDATE OF max_per_user ON ticket_types
+FOR EACH ROW
+EXECUTE FUNCTION fn_check_ticket_type_max_reduction();
+
 -- =============================================================================
 -- 4. ORDERS & ORDER ITEMS
 -- =============================================================================
@@ -204,6 +249,49 @@ CREATE TABLE order_items (
 
 CREATE INDEX idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX idx_order_items_ticket_type_id ON order_items(ticket_type_id);
+
+CREATE OR REPLACE FUNCTION fn_validate_order_total_amount()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_order_id UUID;
+    v_order_total NUMERIC(12, 2);
+    v_items_sum NUMERIC(12, 2);
+BEGIN
+    IF TG_TABLE_NAME = 'orders' THEN
+        v_order_id := NEW.id;
+        v_order_total := NEW.total_amount;
+    ELSE
+        v_order_id := COALESCE(NEW.order_id, OLD.order_id);
+        SELECT total_amount INTO v_order_total 
+        FROM orders 
+        WHERE id = v_order_id;
+    END IF;
+    IF v_order_total IS NULL THEN
+        RETURN NULL;
+    END IF;
+    SELECT COALESCE(SUM(line_total), 0) INTO v_items_sum
+    FROM order_items
+    WHERE order_id = v_order_id;
+    IF v_order_total <> v_items_sum THEN
+        RAISE EXCEPTION 'Constraint violation: orders.total_amount (%) must equal sum of order_items.line_total (%) for order %',
+            v_order_total, v_items_sum, v_order_id;
+    END IF;
+
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER trg_check_orders_total
+AFTER INSERT OR UPDATE OF total_amount ON orders
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION fn_validate_order_total_amount();
+
+CREATE CONSTRAINT TRIGGER trg_check_order_items_total
+AFTER INSERT OR UPDATE OF line_total, order_id OR DELETE ON order_items
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION fn_validate_order_total_amount();
 
 -- =============================================================================
 -- 5. PAYMENTS
@@ -361,13 +449,22 @@ CREATE TABLE artist_bio_jobs (
     error_message TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TIMESTAMPTZ,
+    processing_token UUID,
+    lease_until TIMESTAMPTZ,
     CONSTRAINT fk_artist_bio_jobs_concert FOREIGN KEY (concert_id) REFERENCES concerts(id) ON DELETE CASCADE,
     CONSTRAINT fk_artist_bio_jobs_user FOREIGN KEY (requested_by) REFERENCES users(id),
+    CONSTRAINT chk_abj_attempts CHECK (attempts >= 0),
     CONSTRAINT chk_abj_status CHECK (status IN ('PENDING', 'PROCESSING', 'DONE', 'FAILED'))
 );
 
 CREATE INDEX idx_abj_concert_status ON artist_bio_jobs(concert_id, status);
 CREATE INDEX idx_abj_status_created ON artist_bio_jobs(status, created_at);
+CREATE INDEX idx_abj_pending_due ON artist_bio_jobs(next_attempt_at, updated_at)
+    WHERE status = 'PENDING';
+CREATE INDEX idx_abj_processing_lease ON artist_bio_jobs(lease_until)
+    WHERE status = 'PROCESSING';
 
 -- =============================================================================
 -- 9. NOTIFICATION LOG / QUEUE

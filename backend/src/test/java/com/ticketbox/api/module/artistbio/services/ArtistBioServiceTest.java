@@ -86,7 +86,7 @@ class ArtistBioServiceTest {
         assertThatThrownBy(() -> service.upload(admin, concert.getId(), file)).isInstanceOf(ConcertStateConflictException.class);
     }
     @Test void pollChecksConcertAndJobPairEvenAfterCancellation() {
-        concert.setStatus(ConcertStatus.CANCELED);
+        concert.setStatus(ConcertStatus.CANCELLED);
         UUID jobId = UUID.randomUUID();
         doNothing().when(concertService).checkArtistBioAccess(actor, concert.getId());
         when(jobs.findByIdAndConcertId(jobId, concert.getId())).thenReturn(Optional.empty());

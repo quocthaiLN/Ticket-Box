@@ -81,8 +81,8 @@ public class ConcertServiceImpl implements ConcertService {
 
             if (statusStr != null && !statusStr.trim().isEmpty()) {
                 String status = statusStr.trim().toUpperCase();
-                if (status.equals("CANCELED") || status.equals("CANCELLED")) {
-                    predicates.add(root.get("status").in(ConcertStatus.CANCELED, ConcertStatus.CANCELLED));
+                if (status.equals("CANCELLED")) {
+                    predicates.add(root.get("status").in(ConcertStatus.CANCELLED));
                 } else {
                     try {
                         predicates.add(cb.equal(root.get("status"), ConcertStatus.valueOf(status)));
@@ -252,11 +252,11 @@ public class ConcertServiceImpl implements ConcertService {
     @Override
     public AdminConcertResponse cancelConcert(User currentUser, UUID concertId, String reason) {
         Concert concert = lockConcertAndCheckOwnership(currentUser, concertId);
-        if (concert.getStatus() == ConcertStatus.CANCELED || concert.getStatus() == ConcertStatus.CANCELLED) return mapToConcertDetailResponse(concert);
+        if (concert.getStatus() == ConcertStatus.CANCELLED) return mapToConcertDetailResponse(concert);
         if (concert.getStatus() != ConcertStatus.DRAFT && concert.getStatus() != ConcertStatus.PUBLISHED) throw invalidState();
 
         Concert before = copyConcert(concert);
-        concert.setStatus(ConcertStatus.CANCELED);
+        concert.setStatus(ConcertStatus.CANCELLED);
         Concert cancelledConcert = concertRepository.save(concert);
         log.info("Cancelled concert {} by user {}. Reason: {}", cancelledConcert.getId(), currentUser.getEmail(), reason);
         audit(currentUser, "CANCEL_CONCERT", "CONCERT", concertId, before, Map.of("after", cancelledConcert, "reason", reason == null ? "" : reason));
@@ -568,7 +568,7 @@ public class ConcertServiceImpl implements ConcertService {
         snapshot.put("id", c.getId().toString()); snapshot.put("title", c.getTitle()); snapshot.put("slug", c.getSlug());
         snapshot.put("venue", c.getVenue()); snapshot.put("description", c.getDescription()); snapshot.put("artist_name", c.getArtistName());
         snapshot.put("artist_bio", c.getArtistBio()); snapshot.put("starts_at", c.getStartsAt()); snapshot.put("ends_at", c.getEndsAt());
-        snapshot.put("status", c.getStatus() == ConcertStatus.CANCELLED ? "CANCELED" : c.getStatus().name());
+        snapshot.put("status", c.getStatus().name());
         snapshot.put("cover_image_url", c.getCoverImageUrl()); snapshot.put("seat_map_url", c.getSeatMapUrl());
         return snapshot;
     }
@@ -613,7 +613,7 @@ public class ConcertServiceImpl implements ConcertService {
                 .artistBio(concert.getArtistBio())
                 .startsAt(concert.getStartsAt().atOffset(java.time.ZoneOffset.UTC))
                 .endsAt(concert.getEndsAt().atOffset(java.time.ZoneOffset.UTC))
-                .status(concert.getStatus() == ConcertStatus.CANCELLED ? "CANCELED" : concert.getStatus().name())
+                .status(concert.getStatus().name())
                 .coverImageUrl(storageService.buildPublicUrl(concert.getCoverImageUrl()))
                 .seatMapUrl(storageService.buildPublicUrl(concert.getSeatMapUrl()))
                 .organizerId(concert.getOrganizer() != null ? concert.getOrganizer().getId() : null)

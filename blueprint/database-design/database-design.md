@@ -55,37 +55,7 @@
 
 ---
 
-## 3. Sơ đồ quan hệ tổng quan
-
-```mermaid
-erDiagram
-    users ||--o{ user_accounts : "có"
-    users ||--o{ concerts : "tổ chức"
-    concerts ||--o{ seat_zones : "gồm"
-    concerts ||--o{ ticket_types : "bán"
-    seat_zones ||--o{ ticket_types : "áp dụng cho"
-    users ||--o{ user_ticket_type_counters : "đếm"
-    ticket_types ||--o{ user_ticket_type_counters : "được đếm"
-    users ||--o{ orders : "đặt"
-    concerts ||--o{ orders : "thuộc"
-    orders ||--|{ order_items : "gồm"
-    ticket_types ||--o{ order_items : "được mua trong"
-    orders ||--o{ payments : "thanh toán bởi"
-    orders ||--o{ tickets : "phát hành"
-    order_items ||--o{ tickets : "sinh ra"
-    concerts ||--o{ guest_import_jobs : "nhập khách mời"
-    guest_import_jobs ||--o{ guest_import_errors : "ghi lỗi"
-    guest_import_jobs ||--o{ guest_list : "tạo ra"
-    concerts ||--o{ guest_list : "mời"
-    concerts ||--o{ artist_bio_jobs : "tạo bio"
-    users ||--o{ notifications : "nhận"
-    tickets ||--o{ notifications : "liên quan"
-    users ||--o{ audit_logs : "thực hiện"
-```
-
----
-
-## 4. Tổng hợp hành vi xóa (ON DELETE)
+## 3. Tổng hợp hành vi xóa (ON DELETE)
 
 | FK | Hành vi |
 |---|---|
@@ -102,12 +72,10 @@ Hệ quả: dữ liệu giao dịch (đơn hàng, vé, thông báo, nhật ký) 
 
 ---
 
-## 5. Ghi chú & điểm cần lưu ý
+## 4. Ghi chú & điểm cần lưu ý
 
-1. **Hai cách viết trạng thái hủy trong `concerts.status`:** CHECK chấp nhận cả `CANCELED` và `CANCELLED`, trong khi các bảng khác (`orders`, `payments`, `tickets`, `guest_list`) chỉ dùng `CANCELLED`. Nên thống nhất một giá trị trong code.
+1. **Trạng thái hủy trong `concerts.status`:** Đã thống nhất chỉ dùng `CANCELLED`, đồng bộ với các bảng khác (`orders`, `payments`, `tickets`, `guest_list`).
 2. **`ticket_types.status` có cả `ACTIVE` và `ON_SALE`**, và **`notifications.type` có cả `CONCERT_REMINDER` và `EVENT_REMINDER`**: các giá trị này có ý nghĩa gần nhau; schema không phân biệt rõ, cần theo quy ước của tầng ứng dụng.
-3. **Index trùng lặp:** `idx_users_email`, `idx_users_phone` và `idx_concerts_slug` trùng chức năng với unique index đã có trên cùng cột (PostgreSQL tự tạo index cho UNIQUE), tốn thêm dung lượng ghi mà không có lợi ích truy vấn.
 4. **FK kép bảo vệ tính nhất quán theo concert:** `ticket_types → seat_zones`, `tickets → ticket_types/seat_zones`, `guest_list → seat_zones` đều tham chiếu `(id, concert_id)`, nên không thể gắn khu vực/loại vé của concert này vào dữ liệu của concert khác.
 5. **UNIQUE với cột nullable:** trong PostgreSQL, nhiều dòng có giá trị NULL không vi phạm UNIQUE; điều này áp dụng cho `payments(provider, provider_transaction_id)` và `guest_list(concert_id, code)`.
-6. **Toàn vẹn tồn kho do DB bảo đảm một phần:** DB chặn `held + sold > total` (`chk_ticket_types_inventory`) và đảm bảo `line_total = quantity * unit_price`, nhưng **không** tự kiểm tra `orders.total_amount` có bằng tổng các `order_items.line_total` hay không, cũng như không kiểm tra giới hạn `max_per_user`; các phần này do tầng ứng dụng đảm nhiệm (dùng `user_ticket_type_counters`).
-7. **Hai nhóm cơ chế phục hồi (V3, V4):** `payments` có đối soát (`next_reconcile_at`) và hoàn tiền (`refund_required`); `artist_bio_jobs` có thử lại (`attempts`, `next_attempt_at`) và lease (`processing_token`, `lease_until`). Cả hai dùng *partial index* để việc quét chỉ chạm vào các dòng cần xử lý.
+7. **Hai nhóm cơ chế phục hồi (V3, V4):** `payments` có đối soát (`next_reconcile_at`) và hoàn tiền (`refund_required`) dùng *partial index* để việc quét chỉ chạm vào các dòng cần xử lý.

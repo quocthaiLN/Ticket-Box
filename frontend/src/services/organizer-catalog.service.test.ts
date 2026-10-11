@@ -70,14 +70,14 @@ describe("Organizer catalog contract", () => {
     expect(request().init.method).toBe("PATCH");
     expect(request().body).toEqual({ name: "VIP", total_quantity: 45, status: "CLOSED" });
   });
-  it("publishes and cancels directly, normalizing the returned canceled status", async () => {
+  it("publishes and cancels directly", async () => {
     reply(concert); await catalog.publishCatalogConcert(concert.id);
     expect(request().url).toBe("/admin/concerts/concert-1/publish");
-    reply({ ...concert, status: "CANCELED" });
-    const canceled = await catalog.cancelCatalogConcert(concert.id, "Weather");
+    reply({ ...concert, status: "CANCELLED" });
+    const cancelled = await catalog.cancelCatalogConcert(concert.id, "Weather");
     expect(request().url).toBe("/admin/concerts/concert-1/cancel");
     expect(request().body).toEqual({ reason: "Weather" });
-    expect(toOrganizerConcert(canceled).status).toBe("CANCELLED");
+    expect(toOrganizerConcert(cancelled).status).toBe("CANCELLED");
   });
   it("uploads multipart with file part and without forcing a content-type boundary", async () => {
     reply({ id: "job-1", status: "PENDING" });

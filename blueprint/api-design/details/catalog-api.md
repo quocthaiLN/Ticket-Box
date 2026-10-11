@@ -98,7 +98,7 @@ Mapping dưới đây là nguồn dữ liệu cho contract Admin; không thay đ
 
 Cả ba bảng catalog có `created_at`, `updated_at` kiểu TIMESTAMPTZ. Schema không có `published_at`, `cancelled_at`, hoặc lý do hủy trên concert. Không suy diễn cột lưu trữ từ response public cũ.
 
-- Concert status lưu trong DB: `DRAFT`, `PUBLISHED`, `CANCELED`, `CANCELLED`, `COMPLETED`. Entity dùng `CANCELED`; response Admin chuẩn hóa cả hai cách viết trạng thái hủy thành `CANCELED`. Filter `CANCELED` hoặc alias `CANCELLED` đều tìm cả hai giá trị lưu trữ.
+- Concert status lưu trong DB: `DRAFT`, `PUBLISHED`, `CANCELLED`, `COMPLETED`. Entity và response dùng `CANCELLED`. Filter status dùng `CANCELLED`.
 - Ticket type status: `DRAFT`, `ACTIVE`, `ON_SALE`, `SUSPENDED`, `CLOSED`, `SOLD_OUT`.
 - Giá là `NUMERIC(12,2)` không âm; currency VARCHAR(3), mặc định `VND`; `max_per_user > 0`; `sale_end_at > sale_start_at`.
 - Các giới hạn tổng vé theo capacity zone và lifecycle ở mục 7 là business rules bổ sung, không phải CHECK constraint sẵn có trong DB.
@@ -536,7 +536,7 @@ Danh sách mọi trạng thái theo quyền, bao gồm draft và concert đã h�
 | Query | Kiểu | Bắt buộc / mặc định | Quy tắc |
 | --- | --- | --- | --- |
 | `q` | string | Không | Trim; rỗng coi như không lọc; tìm chuỗi con không phân biệt hoa/thường trong title hoặc artist_name. `%` và `_` được coi là ký tự tìm kiếm thường. |
-| `status` | enum | Không | `DRAFT`, `PUBLISHED`, `CANCELED`, `COMPLETED`; nhận alias `CANCELLED`. Không gửi thì không lọc trạng thái. |
+| `status` | enum | Không | `DRAFT`, `PUBLISHED`, `CANCELLED`, `COMPLETED`. Không gửi thì không lọc trạng thái. |
 | `page` | integer | Không / 0 | >= 0, phân trang từ 0. |
 | `size` | integer | Không / 20 | 1–100. |
 | `sortBy` | string | Không / `createdAt` | Allowlist: `createdAt`, `startsAt`, `title`. |
@@ -733,7 +733,7 @@ Tạo concert `DRAFT`; server lấy organizer từ caller, kể cả ADMIN.
 | --- | --- | --- | --- |
 | `reason` | string hoặc null | Không / null | Nội dung phục vụ audit; không lưu thành cột trên concerts. |
 
-Chấp nhận không có body hoặc `{}`. Chuyển `DRAFT`/`PUBLISHED → CANCELED`; `COMPLETED` trả `409`. Nếu đã hủy (kể cả DB là CANCELLED), trả `200` resource chuẩn hóa, không lặp side effect và không ghi đè lý do audit lần đầu. Không xóa vật lý, không tự refund/cancel order, không thay đổi status ticket type hoặc held/sold. Payment/Ticketing chịu trách nhiệm xử lý giao dịch liên quan.
+Chấp nhận không có body hoặc `{}`. Chuyển `DRAFT`/`PUBLISHED → CANCELLED`; `COMPLETED` trả `409`. Nếu đã hủy, trả `200` resource chuẩn hóa, không lặp side effect và không ghi đè lý do audit lần đầu. Không xóa vật lý, không tự refund/cancel order, không thay đổi status ticket type hoặc held/sold. Payment/Ticketing chịu trách nhiệm xử lý giao dịch liên quan.
 
 **Request**
 
@@ -759,7 +759,7 @@ Chấp nhận không có body hoặc `{}`. Chuyển `DRAFT`/`PUBLISHED → CANCE
     "artist_bio": null,
     "starts_at": "2026-12-10T12:00:00Z",
     "ends_at": "2026-12-10T16:00:00Z",
-    "status": "CANCELED",
+    "status": "CANCELLED",
     "cover_image_url": null,
     "seat_map_url": null,
     "created_at": "2026-10-01T03:00:00Z",
@@ -986,7 +986,7 @@ Cho phép sửa total_quantity cả khi PUBLISHED; không yêu cầu API invento
 | Hiện trạng đã inspect | Contract cần đạt |
 | --- | --- |
 | Controller nhận sort/page trực tiếp, chưa giới hạn size/allowlist/tie-breaker. | Validate query theo 7.1, sort ổn định và xử lý status alias. |
-| Entity chỉ có CANCELED, DB cho cả CANCELLED. | Đọc được alias cũ và chuẩn hóa response/filter, không chỉ gọi enum valueOf. |
+| Entity và DB thống nhất chỉ dùng CANCELLED. | Response và filter sử dụng CANCELLED đồng bộ với các bảng khác. |
 | DTO/entity dùng LocalDateTime. | Bảo toàn offset/instant khi đọc ghi TIMESTAMPTZ, response UTC. |
 | PATCH bỏ qua null, chưa phân biệt thiếu field; một số blank bị bỏ qua. | Theo dõi field presence, clear nullable, từ chối blank/null/field không hỗ trợ đúng contract. |
 | Service chưa chặn lifecycle; publish/cancel luôn thực hiện write. | State guards, xử lý retry không lặp side effect, terminal chỉ đọc. |
@@ -1132,11 +1132,11 @@ Các lỗi Admin dùng `application/problem+json`, không bọc trong `data`. `c
 - Chỉ có đúng 9 endpoint tại mục 5.2; không có CRUD venue, DELETE concert, GET admin detail, upload hoặc API nâng role trong phạm vi này.
 - ORGANIZER tạo concert với organizer_id của mình; list chỉ gồm dữ liệu mình sở hữu, tổng pagination không lộ concert khác. ADMIN liệt kê/sửa mọi concert; ADMIN tạo concert vẫn là chủ sở hữu.
 - AUDIENCE/CHECKER bị 403; thiếu/sai token bị 401; truy cập resource khác chủ bị 403; ID không tồn tại trả 404 đúng resource. PATCH zone/ticket kiểm tra quyền qua concert cha.
-- Request/response Admin dùng UUID, venue string, price number/currency riêng, RFC 3339 có offset và response UTC; không có published_at/cancelled_at. Alias CANCELLED được đọc/lọc và trả CANCELED.
+- Request/response Admin dùng UUID, venue string, price number/currency riêng, RFC 3339 có offset và response UTC; không có published_at/cancelled_at. Trạng thái hủy dùng CANCELLED.
 - List kiểm tra page/size/sort/status, size tối đa 100, tie-breaker ổn định; kiểm tra trang rỗng và nhiều concert có cùng giá trị sort.
 - Validation khớp SQL: độ dài chuỗi, nullable, unique slug/code/name, FK zone cùng concert, giá precision/scale, quantity 0 hợp lệ, max_per_user dương và time range hợp lệ. Kiểm tra cả trùng tên khi PATCH và hai request tạo trùng đồng thời.
 - PATCH giữ field vắng mặt, xóa nullable bằng null, chặn null bắt buộc/field bất biến/counters. Kiểm tra cập nhật riêng từng đầu mốc thời gian và request rỗng.
-- DRAFT/PUBLISHED được sửa; CANCELED/CANCELLED/COMPLETED không được sửa cấu hình. Publish thiếu zone/ticket hoặc vượt capacity bị 422; publish từ terminal bị 409. Publish/cancel lặp trả 200 không lặp audit hoặc thay đổi timestamp.
+- DRAFT/PUBLISHED được sửa; CANCELLED/COMPLETED không được sửa cấu hình. Publish thiếu zone/ticket hoặc vượt capacity bị 422; publish từ terminal bị 409. Publish/cancel lặp trả 200 không lặp audit hoặc thay đổi timestamp.
 - Tổng vé theo zone không vượt capacity khi tạo/sửa ticket hoặc giảm capacity; kiểm tra nhiều ticket type cộng dồn, cả status không mở bán. total_quantity không xuống dưới held + sold; kiểm tra race giữa PATCH quantity, hold/sell và chỉnh capacity.
 - Publish chỉ chuyển ticket DRAFT sang ON_SALE trong lần chuyển trạng thái; retry không kích hoạt ticket mới. Cancel chỉ đổi concert, không tự hoàn tiền hoặc chỉnh inventory counters.
 - Mutation thực tế có audit và invalidate sau commit; rollback không invalidate, retry/no-op không tạo side effect trùng. Lỗi cache sau commit có log/retry invalidation.

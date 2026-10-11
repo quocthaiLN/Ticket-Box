@@ -4,7 +4,7 @@ export type CatalogConcert = {
   id: string; title: string; slug: string; venue: string; artist_name: string;
   description: string | null; artist_bio: string | null;
   starts_at: string; ends_at: string;
-  status: "DRAFT" | "PUBLISHED" | "CANCELED" | "CANCELLED" | "COMPLETED";
+  status: "DRAFT" | "PUBLISHED" | "CANCELLED" | "COMPLETED";
   cover_image_url: string | null; seat_map_url: string | null;
 };
 export type ConcertInput = {

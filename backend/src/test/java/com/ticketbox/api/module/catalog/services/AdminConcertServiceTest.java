@@ -233,12 +233,12 @@ class ConcertServiceTest {
     @Test
     @DisplayName("Repeated cancel on cancelled concert does not repeat side effects")
     void cancelConcert_alreadyCancelled() {
-        concert.setStatus(ConcertStatus.CANCELED);
+        concert.setStatus(ConcertStatus.CANCELLED);
         when(concertRepository.findByIdForUpdate(concertId)).thenReturn(Optional.of(concert));
 
         AdminConcertResponse response = concertService.cancelConcert(adminUser, concertId, "retry");
 
-        assertEquals("CANCELED", response.getStatus());
+        assertEquals("CANCELLED", response.getStatus());
         verify(concertRepository, never()).save(any(Concert.class));
         verifyNoInteractions(auditLogService, cacheService);
     }

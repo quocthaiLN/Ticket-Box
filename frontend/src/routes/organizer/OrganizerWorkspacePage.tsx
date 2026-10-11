@@ -240,7 +240,7 @@ export function OrganizerWorkspacePage({ view }: { view: OrganizerView }) {
   async function submitDeletionRequest(concertId: string, reason: string) {
     setMessage("");
     const saved = await cancelCatalogConcert(concertId, reason);
-    setConcerts(current => current.map(item => item.id === concertId ? { ...item, status: saved.status === "CANCELED" ? "CANCELLED" : saved.status } : item));
+    setConcerts(current => current.map(item => item.id === concertId ? { ...item, status: saved.status } : item));
     setDeletingConcertId(null);
     setMessage("Đã hủy concert.");
   }

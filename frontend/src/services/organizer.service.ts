@@ -294,7 +294,7 @@ export function toOrganizerConcert(concert: CatalogConcert, metadata?: CatalogMe
     id: concert.id, title: concert.title, slug: concert.slug, artist_name: concert.artist_name,
     description: concert.description ?? undefined, artist_bio: concert.artist_bio ?? undefined,
     starts_at: concert.starts_at, ends_at: concert.ends_at,
-    status: concert.status === "CANCELED" ? "CANCELLED" : concert.status,
+    status: concert.status,
     venue: concert.venue,
     cover_image_url: concert.cover_image_url ?? undefined, seat_map_url: concert.seat_map_url ?? undefined,
     seat_zones: metadata?.seat_zones.map(zone => ({ ...zone, description: zone.description ?? undefined, svg_path: zone.svg_path ?? undefined })) ?? [],

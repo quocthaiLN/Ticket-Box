@@ -28,7 +28,7 @@
 |---|---|---|
 | `status` | `DRAFT` | Bản nháp (mặc định) |
 | | `PUBLISHED` | Đã công bố |
-| | `CANCELED` / `CANCELLED` | Đã hủy (DB chấp nhận cả hai cách viết, xem [mục 5 trong file tổng quan](../database-design.md#5-ghi-chú--điểm-cần-lưu-ý)) |
+| | `CANCELLED` | Đã hủy |
 | | `COMPLETED` | Đã diễn ra xong |
 
 **Quan hệ**
