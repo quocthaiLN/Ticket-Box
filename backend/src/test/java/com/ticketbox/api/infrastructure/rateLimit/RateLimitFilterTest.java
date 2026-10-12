@@ -50,7 +50,7 @@ class RateLimitFilterTest {
         assertEquals(429, response.getStatus());
         assertEquals("2", response.getHeader("Retry-After"));
         assertEquals("RATE_LIMITED", new ObjectMapper().readTree(response.getContentAsString())
-                .path("error").path("code").asText());
+                .path("code").asText());
         assertNull(chain.getRequest());
         verify(limiter).check(eq(userId), any());
     }

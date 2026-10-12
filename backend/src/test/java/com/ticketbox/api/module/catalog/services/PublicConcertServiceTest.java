@@ -1,7 +1,6 @@
 package com.ticketbox.api.module.catalog.services;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.catalog.domain.dtos.ConcertDetailResponse;
 import com.ticketbox.api.module.catalog.domain.dtos.ConcertQuotaResponse;
@@ -11,6 +10,8 @@ import com.ticketbox.api.module.catalog.domain.entities.ConcertStatus;
 import com.ticketbox.api.module.catalog.domain.entities.SeatZone;
 import com.ticketbox.api.module.catalog.domain.entities.TicketType;
 import com.ticketbox.api.module.catalog.domain.entities.TicketTypeStatus;
+import com.ticketbox.api.module.catalog.domain.exception.CatalogErrorCode;
+import com.ticketbox.api.module.catalog.domain.exception.ConcertNotFoundException;
 import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.SeatZoneRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
@@ -30,7 +31,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.http.HttpStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -138,12 +138,11 @@ class CatalogServiceTest {
     void getConcertDetail_draftConcert_throwsNotFound() {
         when(concertRepository.findById(draftConcertId)).thenReturn(Optional.of(draftConcert));
 
-        AppException ex = assertThrows(AppException.class, () ->
+        ConcertNotFoundException ex = assertThrows(ConcertNotFoundException.class, () ->
                 CatalogService.getConcertDetail(draftConcertId)
         );
 
-        assertEquals(HttpStatus.NOT_FOUND, ex.getStatus());
-        assertEquals("CONCERT_NOT_FOUND", ex.getErrorCode());
+        assertEquals(CatalogErrorCode.CONCERT_NOT_FOUND, ex.getErrorCode());
     }
 
     @Test

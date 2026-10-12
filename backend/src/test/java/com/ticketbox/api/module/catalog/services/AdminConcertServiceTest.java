@@ -1,6 +1,5 @@
 package com.ticketbox.api.module.catalog.services;
 
-import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.auth.domain.entities.UserRole;
 import com.ticketbox.api.module.catalog.domain.dtos.AdminConcertResponse;
@@ -8,6 +7,10 @@ import com.ticketbox.api.module.catalog.domain.dtos.CreateConcertRequest;
 import com.ticketbox.api.module.catalog.domain.dtos.UpdateConcertRequest;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
 import com.ticketbox.api.module.catalog.domain.entities.ConcertStatus;
+import com.ticketbox.api.module.catalog.domain.exception.CatalogAccessDeniedException;
+import com.ticketbox.api.module.catalog.domain.exception.CatalogErrorCode;
+import com.ticketbox.api.module.catalog.domain.exception.ConcertNotFoundException;
+import com.ticketbox.api.module.catalog.domain.exception.ConcertStateConflictException;
 import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.SeatZoneRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
@@ -20,7 +23,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -189,12 +191,11 @@ class ConcertServiceTest {
 
         when(concertRepository.findByIdForUpdate(concertId)).thenReturn(Optional.of(concert));
 
-        AppException ex = assertThrows(AppException.class, () ->
+        CatalogAccessDeniedException ex = assertThrows(CatalogAccessDeniedException.class, () ->
                 concertService.updateConcert(otherOrganizerUser, concertId, request)
         );
 
-        assertEquals(HttpStatus.FORBIDDEN, ex.getStatus());
-        assertEquals("FORBIDDEN", ex.getErrorCode());
+        assertEquals(CatalogErrorCode.FORBIDDEN, ex.getErrorCode());
     }
 
     @Test
@@ -232,11 +233,10 @@ class ConcertServiceTest {
         concert.setStatus(ConcertStatus.COMPLETED);
         when(concertRepository.findByIdForUpdate(concertId)).thenReturn(Optional.of(concert));
 
-        AppException ex = assertThrows(AppException.class, () ->
+        ConcertStateConflictException ex = assertThrows(ConcertStateConflictException.class, () ->
                 concertService.updateConcert(adminUser, concertId, UpdateConcertRequest.builder().title("Nope").build()));
 
-        assertEquals(HttpStatus.CONFLICT, ex.getStatus());
-        assertEquals("INVALID_CONCERT_STATE", ex.getErrorCode());
+        assertEquals(CatalogErrorCode.INVALID_CONCERT_STATE, ex.getErrorCode());
         verify(concertRepository, never()).save(any(Concert.class));
     }
 
