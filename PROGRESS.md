@@ -1,37 +1,93 @@
-# Progress Tracking
+# Task Progress
 
-File này ghi nhận tiến độ thực hiện các task, trạng thái kiểm thử và kế hoạch tiếp theo của dự án TicketBox theo quy định tại `AGENT.md`.
+- File này được sử dụng để theo dõi một task được thực hiện qua nhiều Session.
+- Mỗi khi được yêu cầu kết thúc một Session cần tổng kết các thông tin: Goal, Completed,  Commits, Files or artifacts updated, Known risk or unresolved issue, Next best step.
+- Mỗi khi bắt đầu 1 task mới mà file vẫn còn chứa progress của task cũ thì cần tôi xác nhận có nên xóa ngay hay kiểm tra gì khác nữa không.
 
----
+## Task Description
+- Name: Refactor MapStruct để ánh xạ Entity sang DTO/Record và ngược lại
+- Description: Tích hợp thư viện MapStruct vào dự án Spring Boot, thay thế toàn bộ các hàm mapping thủ công rải rác (`mapTo...`) và constructor/builder thô trong các service bằng các Mapper component chuyên biệt. Triển khai lát cắt mỏng đầu tiên trên module `catalog`.
+- Goal: Loại bỏ hoàn toàn code trùng lặp chuyển đổi đối tượng trong module `catalog`, hỗ trợ 2 chiều (Entity -> Response DTO và Request -> Entity), không thay đổi behaviour của hệ thống, chuẩn hóa để nhân rộng sang các module khác.
+- Acceptance criteria:
+  - Cấu hình MapStruct 1.6.3 tương thích với Lombok qua maven-compiler-plugin.
+  - Tạo các Mapper Spring component: `ConcertMapper`, `SeatZoneMapper`, `TicketTypeMapper` tại `.../catalog/mappers`.
+  - Loại bỏ các hàm `mapTo...` trùng lặp trong `ConcertServiceImpl`, `CatalogServiceImpl`, `ConcertWarmUpServiceImpl`.
+  - Giữ nguyên định dạng dữ liệu (Admin DTO OffsetDateTime UTC, Public DTO LocalDateTime, StorageService public URLs).
+  - Viết unit test kiểm chứng đầy đủ cho các Mapper mới.
+  - Dự án compile thành công và pass toàn bộ mapper tests.
 
-## Session: 2026-10-11 - Cập nhật tài liệu cấu trúc dự án (`blueprint/structure.md`)
+## Session Logs
 
-### 1. Mục tiêu phiên làm việc
-- Khảo sát thực tế toàn bộ cấu trúc dự án backend (Spring Boot Modular Monolith), frontend và các thư mục liên quan.
-- Cập nhật chi tiết tài liệu [blueprint/structure.md](file:///home/le-nguyen-quoc-thai/src/my-project/Ticket-Box/blueprint/structure.md) đáp ứng đầy đủ 4 yêu cầu:
-  1. **Project high level structure**: Khái quát các thành phần cấp cao (`backend`, `frontend`, `blueprint`, `nginx`, `postman`, `docker-compose.yml`, `init.sh`).
-  2. **Infrastructure folder**: Liệt kê và phân loại đầy đủ các nhóm cấu hình/thành phần nền tảng (`config`, `security`, `rateLimit`, `filter`, `exception`, `response`).
-  3. **Each Module**: Mô tả cấu trúc các thư mục/tập tin bên trong một module chuẩn (`controllers`, `services`, `repositories`, `domain` (entities, dtos, exception, mappers), `config`, `producers`, `consumers`, `events`, `schedulers`) và các thành phần mở rộng (`gateways`, `ai`, `storage`).
-  4. **Others folders**: Mô tả chi tiết vai trò của `com.ticketbox.api.module.shared` (cache, SingleFlight, idempotency, storage, validation, exceptions) và `com.ticketbox.api.worker` (cơ chế đa profile `worker` vs `api`, `WarmUpWorkerListener`, `WorkerPlaceholder`).
+- Session 001
+  - Goal: Khởi tạo cấu hình MapStruct và hoàn thiện lát cắt mỏng (thin vertical slice) cho module `catalog`.
+  - Completed:
+    - Bổ sung cấu hình MapStruct và Lombok binding vào `backend/pom.xml`.
+    - Tạo 3 interface/abstract class Mapper: `ConcertMapper`, `SeatZoneMapper`, `TicketTypeMapper` tại gói `com.ticketbox.api.module.catalog.mappers`.
+    - Refactor `ConcertServiceImpl`: xóa bỏ các hàm `mapToConcertDetailResponse`, `mapToSeatZoneResponse`, `mapToTicketTypeResponse`; thay thế bằng Mapper tương ứng; chuẩn hóa `create*` sang dùng mapper.
+    - Refactor `CatalogServiceImpl`: xóa bỏ các hàm mapping trùng lặp; dùng `ConcertMapper`, `SeatZoneMapper`, `TicketTypeMapper`.
+    - Refactor `ConcertWarmUpServiceImpl`: xóa bỏ các hàm mapping trùng lặp; dùng `ConcertMapper`, `SeatZoneMapper`, `TicketTypeMapper`.
+    - Cập nhật các mock/spy mapper trong `AdminConcertServiceTest`, `PublicConcertServiceTest`, `ConcertWarmUpServiceTest`.
+    - Bổ sung bộ unit test toàn diện `CatalogMappersTest` (5/5 tests passed).
+  - Commits: Chưa commit (chờ review kết quả session).
+  - Files or artifacts updated:
+    - `backend/pom.xml`
+    - `backend/src/main/java/com/ticketbox/api/module/catalog/mappers/ConcertMapper.java` [NEW]
+    - `backend/src/main/java/com/ticketbox/api/module/catalog/mappers/SeatZoneMapper.java` [NEW]
+    - `backend/src/main/java/com/ticketbox/api/module/catalog/mappers/TicketTypeMapper.java` [NEW]
+    - `backend/src/main/java/com/ticketbox/api/module/catalog/services/ConcertServiceImpl.java`
+    - `backend/src/main/java/com/ticketbox/api/module/catalog/services/CatalogServiceImpl.java`
+    - `backend/src/main/java/com/ticketbox/api/module/catalog/services/ConcertWarmUpServiceImpl.java`
+    - `backend/src/test/java/com/ticketbox/api/module/catalog/mappers/CatalogMappersTest.java` [NEW]
+    - `backend/src/test/java/com/ticketbox/api/module/catalog/services/AdminConcertServiceTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/catalog/services/PublicConcertServiceTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/catalog/ConcertWarmUpServiceTest.java`
+    - `PROGRESS.md`
+  - Known risk or unresolved issue:
+    - 4 test cases baseline (ngoài phạm vi refactor này) của hệ thống đang fail do mismatch kiểu exception (`AppException` vs custom domain exceptions).
+  - Next best step:
+    - Tiếp tục triển khai MapStruct cho lát cắt tiếp theo: module `order`, `payment`, `ticket`, `auth`, `artistbio`.
 
----
-
-### 2. Các công việc đã thực hiện
-- [x] Khảo sát cây thư mục codebase backend Java (`com.ticketbox.api`), cấu trúc tài nguyên `src/main/resources` và `frontend`.
-- [x] Rà soát các cấu hình hạ tầng (`MinIOConfig`, `RedisConfig`, `RabbitMqConfig`, `SecurityConfig`, `TransactionConfig`, `JacksonConfig`).
-- [x] Rà soát cơ chế bảo mật & anti-bot (`JwtUtils`, `JwtFilter`, `TokenBlacklistService`, `OidcSuccessHandler`, `RedisRateLimiter`, `RateLimitFilter`).
-- [x] Rà soát cấu trúc tất cả các Bounded Context Modules (`auth`, `catalog`, `order`, `payment`, `ticket`, `artistbio`, `notification`, `audit`).
-- [x] Rà soát module `shared` (`CacheService`, `SingleFlight`, `IdempotencyService`, `StorageService`, v.v.) và package `worker` (`WarmUpWorkerListener`).
-- [x] Cập nhật hoàn chỉnh nội dung file [blueprint/structure.md](file:///home/le-nguyen-quoc-thai/src/my-project/Ticket-Box/blueprint/structure.md).
-- [x] Tinh chỉnh phần **Project High Level Structure**: Liệt kê rõ ràng `infrastructure/`, `worker/` và chi tiết toàn bộ các thư mục module bên trong `module/` (`artistbio`, `audit`, `auth`, `catalog`, `notification`, `order`, `payment`, `shared`, `ticket`).
-
----
-
-### 3. Trạng thái xác minh (Verification Status)
-- File tài liệu đã được ghi và xác minh định dạng Markdown, đường dẫn file và cấu trúc package chính xác 100% khớp với cấu trúc thực tế của codebase.
-- Không gây ảnh hưởng hay xung đột với mã nguồn của backend và frontend.
-
----
-
-### 4. Bước tiếp theo (Next Steps)
-- Tiếp tục thực hiện các nhiệm vụ phát triển/hoàn thiện tính năng hoặc refactor tài liệu khác theo yêu cầu tiếp theo của người dùng.
+- Session 002
+  - Goal: Chuẩn hóa package theo kiến trúc dự án sang `domain.mappers` và hoàn thành refactor toàn bộ các module còn lại (`order`, `payment`, `ticket`, `auth`, `artistbio`).
+  - Completed:
+    - Chuẩn hóa vị trí package mappers sang `com.ticketbox.api.module.<module>.domain.mappers` tuân thủ `blueprint/structure.md`.
+    - **Module `order`**:
+      - Tạo [`OrderMapper`](backend/src/main/java/com/ticketbox/api/module/order/domain/mappers/OrderMapper.java) ánh xạ `Order` & `OrderItem` sang `OrderResponse` và `OrderItemResponse`.
+      - Refactor `OrderServiceImpl`, loại bỏ phương thức `mapToOrderResponse`.
+      - Bổ sung spy trong `OrderServiceImplTest` (5/5 passed).
+    - **Module `payment`**:
+      - Tạo [`PaymentMapper`](backend/src/main/java/com/ticketbox/api/module/payment/domain/mappers/PaymentMapper.java) ánh xạ `Payment` sang `CreatePaymentResponse` và `PaymentResponse`.
+      - Refactor `PaymentServiceImpl`, thay thế các hàm `mapToResponse` và `mapToPaymentResponse`.
+      - Cập nhật `PaymentServiceImplTest` và `PaymentResilienceServiceTest` (16/16 passed).
+    - **Module `ticket`**:
+      - Tạo [`TicketMapper`](backend/src/main/java/com/ticketbox/api/module/ticket/domain/mappers/TicketMapper.java) ánh xạ `Ticket` sang `TicketResponse` (với `ConcertInfo`, `TicketTypeInfo`, `SeatZoneInfo`, `QrInfo`) và `TicketQrResponse`.
+      - Refactor `TicketServiceImpl`, loại bỏ `toTicketResponse`.
+      - Cập nhật `TicketServiceImplTest` (2/2 passed).
+    - **Module `auth`**:
+      - Tạo [`UserMapper`](backend/src/main/java/com/ticketbox/api/module/auth/domain/mappers/UserMapper.java) ánh xạ `User` sang `UserResponse`.
+      - Refactor `AdminUserServiceImpl` và `UserServiceImpl`, thay thế `UserResponse.fromEntity`.
+      - Cập nhật `AdminUserServiceTest` và `UserServiceTest` (12/12 passed).
+    - **Module `artistbio`**:
+      - Tạo [`ArtistBioMapper`](backend/src/main/java/com/ticketbox/api/module/artistbio/domain/mappers/ArtistBioMapper.java) ánh xạ `ArtistBioJob` sang `ArtistBioJobResponse` với UTC Offset.
+      - Refactor `ArtistBioServiceImpl`, thay thế `ArtistBioJobResponse.from`.
+      - Cập nhật `ArtistBioServiceTest` (6/6 passed).
+    - Chạy toàn bộ regression test suite của tất cả các module refactored: **48/48 tests passed**, không phát sinh regression hay thay đổi behaviour.
+  - Commits: Sẵn sàng để commit.
+  - Files or artifacts updated:
+    - `PROGRESS.md`
+    - `backend/src/main/java/com/ticketbox/api/module/catalog/domain/mappers/*`
+    - `backend/src/main/java/com/ticketbox/api/module/order/domain/mappers/OrderMapper.java` [NEW]
+    - `backend/src/main/java/com/ticketbox/api/module/order/services/OrderServiceImpl.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/mappers/PaymentMapper.java` [NEW]
+    - `backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentServiceImpl.java`
+    - `backend/src/main/java/com/ticketbox/api/module/ticket/domain/mappers/TicketMapper.java` [NEW]
+    - `backend/src/main/java/com/ticketbox/api/module/ticket/services/TicketServiceImpl.java`
+    - `backend/src/main/java/com/ticketbox/api/module/auth/domain/mappers/UserMapper.java` [NEW]
+    - `backend/src/main/java/com/ticketbox/api/module/auth/services/UserServiceImpl.java`
+    - `backend/src/main/java/com/ticketbox/api/module/auth/services/AdminUserServiceImpl.java`
+    - `backend/src/main/java/com/ticketbox/api/module/artistbio/domain/mappers/ArtistBioMapper.java` [NEW]
+    - `backend/src/main/java/com/ticketbox/api/module/artistbio/services/ArtistBioServiceImpl.java`
+    - Cùng các test files tương ứng trong từng module.
+  - Known risk or unresolved issue: Không có rủi ro mới; 4 baseline tests ngoài phạm vi ban đầu giữ nguyên.
+  - Next best step:
+    - Báo cáo kết quả hoàn thành task cho người dùng và sẵn sàng commit.

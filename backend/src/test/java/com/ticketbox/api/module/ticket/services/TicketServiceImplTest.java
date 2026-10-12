@@ -20,6 +20,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class TicketServiceImplTest {
     @Mock private TicketRepository ticketRepository;
+    @org.mockito.Spy private com.ticketbox.api.module.ticket.domain.mappers.TicketMapper ticketMapper = new com.ticketbox.api.module.ticket.domain.mappers.TicketMapperImpl();
     @InjectMocks private TicketServiceImpl ticketService;
 
     @Test

@@ -31,6 +31,7 @@ public class ArtistBioServiceImpl implements ArtistBioService {
     private final ArtistBioProducer producer;
     private final AuditLogService audit;
     private final TransactionTemplate transactionTemplate;
+    private final com.ticketbox.api.module.artistbio.domain.mappers.ArtistBioMapper artistBioMapper;
 
     @Override
     public ArtistBioJobResponse upload(User actor, UUID concertId, MultipartFile file) {
@@ -70,13 +71,13 @@ public class ArtistBioServiceImpl implements ArtistBioService {
                 }
             }
         });
-        return ArtistBioJobResponse.from(job);
+        return artistBioMapper.toArtistBioJobResponse(job);
     }
 
     @Override
     public ArtistBioJobResponse get(User actor, UUID concertId, UUID jobId) {
         concertService.checkArtistBioAccess(actor, concertId);
-        return transactionTemplate.execute(status -> ArtistBioJobResponse.from(
+        return transactionTemplate.execute(status -> artistBioMapper.toArtistBioJobResponse(
                 jobs.findByIdAndConcertId(jobId, concertId).orElseThrow(ArtistBioJobNotFoundException::new)));
     }
 }

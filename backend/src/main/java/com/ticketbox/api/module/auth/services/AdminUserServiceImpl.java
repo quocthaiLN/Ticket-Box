@@ -23,11 +23,12 @@ public class AdminUserServiceImpl implements AdminUserService {
 
     private final UserRepository userRepository;
     private final AuditLogService auditLogService;
+    private final com.ticketbox.api.module.auth.domain.mappers.UserMapper userMapper;
 
     @Override
     @Transactional(readOnly = true)
     public Page<UserResponse> getUsers(Pageable pageable) {
-        return userRepository.findAll(pageable).map(UserResponse::fromEntity);
+        return userRepository.findAll(pageable).map(userMapper::toUserResponse);
     }
 
     @Override
@@ -80,6 +81,6 @@ public class AdminUserServiceImpl implements AdminUserService {
                 ipAddress,
                 userAgent);
 
-        return UserResponse.fromEntity(updatedUser);
+        return userMapper.toUserResponse(updatedUser);
     }
 }

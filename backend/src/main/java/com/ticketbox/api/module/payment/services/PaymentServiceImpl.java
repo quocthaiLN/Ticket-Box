@@ -63,6 +63,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
     private final TicketPaymentSucceededConsumer ticketIssuer;
+    private final com.ticketbox.api.module.payment.domain.mappers.PaymentMapper paymentMapper;
 
     @Override
     public PaymentResponse getPayment(User currentUser, UUID paymentId) {
@@ -72,7 +73,7 @@ public class PaymentServiceImpl implements PaymentService {
         if (!payment.getOrder().getUser().getId().equals(currentUser.getId())) {
             throw paymentNotFound();
         }
-        return mapToPaymentResponse(payment);
+        return paymentMapper.toPaymentResponse(payment);
     }
 
     @Override
@@ -427,35 +428,7 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private CreatePaymentResponse mapToResponse(Payment payment) {
-        return CreatePaymentResponse.builder()
-                .paymentId(payment.getId())
-                .orderId(payment.getOrder().getId())
-                .provider(payment.getProvider().name())
-                .status(payment.getStatus().name())
-                .amount(payment.getAmount())
-                .currency(payment.getCurrency())
-                .checkoutUrl(payment.getCheckoutUrl())
-                .holdExpiresAt(payment.getOrder().getHoldExpiresAt())
-                .createdAt(payment.getCreatedAt())
-                .build();
-    }
-
-    private PaymentResponse mapToPaymentResponse(Payment payment) {
-        return PaymentResponse.builder()
-                .paymentId(payment.getId())
-                .orderId(payment.getOrder().getId())
-                .provider(payment.getProvider().name())
-                .status(payment.getStatus().name())
-                .amount(payment.getAmount())
-                .currency(payment.getCurrency())
-                .checkoutUrl(payment.getCheckoutUrl())
-                .holdExpiresAt(payment.getOrder().getHoldExpiresAt())
-                .paidAt(payment.getPaidAt())
-                .failureReason(payment.getFailureReason())
-                .refundRequired(payment.isRefundRequired())
-                .createdAt(payment.getCreatedAt())
-                .updatedAt(payment.getUpdatedAt())
-                .build();
+        return paymentMapper.toCreatePaymentResponse(payment);
     }
 
     private AppException paymentNotFound() {

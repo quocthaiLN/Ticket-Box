@@ -52,6 +52,15 @@ class ConcertWarmUpServiceTest {
     @Mock
     private StorageService storageService;
 
+    @org.mockito.Spy
+    private com.ticketbox.api.module.catalog.domain.mappers.ConcertMapper concertMapper = new com.ticketbox.api.module.catalog.domain.mappers.ConcertMapperImpl();
+
+    @org.mockito.Spy
+    private com.ticketbox.api.module.catalog.domain.mappers.SeatZoneMapper seatZoneMapper = new com.ticketbox.api.module.catalog.domain.mappers.SeatZoneMapperImpl();
+
+    @org.mockito.Spy
+    private com.ticketbox.api.module.catalog.domain.mappers.TicketTypeMapper ticketTypeMapper = new com.ticketbox.api.module.catalog.domain.mappers.TicketTypeMapperImpl();
+
     @InjectMocks
     private ConcertWarmUpServiceImpl warmUpService;
 
@@ -62,6 +71,7 @@ class ConcertWarmUpServiceTest {
 
     @BeforeEach
     void setUp() {
+        org.springframework.test.util.ReflectionTestUtils.setField(concertMapper, "storageService", storageService);
         concertId = UUID.randomUUID();
         User organizer = User.builder().id(UUID.randomUUID()).fullName("Organizer Test").build();
 

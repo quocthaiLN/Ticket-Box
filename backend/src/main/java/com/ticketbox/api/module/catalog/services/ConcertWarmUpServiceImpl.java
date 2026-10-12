@@ -6,6 +6,9 @@ import com.ticketbox.api.module.catalog.domain.entities.ConcertStatus;
 import com.ticketbox.api.module.catalog.domain.entities.SeatZone;
 import com.ticketbox.api.module.catalog.domain.entities.TicketType;
 import com.ticketbox.api.module.catalog.domain.entities.TicketTypeStatus;
+import com.ticketbox.api.module.catalog.domain.mappers.ConcertMapper;
+import com.ticketbox.api.module.catalog.domain.mappers.SeatZoneMapper;
+import com.ticketbox.api.module.catalog.domain.mappers.TicketTypeMapper;
 import com.ticketbox.api.module.catalog.repositories.ConcertRepository;
 import com.ticketbox.api.module.catalog.repositories.SeatZoneRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
@@ -36,6 +39,9 @@ public class ConcertWarmUpServiceImpl implements ConcertWarmUpService {
     private final TicketTypeRepository ticketTypeRepository;
     private final CacheService cacheService;
     private final StorageService storageService;
+    private final ConcertMapper concertMapper;
+    private final SeatZoneMapper seatZoneMapper;
+    private final TicketTypeMapper ticketTypeMapper;
 
     @Override
     public void warmUpConcertCache(UUID concertId) {
@@ -54,15 +60,15 @@ public class ConcertWarmUpServiceImpl implements ConcertWarmUpService {
         List<TicketType> ticketTypes = ticketTypeRepository.findByConcertId(concertId);
 
         List<SeatZoneResponse> zoneResponses = seatZones.stream()
-                .map(this::mapToSeatZoneResponse)
+                .map(seatZoneMapper::toResponse)
                 .collect(Collectors.toList());
 
         List<TicketTypeResponse> ticketResponses = ticketTypes.stream()
-                .map(this::mapToTicketTypeResponse)
+                .map(ticketTypeMapper::toResponse)
                 .collect(Collectors.toList());
 
         // 1. Warm-up Concert Detail (concerts:{concertId}) - 30m TTL
-        ConcertDetailResponse detailResponse = mapToConcertDetailResponse(concert);
+        ConcertDetailResponse detailResponse = concertMapper.toDetailResponse(concert);
         cacheService.set("concerts:" + concertId, detailResponse, Duration.ofMinutes(30));
 
         // 2. Warm-up Concert Metadata (concerts:{concertId}:metadata) - 24h TTL
@@ -92,7 +98,7 @@ public class ConcertWarmUpServiceImpl implements ConcertWarmUpService {
         // 4. Warm-up Ticket Types (concerts:{concertId}:ticket-types includeClosed=false) - 30m TTL
         List<TicketTypeResponse> openTicketResponses = ticketTypes.stream()
                 .filter(t -> t.getStatus() != TicketTypeStatus.SUSPENDED && t.getStatus() != TicketTypeStatus.DRAFT)
-                .map(this::mapToTicketTypeResponse)
+                .map(ticketTypeMapper::toResponse)
                 .collect(Collectors.toList());
 
         String ticketTypesCacheKey = cacheService.generateHashKey("concerts:" + concertId + ":ticket-types", Map.of("includeClosed", false));
@@ -133,60 +139,5 @@ public class ConcertWarmUpServiceImpl implements ConcertWarmUpService {
         cacheService.set("concerts:" + concertId + ":inventory", inventoryResponse, Duration.ofMinutes(5));
 
         log.info("Finished cache warm-up successfully for concertId: {}", concertId);
-    }
-
-    private ConcertDetailResponse mapToConcertDetailResponse(Concert concert) {
-        return ConcertDetailResponse.builder()
-                .id(concert.getId())
-                .title(concert.getTitle())
-                .slug(concert.getSlug())
-                .venue(concert.getVenue())
-                .description(concert.getDescription())
-                .artistName(concert.getArtistName())
-                .artistBio(concert.getArtistBio())
-                .startsAt(concert.getStartsAt())
-                .endsAt(concert.getEndsAt())
-                .status(concert.getStatus().name())
-                .coverImageUrl(storageService.buildPublicUrl(concert.getCoverImageUrl()))
-                .seatMapUrl(storageService.buildPublicUrl(concert.getSeatMapUrl()))
-                .organizerId(concert.getOrganizer() != null ? concert.getOrganizer().getId() : null)
-                .organizerName(concert.getOrganizer() != null ? concert.getOrganizer().getFullName() : null)
-                .createdAt(concert.getCreatedAt())
-                .updatedAt(concert.getUpdatedAt())
-                .build();
-    }
-
-    private SeatZoneResponse mapToSeatZoneResponse(SeatZone zone) {
-        return SeatZoneResponse.builder()
-                .id(zone.getId())
-                .concertId(zone.getConcert().getId())
-                .code(zone.getCode())
-                .name(zone.getName())
-                .description(zone.getDescription())
-                .capacity(zone.getCapacity())
-                .svgPath(zone.getSvgPath())
-                .sortOrder(zone.getSortOrder())
-                .build();
-    }
-
-    private TicketTypeResponse mapToTicketTypeResponse(TicketType tt) {
-        return TicketTypeResponse.builder()
-                .id(tt.getId())
-                .concertId(tt.getConcert().getId())
-                .seatZoneId(tt.getSeatZone().getId())
-                .zoneCode(tt.getSeatZone().getCode())
-                .name(tt.getName())
-                .description(tt.getDescription())
-                .price(tt.getPrice())
-                .currency(tt.getCurrency())
-                .totalQuantity(tt.getTotalQuantity())
-                .heldQuantity(tt.getHeldQuantity())
-                .soldQuantity(tt.getSoldQuantity())
-                .availableQuantity(tt.getAvailableQuantity())
-                .maxPerUser(tt.getMaxPerUser())
-                .saleStartAt(tt.getSaleStartAt())
-                .saleEndAt(tt.getSaleEndAt())
-                .status(tt.getStatus().name())
-                .build();
     }
 }

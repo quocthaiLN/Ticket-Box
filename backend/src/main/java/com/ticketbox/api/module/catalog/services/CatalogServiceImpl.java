@@ -2,6 +2,9 @@ package com.ticketbox.api.module.catalog.services;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.ticketbox.api.module.catalog.domain.exception.ConcertNotFoundException;
+import com.ticketbox.api.module.catalog.domain.mappers.ConcertMapper;
+import com.ticketbox.api.module.catalog.domain.mappers.SeatZoneMapper;
+import com.ticketbox.api.module.catalog.domain.mappers.TicketTypeMapper;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.catalog.domain.dtos.*;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
@@ -45,6 +48,9 @@ public class CatalogServiceImpl implements CatalogService {
     private final UserTicketTypeCounterRepository counterRepository;
     private final CacheService cacheService;
     private final StorageService storageService;
+    private final ConcertMapper concertMapper;
+    private final SeatZoneMapper seatZoneMapper;
+    private final TicketTypeMapper ticketTypeMapper;
 
     @Override
     public Page<ConcertResponse> getPublishedConcerts(String q, String city, LocalDateTime from, LocalDateTime to, Pageable pageable) {
@@ -104,7 +110,7 @@ public class CatalogServiceImpl implements CatalogService {
                     .filter(c -> c.getStatus() == ConcertStatus.PUBLISHED)
                     .orElseThrow(() -> new ConcertNotFoundException(concertId));
 
-            return mapToConcertDetailResponse(concert);
+            return concertMapper.toDetailResponse(concert);
         });
     }
 
@@ -119,8 +125,8 @@ public class CatalogServiceImpl implements CatalogService {
             List<SeatZone> seatZones = seatZoneRepository.findByConcertIdOrderBySortOrderAsc(concertId);
             List<TicketType> ticketTypes = ticketTypeRepository.findByConcertId(concertId);
 
-            List<SeatZoneResponse> zoneResponses = seatZones.stream().map(this::mapToSeatZoneResponse).collect(Collectors.toList());
-            List<TicketTypeResponse> ticketResponses = ticketTypes.stream().map(this::mapToTicketTypeResponse).collect(Collectors.toList());
+            List<SeatZoneResponse> zoneResponses = seatZones.stream().map(seatZoneMapper::toResponse).collect(Collectors.toList());
+            List<TicketTypeResponse> ticketResponses = ticketTypes.stream().map(ticketTypeMapper::toResponse).collect(Collectors.toList());
 
             ConcertMetadataResponse.SeatMapInfo seatMapInfo = ConcertMetadataResponse.SeatMapInfo.builder()
                     .svgUrl(storageService.buildPublicUrl(concert.getSeatMapUrl()))
@@ -128,7 +134,7 @@ public class CatalogServiceImpl implements CatalogService {
                     .build();
 
             return ConcertMetadataResponse.builder()
-                    .concert(mapToConcertDetailResponse(concert))
+                    .concert(concertMapper.toDetailResponse(concert))
                     .seatZones(zoneResponses)
                     .ticketTypes(ticketResponses)
                     .seatMap(seatMapInfo)
@@ -146,7 +152,7 @@ public class CatalogServiceImpl implements CatalogService {
                     .orElseThrow(() -> new ConcertNotFoundException(concertId));
 
             List<SeatZone> seatZones = seatZoneRepository.findByConcertIdOrderBySortOrderAsc(concertId);
-            List<SeatZoneResponse> zoneResponses = seatZones.stream().map(this::mapToSeatZoneResponse).collect(Collectors.toList());
+            List<SeatZoneResponse> zoneResponses = seatZones.stream().map(seatZoneMapper::toResponse).collect(Collectors.toList());
 
             return SeatMapResponse.builder()
                     .concertId(concert.getId())
@@ -175,7 +181,7 @@ public class CatalogServiceImpl implements CatalogService {
                         .collect(Collectors.toList());
             }
 
-            return ticketTypes.stream().map(this::mapToTicketTypeResponse).collect(Collectors.toList());
+            return ticketTypes.stream().map(ticketTypeMapper::toResponse).collect(Collectors.toList());
         });
     }
 
@@ -251,79 +257,13 @@ public class CatalogServiceImpl implements CatalogService {
         BigDecimal maxPrice = ticketTypes.stream().map(TicketType::getPrice).max(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
         String currency = ticketTypes.stream().findFirst().map(TicketType::getCurrency).orElse("VND");
 
-        return ConcertResponse.builder()
-                .id(concert.getId())
-                .title(concert.getTitle())
-                .slug(concert.getSlug())
-                .venue(concert.getVenue())
-                .artistName(concert.getArtistName())
-                .startsAt(concert.getStartsAt())
-                .endsAt(concert.getEndsAt())
-                .status(concert.getStatus().name())
-                .coverImageUrl(storageService.buildPublicUrl(concert.getCoverImageUrl()))
-                .organizerId(concert.getOrganizer() != null ? concert.getOrganizer().getId() : null)
-                .organizerName(concert.getOrganizer() != null ? concert.getOrganizer().getFullName() : null)
-                .ticketPriceRange(ConcertResponse.TicketPriceRange.builder()
-                        .minAmount(minPrice)
-                        .maxAmount(maxPrice)
-                        .currency(currency)
-                        .build())
-                .build();
-    }
-
-    private ConcertDetailResponse mapToConcertDetailResponse(Concert concert) {
-        return ConcertDetailResponse.builder()
-                .id(concert.getId())
-                .title(concert.getTitle())
-                .slug(concert.getSlug())
-                .venue(concert.getVenue())
-                .description(concert.getDescription())
-                .artistName(concert.getArtistName())
-                .artistBio(concert.getArtistBio())
-                .startsAt(concert.getStartsAt())
-                .endsAt(concert.getEndsAt())
-                .status(concert.getStatus().name())
-                .coverImageUrl(storageService.buildPublicUrl(concert.getCoverImageUrl()))
-                .seatMapUrl(storageService.buildPublicUrl(concert.getSeatMapUrl()))
-                .organizerId(concert.getOrganizer() != null ? concert.getOrganizer().getId() : null)
-                .organizerName(concert.getOrganizer() != null ? concert.getOrganizer().getFullName() : null)
-                .createdAt(concert.getCreatedAt())
-                .updatedAt(concert.getUpdatedAt())
-                .build();
-    }
-
-    private SeatZoneResponse mapToSeatZoneResponse(SeatZone zone) {
-        return SeatZoneResponse.builder()
-                .id(zone.getId())
-                .concertId(zone.getConcert().getId())
-                .code(zone.getCode())
-                .name(zone.getName())
-                .description(zone.getDescription())
-                .capacity(zone.getCapacity())
-                .svgPath(zone.getSvgPath())
-                .sortOrder(zone.getSortOrder())
-                .build();
-    }
-
-    private TicketTypeResponse mapToTicketTypeResponse(TicketType tt) {
-        return TicketTypeResponse.builder()
-                .id(tt.getId())
-                .concertId(tt.getConcert().getId())
-                .seatZoneId(tt.getSeatZone().getId())
-                .zoneCode(tt.getSeatZone().getCode())
-                .name(tt.getName())
-                .description(tt.getDescription())
-                .price(tt.getPrice())
-                .currency(tt.getCurrency())
-                .totalQuantity(tt.getTotalQuantity())
-                .heldQuantity(tt.getHeldQuantity())
-                .soldQuantity(tt.getSoldQuantity())
-                .availableQuantity(tt.getAvailableQuantity())
-                .maxPerUser(tt.getMaxPerUser())
-                .saleStartAt(tt.getSaleStartAt())
-                .saleEndAt(tt.getSaleEndAt())
-                .status(tt.getStatus().name())
-                .build();
+        ConcertResponse response = concertMapper.toResponse(concert);
+        response.setTicketPriceRange(ConcertResponse.TicketPriceRange.builder()
+                .minAmount(minPrice)
+                .maxAmount(maxPrice)
+                .currency(currency)
+                .build());
+        return response;
     }
 
     private TicketTypeQuotaResponse mapToTicketTypeQuotaResponse(TicketType ticketType, UserTicketTypeCounter counter) {

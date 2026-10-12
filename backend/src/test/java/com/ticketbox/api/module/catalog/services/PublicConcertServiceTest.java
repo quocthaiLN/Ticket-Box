@@ -65,6 +65,15 @@ class CatalogServiceTest {
     @Mock
     private StorageService storageService;
 
+    @org.mockito.Spy
+    private com.ticketbox.api.module.catalog.domain.mappers.ConcertMapper concertMapper = new com.ticketbox.api.module.catalog.domain.mappers.ConcertMapperImpl();
+
+    @org.mockito.Spy
+    private com.ticketbox.api.module.catalog.domain.mappers.SeatZoneMapper seatZoneMapper = new com.ticketbox.api.module.catalog.domain.mappers.SeatZoneMapperImpl();
+
+    @org.mockito.Spy
+    private com.ticketbox.api.module.catalog.domain.mappers.TicketTypeMapper ticketTypeMapper = new com.ticketbox.api.module.catalog.domain.mappers.TicketTypeMapperImpl();
+
     @InjectMocks
     private CatalogServiceImpl CatalogService;
 
@@ -75,6 +84,7 @@ class CatalogServiceTest {
 
     @BeforeEach
     void setUp() {
+        org.springframework.test.util.ReflectionTestUtils.setField(concertMapper, "storageService", storageService);
         lenient().when(cacheService.getOrFetch(anyString(), any(), any(Class.class), any())).thenAnswer(invocation -> {
             Supplier<?> supplier = invocation.getArgument(3);
             return supplier.get();

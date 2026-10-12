@@ -19,6 +19,7 @@ import static org.mockito.Mockito.when;
 class AdminUserServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private AuditLogService auditLogService;
+    @org.mockito.Spy private com.ticketbox.api.module.auth.domain.mappers.UserMapper userMapper = new com.ticketbox.api.module.auth.domain.mappers.UserMapperImpl();
     @InjectMocks private AdminUserServiceImpl adminUserService;
 
     @Test

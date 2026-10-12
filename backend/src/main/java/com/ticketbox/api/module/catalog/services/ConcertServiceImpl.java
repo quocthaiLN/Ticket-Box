@@ -2,6 +2,9 @@ package com.ticketbox.api.module.catalog.services;
 
 import com.ticketbox.api.module.shared.validation.RequestValidationException;
 import com.ticketbox.api.module.catalog.domain.exception.*;
+import com.ticketbox.api.module.catalog.domain.mappers.ConcertMapper;
+import com.ticketbox.api.module.catalog.domain.mappers.SeatZoneMapper;
+import com.ticketbox.api.module.catalog.domain.mappers.TicketTypeMapper;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.auth.domain.entities.UserRole;
 import com.ticketbox.api.module.catalog.domain.dtos.*;
@@ -46,6 +49,9 @@ public class ConcertServiceImpl implements ConcertService {
     private final CacheService cacheService;
     private final StorageService storageService;
     private final AuditLogService auditLogService;
+    private final ConcertMapper concertMapper;
+    private final SeatZoneMapper seatZoneMapper;
+    private final TicketTypeMapper ticketTypeMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -103,7 +109,7 @@ public class ConcertServiceImpl implements ConcertService {
         };
 
         Page<Concert> concertPage = concertRepository.findAll(spec, pageable);
-        return concertPage.map(this::mapToConcertDetailResponse);
+        return concertPage.map(concertMapper::toAdminResponse);
     }
 
     @Override
@@ -111,11 +117,11 @@ public class ConcertServiceImpl implements ConcertService {
     public AdminConcertMetadataResponse getConcertMetadata(User currentUser, UUID concertId) {
         Concert concert = getConcertAndCheckOwnership(currentUser, concertId);
         return new AdminConcertMetadataResponse(
-                mapToConcertDetailResponse(concert),
+                concertMapper.toAdminResponse(concert),
                 seatZoneRepository.findByConcertIdOrderBySortOrderAsc(concertId).stream()
-                        .map(this::mapToSeatZoneResponse).toList(),
+                        .map(seatZoneMapper::toAdminResponse).toList(),
                 ticketTypeRepository.findByConcertId(concertId).stream()
-                        .map(this::mapToTicketTypeResponse).toList(),
+                        .map(ticketTypeMapper::toAdminResponse).toList(),
                 ConcertMetadataResponse.SeatMapInfo.builder()
                         .svgUrl(storageService.buildPublicUrl(concert.getSeatMapUrl()))
                         .fallbackImageUrl(storageService.buildPublicUrl(concert.getCoverImageUrl()))
@@ -133,20 +139,9 @@ public class ConcertServiceImpl implements ConcertService {
             throw new InvalidConcertTimeRangeException();
         }
 
-        Concert concert = Concert.builder()
-                .title(request.getTitle())
-                .slug(request.getSlug())
-                .venue(request.getVenue())
-                .description(request.getDescription())
-                .artistName(request.getArtistName())
-                .artistBio(request.getArtistBio())
-                .startsAt(request.getStartsAt())
-                .endsAt(request.getEndsAt())
-                .coverImageUrl(request.getCoverImageUrl())
-                .seatMapUrl(request.getSeatMapUrl())
-                .organizer(currentUser)
-                .status(ConcertStatus.DRAFT)
-                .build();
+        Concert concert = concertMapper.toEntity(request);
+        concert.setOrganizer(currentUser);
+        concert.setStatus(ConcertStatus.DRAFT);
 
         Concert savedConcert;
         try {
@@ -160,7 +155,7 @@ public class ConcertServiceImpl implements ConcertService {
         log.info("Created concert {} (ID: {}) by user {}", savedConcert.getTitle(), savedConcert.getId(), currentUser.getEmail());
         audit(currentUser, "CREATE_CONCERT", "CONCERT", savedConcert.getId(), null, savedConcert);
         invalidateAfterCommit(savedConcert.getId());
-        return mapToConcertDetailResponse(savedConcert);
+        return concertMapper.toAdminResponse(savedConcert);
     }
 
     @Override
@@ -197,17 +192,17 @@ public class ConcertServiceImpl implements ConcertService {
             throw new InvalidConcertTimeRangeException();
         }
 
-        if (sameConcert(before, concert)) return mapToConcertDetailResponse(concert);
+        if (sameConcert(before, concert)) return concertMapper.toAdminResponse(concert);
         Concert updatedConcert = concertRepository.save(concert);
         audit(currentUser, "UPDATE_CONCERT", "CONCERT", concertId, before, updatedConcert);
         invalidateAfterCommit(concertId);
-        return mapToConcertDetailResponse(updatedConcert);
+        return concertMapper.toAdminResponse(updatedConcert);
     }
 
     @Override
     public AdminConcertResponse publishConcert(User currentUser, UUID concertId) {
         Concert concert = lockConcertAndCheckOwnership(currentUser, concertId);
-        if (concert.getStatus() == ConcertStatus.PUBLISHED) return mapToConcertDetailResponse(concert);
+        if (concert.getStatus() == ConcertStatus.PUBLISHED) return concertMapper.toAdminResponse(concert);
         if (concert.getStatus() != ConcertStatus.DRAFT) throw invalidState();
 
         List<SeatZone> seatZones = seatZoneRepository.findByConcertIdOrderBySortOrderAsc(concertId);
@@ -246,13 +241,13 @@ public class ConcertServiceImpl implements ConcertService {
         log.info("Published concert {} by user {}", publishedConcert.getId(), currentUser.getEmail());
         audit(currentUser, "PUBLISH_CONCERT", "CONCERT", concertId, before, publishedConcert);
         invalidateAfterCommit(concertId);
-        return mapToConcertDetailResponse(publishedConcert);
+        return concertMapper.toAdminResponse(publishedConcert);
     }
 
     @Override
     public AdminConcertResponse cancelConcert(User currentUser, UUID concertId, String reason) {
         Concert concert = lockConcertAndCheckOwnership(currentUser, concertId);
-        if (concert.getStatus() == ConcertStatus.CANCELLED) return mapToConcertDetailResponse(concert);
+        if (concert.getStatus() == ConcertStatus.CANCELLED) return concertMapper.toAdminResponse(concert);
         if (concert.getStatus() != ConcertStatus.DRAFT && concert.getStatus() != ConcertStatus.PUBLISHED) throw invalidState();
 
         Concert before = copyConcert(concert);
@@ -261,7 +256,7 @@ public class ConcertServiceImpl implements ConcertService {
         log.info("Cancelled concert {} by user {}. Reason: {}", cancelledConcert.getId(), currentUser.getEmail(), reason);
         audit(currentUser, "CANCEL_CONCERT", "CONCERT", concertId, before, Map.of("after", cancelledConcert, "reason", reason == null ? "" : reason));
         invalidateAfterCommit(concertId);
-        return mapToConcertDetailResponse(cancelledConcert);
+        return concertMapper.toAdminResponse(cancelledConcert);
     }
 
     @Override
@@ -279,15 +274,12 @@ public class ConcertServiceImpl implements ConcertService {
             throw new SeatZoneCodeAlreadyExistsException(request.getCode() == null ? "" : request.getCode().trim().toUpperCase(java.util.Locale.ROOT));
         }
 
-        SeatZone zone = SeatZone.builder()
-                .concert(concert)
-                .code(code)
-                .name(request.getName())
-                .description(request.getDescription())
-                .capacity(request.getCapacity())
-                .svgPath(request.getSvgPath())
-                .sortOrder(request.getSortOrder() != null ? request.getSortOrder() : 0)
-                .build();
+        SeatZone zone = seatZoneMapper.toEntity(request);
+        zone.setConcert(concert);
+        zone.setCode(code);
+        if (zone.getSortOrder() == null) {
+            zone.setSortOrder(0);
+        }
 
         SeatZone savedZone;
         try {
@@ -300,7 +292,7 @@ public class ConcertServiceImpl implements ConcertService {
         }
         audit(currentUser, "CREATE_SEAT_ZONE", "SEAT_ZONE", savedZone.getId(), null, savedZoneSnapshot(savedZone));
         invalidateAfterCommit(concertId);
-        return mapToSeatZoneResponse(savedZone);
+        return seatZoneMapper.toAdminResponse(savedZone);
     }
 
     @Override
@@ -333,11 +325,11 @@ public class ConcertServiceImpl implements ConcertService {
         if (zone.getCapacity() == null || zone.getCapacity() <= 0 || allocated != null && allocated > zone.getCapacity()) {
             throw new ZoneCapacityExceededException();
         }
-        if (java.util.Objects.equals(before, savedZoneSnapshot(zone))) return mapToSeatZoneResponse(zone);
+        if (java.util.Objects.equals(before, savedZoneSnapshot(zone))) return seatZoneMapper.toAdminResponse(zone);
         SeatZone updatedZone = seatZoneRepository.save(zone);
         audit(currentUser, "UPDATE_SEAT_ZONE", "SEAT_ZONE", zone.getId(), before, savedZoneSnapshot(zone));
         invalidateAfterCommit(concert.getId());
-        return mapToSeatZoneResponse(updatedZone);
+        return seatZoneMapper.toAdminResponse(updatedZone);
     }
 
     @Override
@@ -362,21 +354,15 @@ public class ConcertServiceImpl implements ConcertService {
             throw new ZoneCapacityExceededException();
         }
 
-        TicketType ticketType = TicketType.builder()
-                .concert(concert)
-                .seatZone(seatZone)
-                .name(request.getName())
-                .description(request.getDescription())
-                .price(request.getPrice())
-                .currency(request.getCurrency() != null ? request.getCurrency() : "VND")
-                .totalQuantity(request.getTotalQuantity())
-                .heldQuantity(0)
-                .soldQuantity(0)
-                .maxPerUser(request.getMaxPerUser())
-                .saleStartAt(request.getSaleStartAt())
-                .saleEndAt(request.getSaleEndAt())
-                .status(TicketTypeStatus.DRAFT)
-                .build();
+        TicketType ticketType = ticketTypeMapper.toEntity(request);
+        ticketType.setConcert(concert);
+        ticketType.setSeatZone(seatZone);
+        if (ticketType.getCurrency() == null) {
+            ticketType.setCurrency("VND");
+        }
+        ticketType.setHeldQuantity(0);
+        ticketType.setSoldQuantity(0);
+        ticketType.setStatus(TicketTypeStatus.DRAFT);
 
         TicketType savedTicketType;
         try {
@@ -389,7 +375,7 @@ public class ConcertServiceImpl implements ConcertService {
         }
         audit(currentUser, "CREATE_TICKET_TYPE", "TICKET_TYPE", savedTicketType.getId(), null, ticketSnapshot(savedTicketType));
         invalidateAfterCommit(concertId);
-        return mapToTicketTypeResponse(savedTicketType);
+        return ticketTypeMapper.toAdminResponse(savedTicketType);
     }
 
     @Override
@@ -451,7 +437,7 @@ public class ConcertServiceImpl implements ConcertService {
             }
         }
 
-        if (java.util.Objects.equals(before, ticketSnapshot(ticketType))) return mapToTicketTypeResponse(ticketType);
+        if (java.util.Objects.equals(before, ticketSnapshot(ticketType))) return ticketTypeMapper.toAdminResponse(ticketType);
         TicketType updatedTicketType;
         try {
             updatedTicketType = ticketTypeRepository.saveAndFlush(ticketType);
@@ -463,7 +449,7 @@ public class ConcertServiceImpl implements ConcertService {
         }
         audit(currentUser, "UPDATE_TICKET_TYPE", "TICKET_TYPE", ticketTypeId, before, ticketSnapshot(updatedTicketType));
         invalidateAfterCommit(concert.getId());
-        return mapToTicketTypeResponse(updatedTicketType);
+        return ticketTypeMapper.toAdminResponse(updatedTicketType);
     }
 
     private Concert getConcertAndCheckOwnership(User currentUser, UUID concertId) {
@@ -600,60 +586,5 @@ public class ConcertServiceImpl implements ConcertService {
         if (concert.getOrganizer() == null || !concert.getOrganizer().getId().equals(currentUser.getId())) {
             throw new CatalogAccessDeniedException();
         }
-    }
+    }}
 
-    private AdminConcertResponse mapToConcertDetailResponse(Concert concert) {
-        return AdminConcertResponse.builder()
-                .id(concert.getId())
-                .title(concert.getTitle())
-                .slug(concert.getSlug())
-                .venue(concert.getVenue())
-                .description(concert.getDescription())
-                .artistName(concert.getArtistName())
-                .artistBio(concert.getArtistBio())
-                .startsAt(concert.getStartsAt().atOffset(java.time.ZoneOffset.UTC))
-                .endsAt(concert.getEndsAt().atOffset(java.time.ZoneOffset.UTC))
-                .status(concert.getStatus().name())
-                .coverImageUrl(storageService.buildPublicUrl(concert.getCoverImageUrl()))
-                .seatMapUrl(storageService.buildPublicUrl(concert.getSeatMapUrl()))
-                .organizerId(concert.getOrganizer() != null ? concert.getOrganizer().getId() : null)
-                .organizerName(concert.getOrganizer() != null ? concert.getOrganizer().getFullName() : null)
-                .createdAt(concert.getCreatedAt() == null ? null : concert.getCreatedAt().atOffset(java.time.ZoneOffset.UTC))
-                .updatedAt(concert.getUpdatedAt() == null ? null : concert.getUpdatedAt().atOffset(java.time.ZoneOffset.UTC))
-                .build();
-    }
-
-    private AdminSeatZoneResponse mapToSeatZoneResponse(SeatZone zone) {
-        return AdminSeatZoneResponse.builder()
-                .id(zone.getId())
-                .concertId(zone.getConcert().getId())
-                .code(zone.getCode())
-                .name(zone.getName())
-                .description(zone.getDescription())
-                .capacity(zone.getCapacity())
-                .svgPath(zone.getSvgPath())
-                .sortOrder(zone.getSortOrder())
-                .build();
-    }
-
-    private AdminTicketTypeResponse mapToTicketTypeResponse(TicketType tt) {
-        return AdminTicketTypeResponse.builder()
-                .id(tt.getId())
-                .concertId(tt.getConcert().getId())
-                .seatZoneId(tt.getSeatZone().getId())
-                .zoneCode(tt.getSeatZone().getCode())
-                .name(tt.getName())
-                .description(tt.getDescription())
-                .price(tt.getPrice())
-                .currency(tt.getCurrency())
-                .totalQuantity(tt.getTotalQuantity())
-                .heldQuantity(tt.getHeldQuantity())
-                .soldQuantity(tt.getSoldQuantity())
-                .availableQuantity(tt.getAvailableQuantity())
-                .maxPerUser(tt.getMaxPerUser())
-                .saleStartAt(tt.getSaleStartAt().atOffset(java.time.ZoneOffset.UTC))
-                .saleEndAt(tt.getSaleEndAt().atOffset(java.time.ZoneOffset.UTC))
-                .status(tt.getStatus().name())
-                .build();
-    }
-}

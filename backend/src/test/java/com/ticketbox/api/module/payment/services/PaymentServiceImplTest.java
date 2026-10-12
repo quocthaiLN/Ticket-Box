@@ -47,6 +47,9 @@ class PaymentServiceImplTest {
     @Mock
     private com.ticketbox.api.module.order.services.OrderInventoryService orderInventoryService;
 
+    @org.mockito.Spy
+    private com.ticketbox.api.module.payment.domain.mappers.PaymentMapper paymentMapper = new com.ticketbox.api.module.payment.domain.mappers.PaymentMapperImpl();
+
     @InjectMocks
     private PaymentServiceImpl paymentService;
 

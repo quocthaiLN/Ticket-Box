@@ -66,6 +66,14 @@ npm run dev
 
 Truy cập [localhost:3001](http://localhost:3001). Build frontend bằng `npm run build`.
 
+## Đăng nhập
+
+organizer@ticketbox.com
+audience1@ticketbox.com
+Password123@
+
+
+
 ## Nginx và Backend
 
 ```text

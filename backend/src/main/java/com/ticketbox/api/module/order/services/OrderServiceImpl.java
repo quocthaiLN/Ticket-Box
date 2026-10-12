@@ -37,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import com.ticketbox.api.module.order.domain.mappers.OrderMapper;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -65,6 +66,7 @@ public class OrderServiceImpl implements OrderService {
     private final IdempotencyService idempotencyService;
     private final TransactionTemplate transactionTemplate;
     private final CacheService cacheService;
+    private final OrderMapper orderMapper;
 
     public Duration getHoldTtl() {
         return Duration.ofMinutes(holdMinutes);
@@ -138,7 +140,7 @@ public class OrderServiceImpl implements OrderService {
         order.setTotalAmount(totalAmount);
 
         Order savedOrder = orderRepository.save(order);
-        return mapToOrderResponse(savedOrder);
+        return orderMapper.toResponse(savedOrder);
     }
 
     @Override
@@ -148,7 +150,7 @@ public class OrderServiceImpl implements OrderService {
         if (!order.getUser().getId().equals(currentUser.getId())) {
             throw new OrderAccessDeniedException();
         }
-        return mapToOrderResponse(order);
+        return orderMapper.toResponse(order);
     }
 
     @Override
@@ -160,7 +162,7 @@ public class OrderServiceImpl implements OrderService {
                     if (!matchesExistingOrder(order, currentUser, request)) {
                         throw new IdempotencyKeyReusedException();
                     }
-                    return mapToOrderResponse(order);
+                    return orderMapper.toResponse(order);
                 });
     }
 
@@ -228,28 +230,6 @@ public class OrderServiceImpl implements OrderService {
         ticketType.setHeldQuantity(ticketType.getHeldQuantity() + requestedQuantity);
         counter.setHeldQuantity(counter.getHeldQuantity() + requestedQuantity);
         counterRepository.save(counter);
-    }
-
-    private OrderResponse mapToOrderResponse(Order order) {
-        List<OrderItemResponse> items = order.getOrderItems().stream()
-                .map(item -> OrderItemResponse.builder()
-                        .ticketTypeId(item.getTicketType().getId())
-                        .quantity(item.getQuantity())
-                        .unitPrice(item.getUnitPrice())
-                        .lineTotal(item.getLineTotal())
-                        .build())
-                .toList();
-
-        return OrderResponse.builder()
-                .orderId(order.getId())
-                .concertId(order.getConcert().getId())
-                .status(order.getStatus().name())
-                .items(items)
-                .totalAmount(order.getTotalAmount())
-                .currency(order.getCurrency())
-                .holdExpiresAt(order.getHoldExpiresAt())
-                .createdAt(order.getCreatedAt())
-                .build();
     }
 
     private String fingerprint(User currentUser, CreateOrderRequest request) {

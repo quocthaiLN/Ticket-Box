@@ -24,12 +24,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class TicketServiceImpl implements TicketService {
 
         private final TicketRepository ticketRepository;
+        private final com.ticketbox.api.module.ticket.domain.mappers.TicketMapper ticketMapper;
 
         @Transactional(readOnly = true)
         @Override
         public Page<TicketResponse> getMyTickets(User currentUser, Pageable pageable) {
                 return ticketRepository.findByUserId(currentUser.getId(), pageable)
-                                .map(this::toTicketResponse);
+                                .map(ticketMapper::toTicketResponse);
         }
 
         @Transactional(readOnly = true)
@@ -44,36 +45,6 @@ public class TicketServiceImpl implements TicketService {
                 if (ticket.getQrPayload() == null || ticket.getQrSignature() == null) {
                         throw new TicketQrUnavailableException("QR code has not been issued for this ticket");
                 }
-                return new TicketQrResponse(ticket.getId().toString(), ticket.getId() + "." + ticket.getQrSignature());
-        }
-
-        private TicketResponse toTicketResponse(Ticket ticket) {
-                boolean qrAvailable = ticket.getStatus() == TicketStatus.ISSUED
-                                && ticket.getQrPayload() != null
-                                && ticket.getQrSignature() != null;
-
-                return new TicketResponse(
-                                ticket.getId().toString(),
-                                ticket.getStatus().name(),
-                                ticket.getIssuedAt(),
-                                new ConcertInfo(
-                                                ticket.getConcert().getId().toString(),
-                                                ticket.getConcert().getTitle(),
-                                                ticket.getConcert().getArtistName(),
-                                                ticket.getConcert().getVenue(),
-                                                ticket.getConcert().getStartsAt(),
-                                                ticket.getConcert().getEndsAt(),
-                                                ticket.getConcert().getCoverImageUrl()),
-                                new TicketTypeInfo(
-                                                ticket.getTicketType().getId().toString(),
-                                                ticket.getTicketType().getName(),
-                                                ticket.getTicketType().getPrice(),
-                                                ticket.getTicketType().getCurrency()),
-                                new SeatZoneInfo(
-                                                ticket.getSeatZone().getId().toString(),
-                                                ticket.getSeatZone().getCode(),
-                                                ticket.getSeatZone().getName()),
-                                new QrInfo(qrAvailable,
-                                                qrAvailable ? "/my-tickets/" + ticket.getId() + "/qr" : null));
+                return ticketMapper.toTicketQrResponse(ticket);
         }
 }

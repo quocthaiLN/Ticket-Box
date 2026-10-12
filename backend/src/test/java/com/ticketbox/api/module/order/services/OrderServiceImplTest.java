@@ -75,6 +75,9 @@ class OrderServiceImplTest {
     @Mock
     private CacheService cacheService;
 
+    @org.mockito.Spy
+    private com.ticketbox.api.module.order.domain.mappers.OrderMapper orderMapper = new com.ticketbox.api.module.order.domain.mappers.OrderMapperImpl();
+
     @InjectMocks
     private OrderServiceImpl orderService;
 

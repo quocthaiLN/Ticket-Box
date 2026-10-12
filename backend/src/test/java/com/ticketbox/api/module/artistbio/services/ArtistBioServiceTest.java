@@ -35,7 +35,8 @@ class ArtistBioServiceTest {
         protected void doCommit(DefaultTransactionStatus status) {}
         protected void doRollback(DefaultTransactionStatus status) {}
     };
-    private final ArtistBioService service = new ArtistBioServiceImpl(concertService, jobs, storage, producer, audit, new TransactionTemplate(tx));
+    private final ArtistBioService service = new ArtistBioServiceImpl(concertService, jobs, storage, producer, audit, new TransactionTemplate(tx),
+            new com.ticketbox.api.module.artistbio.domain.mappers.ArtistBioMapperImpl());
     private final MockMultipartFile file = new MockMultipartFile("file", "kit.pdf", "application/pdf", "%PDF-1.7".getBytes());
     @BeforeEach void setup() {
         when(concertService.getConcertForArtistBioUpload(concert.getOrganizer(), concert.getId())).thenReturn(concert);

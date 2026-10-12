@@ -47,6 +47,7 @@ public class UserServiceImpl implements UserService {
     private final TokenBlacklistService tokenBlacklistService;
     private final AuthProducer authProducer;
     private final StringRedisTemplate stringRedisTemplate;
+    private final com.ticketbox.api.module.auth.domain.mappers.UserMapper userMapper;
 
     @Value("${app.otp.ttl-minutes:5}")
     private long otpTtlMinutes;
@@ -109,7 +110,7 @@ public class UserServiceImpl implements UserService {
 
         authProducer.sendOtpMessage(otpMessage);
 
-        return UserResponse.fromEntity(savedUser);
+        return userMapper.toUserResponse(savedUser);
     }
 
     @Override
@@ -135,7 +136,7 @@ public class UserServiceImpl implements UserService {
         // Clear OTP from Redis upon successful verification
         stringRedisTemplate.delete(redisKey);
 
-        return UserResponse.fromEntity(updatedUser);
+        return userMapper.toUserResponse(updatedUser);
     }
 
     @Override
@@ -241,7 +242,7 @@ public class UserServiceImpl implements UserService {
         return LoginResponse.builder()
                 .accessToken(newAccessToken)
                 .expiresIn(expiresIn)
-                .user(UserResponse.fromEntity(user))
+                .user(userMapper.toUserResponse(user))
                 .build();
     }
 
@@ -250,7 +251,7 @@ public class UserServiceImpl implements UserService {
     public UserResponse getProfile(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
-        return UserResponse.fromEntity(user);
+        return userMapper.toUserResponse(user);
     }
 
     private User findOrCreateGoogleUser(String providerUserId, String email, String fullName) {
@@ -280,7 +281,7 @@ public class UserServiceImpl implements UserService {
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .expiresIn(expiresIn)
-                .user(UserResponse.fromEntity(user))
+                .user(userMapper.toUserResponse(user))
                 .build();
     }
 }

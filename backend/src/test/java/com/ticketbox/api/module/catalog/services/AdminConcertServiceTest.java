@@ -51,6 +51,15 @@ class ConcertServiceTest {
     @Mock
     private com.ticketbox.api.module.audit.services.AuditLogService auditLogService;
 
+    @org.mockito.Spy
+    private com.ticketbox.api.module.catalog.domain.mappers.ConcertMapper concertMapper = new com.ticketbox.api.module.catalog.domain.mappers.ConcertMapperImpl();
+
+    @org.mockito.Spy
+    private com.ticketbox.api.module.catalog.domain.mappers.SeatZoneMapper seatZoneMapper = new com.ticketbox.api.module.catalog.domain.mappers.SeatZoneMapperImpl();
+
+    @org.mockito.Spy
+    private com.ticketbox.api.module.catalog.domain.mappers.TicketTypeMapper ticketTypeMapper = new com.ticketbox.api.module.catalog.domain.mappers.TicketTypeMapperImpl();
+
     @InjectMocks
     private ConcertServiceImpl concertService;
 
@@ -62,6 +71,7 @@ class ConcertServiceTest {
 
     @BeforeEach
     void setUp() {
+        org.springframework.test.util.ReflectionTestUtils.setField(concertMapper, "storageService", storageService);
         organizerUser = User.builder()
                 .id(UUID.fromString("22222222-2222-2222-2222-222222222222"))
                 .email("organizer@ticketbox.com")

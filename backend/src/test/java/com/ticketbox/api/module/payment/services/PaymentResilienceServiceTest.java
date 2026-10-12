@@ -89,7 +89,8 @@ class PaymentResilienceServiceTest {
         stored = new AtomicReference<>();
         service = new PaymentServiceImpl(orderRepository, paymentRepository, List.of(momoGateway),
                 List.of(queryGateway), idempotencyService, transactionTemplate, orderInventoryService,
-                eventPublisher, new ObjectMapper(), ticketIssuer);
+                eventPublisher, new ObjectMapper(), ticketIssuer,
+                new com.ticketbox.api.module.payment.domain.mappers.PaymentMapperImpl());
         lenient().when(momoGateway.getProvider()).thenReturn(PaymentProvider.MOMO);
         lenient().when(momoGateway.transactionReference(PAYMENT_ID)).thenReturn(PAYMENT_ID.toString());
         lenient().when(queryGateway.getProvider()).thenReturn(PaymentProvider.MOMO);

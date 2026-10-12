@@ -69,6 +69,9 @@ class UserServiceTest {
     @Mock
     private org.springframework.data.redis.core.ValueOperations<String, String> valueOperations;
 
+    @org.mockito.Spy
+    private com.ticketbox.api.module.auth.domain.mappers.UserMapper userMapper = new com.ticketbox.api.module.auth.domain.mappers.UserMapperImpl();
+
     @InjectMocks
     private UserServiceImpl userService;
 
