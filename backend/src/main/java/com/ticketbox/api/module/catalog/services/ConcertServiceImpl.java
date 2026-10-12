@@ -164,29 +164,35 @@ public class ConcertServiceImpl implements ConcertService {
         checkEditable(concert);
         Concert before = copyConcert(concert);
 
-        if (request.wasSupplied("title") || request.getTitle() != null) concert.setTitle(requireText(request.getTitle(), "title", 255));
-        if (request.wasSupplied("venue") || request.getVenue() != null) concert.setVenue(requireText(request.getVenue(), "venue", 255));
-        if (request.wasSupplied("description") || request.getDescription() != null) {
-            concert.setDescription(request.getDescription());
+        if (request.getTitle() != null && request.getTitle().isPresent()) {
+            concert.setTitle(requireText(request.getTitle().get(), "title", 255));
         }
-        if (request.wasSupplied("artist_name") || request.getArtistName() != null) concert.setArtistName(requireText(request.getArtistName(), "artist_name", 255));
-        if (request.wasSupplied("artist_bio") || request.getArtistBio() != null) {
-            concert.setArtistBio(request.getArtistBio());
+        if (request.getVenue() != null && request.getVenue().isPresent()) {
+            concert.setVenue(requireText(request.getVenue().get(), "venue", 255));
         }
-        if (request.wasSupplied("cover_image_url") || request.getCoverImageUrl() != null) {
-            concert.setCoverImageUrl(request.getCoverImageUrl());
+        if (request.getDescription() != null && request.getDescription().isPresent()) {
+            concert.setDescription(request.getDescription().get());
         }
-        if (request.wasSupplied("seat_map_url") || request.getSeatMapUrl() != null) {
-            concert.setSeatMapUrl(request.getSeatMapUrl());
+        if (request.getArtistName() != null && request.getArtistName().isPresent()) {
+            concert.setArtistName(requireText(request.getArtistName().get(), "artist_name", 255));
+        }
+        if (request.getArtistBio() != null && request.getArtistBio().isPresent()) {
+            concert.setArtistBio(request.getArtistBio().get());
+        }
+        if (request.getCoverImageUrl() != null && request.getCoverImageUrl().isPresent()) {
+            concert.setCoverImageUrl(request.getCoverImageUrl().get());
+        }
+        if (request.getSeatMapUrl() != null && request.getSeatMapUrl().isPresent()) {
+            concert.setSeatMapUrl(request.getSeatMapUrl().get());
         }
 
-        if (request.wasSupplied("starts_at") || request.getStartsAt() != null) {
-            if (request.getStartsAt() == null) throw validation("starts_at cannot be null");
-            concert.setStartsAt(request.getStartsAt());
+        if (request.getStartsAt() != null && request.getStartsAt().isPresent()) {
+            if (request.getStartsAt().get() == null) throw validation("starts_at cannot be null");
+            concert.setStartsAt(request.getStartsAt().get());
         }
-        if (request.wasSupplied("ends_at") || request.getEndsAt() != null) {
-            if (request.getEndsAt() == null) throw validation("ends_at cannot be null");
-            concert.setEndsAt(request.getEndsAt());
+        if (request.getEndsAt() != null && request.getEndsAt().isPresent()) {
+            if (request.getEndsAt().get() == null) throw validation("ends_at cannot be null");
+            concert.setEndsAt(request.getEndsAt().get());
         }
         if (!concert.getEndsAt().isAfter(concert.getStartsAt())) {
             throw new InvalidConcertTimeRangeException();
@@ -305,20 +311,22 @@ public class ConcertServiceImpl implements ConcertService {
                 () -> new SeatZoneNotFoundException(seatZoneId));
         Map<String, Object> before = savedZoneSnapshot(zone);
 
-        if (request.wasSupplied("name") || request.getName() != null) zone.setName(requireText(request.getName(), "name", 100));
-        if (request.wasSupplied("description") || request.getDescription() != null) {
-            zone.setDescription(request.getDescription());
+        if (request.getName() != null && request.getName().isPresent()) {
+            zone.setName(requireText(request.getName().get(), "name", 100));
         }
-        if (request.wasSupplied("capacity") || request.getCapacity() != null) {
-            if (request.getCapacity() == null) throw validation("capacity cannot be null");
-            zone.setCapacity(request.getCapacity());
+        if (request.getDescription() != null && request.getDescription().isPresent()) {
+            zone.setDescription(request.getDescription().get());
         }
-        if (request.wasSupplied("svg_path") || request.getSvgPath() != null) {
-            zone.setSvgPath(request.getSvgPath());
+        if (request.getCapacity() != null && request.getCapacity().isPresent()) {
+            if (request.getCapacity().get() == null) throw validation("capacity cannot be null");
+            zone.setCapacity(request.getCapacity().get());
         }
-        if (request.wasSupplied("sort_order") || request.getSortOrder() != null) {
-            if (request.getSortOrder() == null) throw validation("sort_order cannot be null");
-            zone.setSortOrder(request.getSortOrder());
+        if (request.getSvgPath() != null && request.getSvgPath().isPresent()) {
+            zone.setSvgPath(request.getSvgPath().get());
+        }
+        if (request.getSortOrder() != null && request.getSortOrder().isPresent()) {
+            if (request.getSortOrder().get() == null) throw validation("sort_order cannot be null");
+            zone.setSortOrder(request.getSortOrder().get());
         }
 
         Long allocated = ticketTypeRepository.sumTotalQuantityByConcertIdAndSeatZoneId(concert.getId(), zone.getId());
@@ -388,37 +396,39 @@ public class ConcertServiceImpl implements ConcertService {
                 .orElseThrow(() -> new TicketTypeNotFoundException(ticketTypeId));
         Map<String, Object> before = ticketSnapshot(ticketType);
 
-        if (request.wasSupplied("name") || request.getName() != null) ticketType.setName(requireText(request.getName(), "name", 100));
+        if (request.getName() != null && request.getName().isPresent()) {
+            ticketType.setName(requireText(request.getName().get(), "name", 100));
+        }
         if (!ticketType.getName().equals(before.get("name"))
                 && ticketTypeRepository.existsByConcertIdAndNameAndIdNot(concert.getId(), ticketType.getName(), ticketTypeId)) {
-            throw new TicketTypeNameAlreadyExistsException(request.getName());
+            throw new TicketTypeNameAlreadyExistsException(ticketType.getName());
         }
-        if (request.wasSupplied("description") || request.getDescription() != null) {
-            ticketType.setDescription(request.getDescription());
+        if (request.getDescription() != null && request.getDescription().isPresent()) {
+            ticketType.setDescription(request.getDescription().get());
         }
-        if (request.wasSupplied("price") || request.getPrice() != null) {
-            if (request.getPrice() == null) throw validation("price cannot be null");
-            ticketType.setPrice(request.getPrice());
+        if (request.getPrice() != null && request.getPrice().isPresent()) {
+            if (request.getPrice().get() == null) throw validation("price cannot be null");
+            ticketType.setPrice(request.getPrice().get());
         }
-        if (request.wasSupplied("total_quantity") || request.getTotalQuantity() != null) {
-            if (request.getTotalQuantity() == null) throw validation("total_quantity cannot be null");
-            if (request.getTotalQuantity() < (ticketType.getHeldQuantity() + ticketType.getSoldQuantity())) {
+        if (request.getTotalQuantity() != null && request.getTotalQuantity().isPresent()) {
+            if (request.getTotalQuantity().get() == null) throw validation("total_quantity cannot be null");
+            if (request.getTotalQuantity().get() < (ticketType.getHeldQuantity() + ticketType.getSoldQuantity())) {
                 throw new InvalidTicketQuantityException("Total quantity cannot be set lower than the sum of held (" + ticketType.getHeldQuantity() + ") and sold (" + ticketType.getSoldQuantity() + ")");
             }
-            ticketType.setTotalQuantity(request.getTotalQuantity());
+            ticketType.setTotalQuantity(request.getTotalQuantity().get());
         }
-        if (request.getPrice() != null) validatePrice(request.getPrice());
-        if (request.wasSupplied("max_per_user") || request.getMaxPerUser() != null) {
-            if (request.getMaxPerUser() == null) throw validation("max_per_user cannot be null");
-            ticketType.setMaxPerUser(request.getMaxPerUser());
+        if (ticketType.getPrice() != null) validatePrice(ticketType.getPrice());
+        if (request.getMaxPerUser() != null && request.getMaxPerUser().isPresent()) {
+            if (request.getMaxPerUser().get() == null) throw validation("max_per_user cannot be null");
+            ticketType.setMaxPerUser(request.getMaxPerUser().get());
         }
-        if (request.wasSupplied("sale_start_at") || request.getSaleStartAt() != null) {
-            if (request.getSaleStartAt() == null) throw validation("sale_start_at cannot be null");
-            ticketType.setSaleStartAt(request.getSaleStartAt());
+        if (request.getSaleStartAt() != null && request.getSaleStartAt().isPresent()) {
+            if (request.getSaleStartAt().get() == null) throw validation("sale_start_at cannot be null");
+            ticketType.setSaleStartAt(request.getSaleStartAt().get());
         }
-        if (request.wasSupplied("sale_end_at") || request.getSaleEndAt() != null) {
-            if (request.getSaleEndAt() == null) throw validation("sale_end_at cannot be null");
-            ticketType.setSaleEndAt(request.getSaleEndAt());
+        if (request.getSaleEndAt() != null && request.getSaleEndAt().isPresent()) {
+            if (request.getSaleEndAt().get() == null) throw validation("sale_end_at cannot be null");
+            ticketType.setSaleEndAt(request.getSaleEndAt().get());
         }
         if (!ticketType.getSaleEndAt().isAfter(ticketType.getSaleStartAt())) {
             throw new InvalidSaleWindowException();
@@ -427,13 +437,13 @@ public class ConcertServiceImpl implements ConcertService {
         if (allocated != null && allocated > ticketType.getSeatZone().getCapacity()) {
             throw new ZoneCapacityExceededException();
         }
-        if (request.wasSupplied("status") || request.getStatus() != null) {
-            if (request.getStatus() == null) throw validation("status cannot be null");
+        if (request.getStatus() != null && request.getStatus().isPresent()) {
+            if (request.getStatus().get() == null) throw validation("status cannot be null");
             try {
-                TicketTypeStatus statusEnum = TicketTypeStatus.valueOf(request.getStatus().toUpperCase());
+                TicketTypeStatus statusEnum = TicketTypeStatus.valueOf(request.getStatus().get().toUpperCase());
                 ticketType.setStatus(statusEnum);
             } catch (IllegalArgumentException e) {
-                throw new RequestValidationException("VALIDATION_ERROR", "Invalid ticket type status: " + request.getStatus());
+                throw new RequestValidationException("VALIDATION_ERROR", "Invalid ticket type status: " + request.getStatus().get());
             }
         }
 
@@ -443,7 +453,7 @@ public class ConcertServiceImpl implements ConcertService {
             updatedTicketType = ticketTypeRepository.saveAndFlush(ticketType);
         } catch (DataIntegrityViolationException exception) {
             if (exception.getMessage() != null && exception.getMessage().toLowerCase().contains("name")) {
-                throw new TicketTypeNameAlreadyExistsException(request.getName());
+                throw new TicketTypeNameAlreadyExistsException(ticketType.getName());
             }
             throw exception;
         }

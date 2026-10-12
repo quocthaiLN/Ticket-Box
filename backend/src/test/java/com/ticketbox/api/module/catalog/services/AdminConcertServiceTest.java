@@ -5,6 +5,7 @@ import com.ticketbox.api.module.auth.domain.entities.UserRole;
 import com.ticketbox.api.module.catalog.domain.dtos.AdminConcertResponse;
 import com.ticketbox.api.module.catalog.domain.dtos.CreateConcertRequest;
 import com.ticketbox.api.module.catalog.domain.dtos.UpdateConcertRequest;
+import org.openapitools.jackson.nullable.JsonNullable;
 import com.ticketbox.api.module.catalog.domain.entities.Concert;
 import com.ticketbox.api.module.catalog.domain.entities.ConcertStatus;
 import com.ticketbox.api.module.catalog.domain.exception.CatalogAccessDeniedException;
@@ -186,7 +187,7 @@ class ConcertServiceTest {
     @DisplayName("Organizer updating another organizer's concert throws FORBIDDEN")
     void updateConcert_forbidden_differentOrganizer() {
         UpdateConcertRequest request = UpdateConcertRequest.builder()
-                .title("Updated Title")
+                .title(JsonNullable.of("Updated Title"))
                 .build();
 
         when(concertRepository.findByIdForUpdate(concertId)).thenReturn(Optional.of(concert));
@@ -202,7 +203,7 @@ class ConcertServiceTest {
     @DisplayName("Admin updating any organizer's concert succeeds")
     void updateConcert_adminSuccess() {
         UpdateConcertRequest request = UpdateConcertRequest.builder()
-                .title("Admin Updated Title")
+                .title(JsonNullable.of("Admin Updated Title"))
                 .build();
 
         when(concertRepository.findByIdForUpdate(concertId)).thenReturn(Optional.of(concert));
@@ -234,7 +235,7 @@ class ConcertServiceTest {
         when(concertRepository.findByIdForUpdate(concertId)).thenReturn(Optional.of(concert));
 
         ConcertStateConflictException ex = assertThrows(ConcertStateConflictException.class, () ->
-                concertService.updateConcert(adminUser, concertId, UpdateConcertRequest.builder().title("Nope").build()));
+                concertService.updateConcert(adminUser, concertId, UpdateConcertRequest.builder().title(JsonNullable.of("Nope")).build()));
 
         assertEquals(CatalogErrorCode.INVALID_CONCERT_STATE, ex.getErrorCode());
         verify(concertRepository, never()).save(any(Concert.class));

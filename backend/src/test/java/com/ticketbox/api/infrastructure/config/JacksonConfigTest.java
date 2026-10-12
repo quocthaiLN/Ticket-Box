@@ -4,8 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketbox.api.module.order.domain.dtos.OrderResponse;
 import com.ticketbox.api.module.catalog.domain.dtos.CreateConcertRequest;
 import com.ticketbox.api.module.catalog.domain.dtos.UpdateConcertRequest;
+import com.ticketbox.api.module.catalog.domain.dtos.UpdateSeatZoneRequest;
+import com.ticketbox.api.module.catalog.domain.dtos.UpdateTicketTypeRequest;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,9 +43,39 @@ class JacksonConfigTest {
     @Test
     void patchDtoTracksExplicitNullSeparatelyFromMissingField() throws Exception {
         ObjectMapper objectMapper = new JacksonConfig().objectMapper();
-        UpdateConcertRequest request = objectMapper.readValue("{\"description\":null}", UpdateConcertRequest.class);
+        UpdateConcertRequest request = objectMapper.readValue(
+                "{\"description\":null,\"starts_at\":\"2026-10-01T12:00:00+07:00\"}", UpdateConcertRequest.class);
 
-        assertEquals(true, request.wasSupplied("description"));
-        assertEquals(false, request.wasSupplied("artist_bio"));
+        assertEquals(true, request.getDescription().isPresent());
+        org.junit.jupiter.api.Assertions.assertNull(request.getDescription().get());
+        assertEquals(false, request.getArtistBio().isPresent());
+        assertEquals(true, request.getStartsAt().isPresent());
+        assertEquals(LocalDateTime.of(2026, 10, 1, 5, 0), request.getStartsAt().get());
+    }
+
+    @Test
+    void seatZonePatchDtoTracksJsonNullable() throws Exception {
+        ObjectMapper objectMapper = new JacksonConfig().objectMapper();
+        UpdateSeatZoneRequest request = objectMapper.readValue(
+                "{\"description\":null,\"capacity\":50}", UpdateSeatZoneRequest.class);
+
+        assertEquals(true, request.getDescription().isPresent());
+        org.junit.jupiter.api.Assertions.assertNull(request.getDescription().get());
+        assertEquals(true, request.getCapacity().isPresent());
+        assertEquals(50, request.getCapacity().get());
+        assertEquals(false, request.getName().isPresent());
+    }
+
+    @Test
+    void ticketTypePatchDtoTracksJsonNullable() throws Exception {
+        ObjectMapper objectMapper = new JacksonConfig().objectMapper();
+        UpdateTicketTypeRequest request = objectMapper.readValue(
+                "{\"price\":150000.00,\"sale_start_at\":\"2026-10-01T12:00:00+07:00\"}", UpdateTicketTypeRequest.class);
+
+        assertEquals(true, request.getPrice().isPresent());
+        assertEquals(new BigDecimal("150000.00"), request.getPrice().get());
+        assertEquals(true, request.getSaleStartAt().isPresent());
+        assertEquals(LocalDateTime.of(2026, 10, 1, 5, 0), request.getSaleStartAt().get());
+        assertEquals(false, request.getName().isPresent());
     }
 }

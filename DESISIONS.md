@@ -15,3 +15,4 @@
 | Number | brief | Link |
 | :---: | :--- | :--- |
 | 01 | Chuẩn hóa chuyển đổi đối tượng Entity <-> DTO bằng MapStruct | [Link](.agents/desisions/01-mapstruct-object-mapping.md) |
+| 02 | Chuẩn hóa Partial Update (API PATCH) bằng JsonNullable | [Link](.agents/desisions/02-json-nullable-partial-update.md) |
