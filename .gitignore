@@ -64,6 +64,7 @@ frontend/yarn-error.log*
 frontend/pnpm-debug.log*
 frontend/.DS_Store
 frontend/Thumbs.db
+frontend/imgs/.minio.sys/
 
 # General build & compilation output
 target/
@@ -103,5 +104,3 @@ logs/
 SKILL.md
 skills-lock.json
 AGENT.md
-PROGESS.md
-DESISION.md
