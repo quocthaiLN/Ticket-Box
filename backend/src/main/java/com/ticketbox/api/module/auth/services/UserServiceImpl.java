@@ -48,6 +48,7 @@ public class UserServiceImpl implements UserService {
     private final AuthProducer authProducer;
     private final StringRedisTemplate stringRedisTemplate;
     private final com.ticketbox.api.module.auth.domain.mappers.UserMapper userMapper;
+    private final com.ticketbox.api.module.audit.services.AuditLogService auditLogService;
 
     @Value("${app.otp.ttl-minutes:5}")
     private long otpTtlMinutes;
@@ -166,14 +167,36 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(InvalidCredentialsException::new);
+        java.util.Optional<User> userOpt = userRepository.findByEmail(request.getEmail());
+        if (userOpt.isEmpty()) {
+            auditLogService.logInvestigativeFailure(
+                    com.ticketbox.api.module.audit.domain.entities.AuditAction.LOGIN_FAILED,
+                    "USER",
+                    maskEmail(request.getEmail()),
+                    java.util.Map.of("reason", "USER_NOT_FOUND")
+            );
+            throw new InvalidCredentialsException();
+        }
+
+        User user = userOpt.get();
 
         if (user.getStatus() == UserStatus.PENDING) {
+            auditLogService.logInvestigativeFailure(
+                    com.ticketbox.api.module.audit.domain.entities.AuditAction.LOGIN_FAILED,
+                    "USER",
+                    user.getId().toString(),
+                    java.util.Map.of("reason", "ACCOUNT_NOT_VERIFIED")
+            );
             throw new AccountNotVerifiedException();
         }
 
         if (user.getStatus() != UserStatus.ACTIVE || user.getDeletedAt() != null) {
+            auditLogService.logInvestigativeFailure(
+                    com.ticketbox.api.module.audit.domain.entities.AuditAction.LOGIN_FAILED,
+                    "USER",
+                    user.getId().toString(),
+                    java.util.Map.of("reason", "ACCOUNT_DISABLED")
+            );
             throw new AccountDisabledException();
         }
 
@@ -182,13 +205,32 @@ public class UserServiceImpl implements UserService {
                         && acc.getUserAccountStatus() == UserAccountStatus.ACTIVE
                         && acc.getDeletedAt() == null)
                 .findFirst()
-                .orElseThrow(InvalidCredentialsException::new);
+                .orElse(null);
 
-        if (!bCryptPasswordEncoder.matches(request.getPassword(), localAccount.getPasswordHash())) {
+        if (localAccount == null || !bCryptPasswordEncoder.matches(request.getPassword(), localAccount.getPasswordHash())) {
+            auditLogService.logInvestigativeFailure(
+                    com.ticketbox.api.module.audit.domain.entities.AuditAction.LOGIN_FAILED,
+                    "USER",
+                    user.getId().toString(),
+                    java.util.Map.of("reason", "INVALID_CREDENTIALS")
+            );
             throw new InvalidCredentialsException();
         }
 
         return createLoginResponse(user);
+    }
+
+    private String maskEmail(String email) {
+        if (email == null || !email.contains("@")) {
+            return "***";
+        }
+        String[] parts = email.split("@", 2);
+        String name = parts[0];
+        String domain = parts[1];
+        if (name.length() <= 2) {
+            return name.charAt(0) + "***@" + domain;
+        }
+        return name.charAt(0) + "***" + name.charAt(name.length() - 1) + "@" + domain;
     }
 
     @Override

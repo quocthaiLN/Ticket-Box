@@ -69,6 +69,9 @@ class UserServiceTest {
     @Mock
     private org.springframework.data.redis.core.ValueOperations<String, String> valueOperations;
 
+    @Mock
+    private com.ticketbox.api.module.audit.services.AuditLogService auditLogService;
+
     @org.mockito.Spy
     private com.ticketbox.api.module.auth.domain.mappers.UserMapper userMapper = new com.ticketbox.api.module.auth.domain.mappers.UserMapperImpl();
 
@@ -170,6 +173,31 @@ class UserServiceTest {
         assertEquals(AuthErrorCode.INVALID_CREDENTIALS, ex.getErrorCode());
         assertEquals("INVALID_CREDENTIALS", ex.getErrorCode().code());
         assertEquals(com.ticketbox.api.module.shared.exception.ErrorType.UNAUTHORIZED, ex.getErrorCode().type());
+        verify(auditLogService).logInvestigativeFailure(
+                eq(com.ticketbox.api.module.audit.domain.entities.AuditAction.LOGIN_FAILED),
+                eq("USER"),
+                eq(sampleUser.getId().toString()),
+                any()
+        );
+    }
+
+    @Test
+    void login_userNotFound_logsFailureWithMaskedEmail() {
+        LoginRequest request = LoginRequest.builder()
+                .email("john.doe@example.com")
+                .password("WrongPassword")
+                .build();
+
+        when(userRepository.findByEmail(request.getEmail())).thenReturn(Optional.empty());
+
+        assertThrows(InvalidCredentialsException.class, () -> userService.login(request));
+
+        verify(auditLogService).logInvestigativeFailure(
+                eq(com.ticketbox.api.module.audit.domain.entities.AuditAction.LOGIN_FAILED),
+                eq("USER"),
+                eq("j***e@example.com"),
+                argThat(map -> "USER_NOT_FOUND".equals(map.get("reason")))
+        );
     }
 
     @Test

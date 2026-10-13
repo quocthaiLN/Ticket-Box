@@ -70,16 +70,11 @@ public class AdminUserServiceImpl implements AdminUserService {
 
         User updatedUser = userRepository.save(user);
 
-        User adminUser = adminId != null ? userRepository.findById(adminId).orElse(null) : null;
-
-        auditLogService.logAction(
-                adminUser,
-                "UPDATE_USER_STATUS",
-                "User",
+        auditLogService.logBusinessSuccess(
+                com.ticketbox.api.module.audit.domain.entities.AuditAction.UPDATE_USER_STATUS,
+                "USER",
                 user.getId().toString(),
-                Map.of("old_status", oldStatus.name(), "new_status", newStatus.name()),
-                ipAddress,
-                userAgent);
+                Map.of("old_status", oldStatus.name(), "new_status", newStatus.name()));
 
         return userMapper.toUserResponse(updatedUser);
     }

@@ -54,14 +54,14 @@ class ArtistBioServiceTest {
                 .when(producer).generate(any());
         var result = service.upload(actor, concert.getId(), file);
         assertThat(result.status()).isEqualTo(ArtistBioJobStatus.PENDING);
-        verify(audit).logAction(eq(actor), eq("CREATE_ARTIST_BIO_JOB"), eq("ARTIST_BIO_JOB"),
-                eq(result.id().toString()), anyMap(), isNull(), isNull());
+        verify(audit).logBusinessSuccess(eq(com.ticketbox.api.module.audit.domain.entities.AuditAction.CREATE_ARTIST_BIO_JOB),
+                eq("ARTIST_BIO_JOB"), eq(result.id().toString()), anyMap());
         verify(producer).generate(result.id());
         verify(storage, never()).delete(any());
         assertThat(concert.getArtistBio()).isEqualTo("existing bio");
     }
     @Test void rollbackRemovesUploadedObjectAndDoesNotPublish() {
-        doThrow(new IllegalStateException("audit failed")).when(audit).logAction(any(), any(), any(), any(), any(), any(), any());
+        doThrow(new IllegalStateException("audit failed")).when(audit).logBusinessSuccess(any(), any(), any(), any());
         assertThatThrownBy(() -> service.upload(actor, concert.getId(), file)).isInstanceOf(IllegalStateException.class);
         verify(storage).delete("s3://bucket/object.pdf"); verifyNoInteractions(producer);
     }

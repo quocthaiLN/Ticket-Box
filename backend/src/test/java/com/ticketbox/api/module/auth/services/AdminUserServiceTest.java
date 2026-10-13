@@ -32,4 +32,25 @@ class AdminUserServiceTest {
 
         assertEquals("USER_NOT_FOUND", exception.getErrorCode().code());
     }
+
+    @Test
+    void updateStatus_success_invokesAuditLogServiceBusinessSuccess() {
+        UUID userId = UUID.randomUUID();
+        com.ticketbox.api.module.auth.domain.entities.User user = com.ticketbox.api.module.auth.domain.entities.User.builder()
+                .id(userId)
+                .email("test@example.com")
+                .status(UserStatus.SUSPENDED)
+                .build();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.save(org.mockito.ArgumentMatchers.any(com.ticketbox.api.module.auth.domain.entities.User.class))).thenReturn(user);
+
+        adminUserService.updateUserStatus(userId, UserStatus.ACTIVE, null, null, null);
+
+        org.mockito.Mockito.verify(auditLogService).logBusinessSuccess(
+                org.mockito.ArgumentMatchers.eq(com.ticketbox.api.module.audit.domain.entities.AuditAction.UPDATE_USER_STATUS),
+                org.mockito.ArgumentMatchers.eq("USER"),
+                org.mockito.ArgumentMatchers.eq(userId.toString()),
+                org.mockito.ArgumentMatchers.argThat(map -> "SUSPENDED".equals(map.get("old_status")) && "ACTIVE".equals(map.get("new_status")))
+        );
+    }
 }

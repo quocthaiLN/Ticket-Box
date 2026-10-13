@@ -59,8 +59,9 @@ public class ArtistBioServiceImpl implements ArtistBioService {
         Concert concert = concertService.getConcertForArtistBioUploadForUpdate(actor, concertId);
         ArtistBioJob job = jobs.saveAndFlush(ArtistBioJob.builder()
                 .concert(concert).requestedBy(actor).sourceFileUrl(source).build());
-        audit.logAction(actor, "CREATE_ARTIST_BIO_JOB", "ARTIST_BIO_JOB", job.getId().toString(),
-                Map.of("concert_id", concertId.toString()), null, null);
+        audit.logBusinessSuccess(com.ticketbox.api.module.audit.domain.entities.AuditAction.CREATE_ARTIST_BIO_JOB,
+                "ARTIST_BIO_JOB", job.getId().toString(),
+                Map.of("concert_id", concertId.toString()));
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {

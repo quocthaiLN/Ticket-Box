@@ -556,7 +556,13 @@ public class ConcertServiceImpl implements ConcertService {
             Object snapshot = map.get("after");
             if (snapshot instanceof Concert c) metadata.put("after", concertSnapshot(c));
         }
-        auditLogService.logAction(actor, action, entity, id.toString(), metadata, null, null);
+        com.ticketbox.api.module.audit.domain.entities.AuditAction auditAction;
+        try {
+            auditAction = com.ticketbox.api.module.audit.domain.entities.AuditAction.valueOf(action);
+        } catch (Exception e) {
+            auditAction = com.ticketbox.api.module.audit.domain.entities.AuditAction.UPDATE_CONCERT;
+        }
+        auditLogService.logBusinessSuccess(auditAction, entity, id.toString(), metadata);
     }
 
     private Map<String, Object> concertSnapshot(Concert c) {

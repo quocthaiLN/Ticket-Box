@@ -37,15 +37,18 @@ public class SecurityConfig {
     private final OidcSuccessHandler oidcSuccessHandler;
     private final RateLimitPolicyRegistry rateLimitPolicies;
     private final RedisRateLimiter redisRateLimiter;
+    private final org.springframework.beans.factory.ObjectProvider<com.ticketbox.api.module.audit.services.AuditLogService> auditLogServiceProvider;
 
     public SecurityConfig(JwtFilter jwtFilter, OidcSuccessHandler oidcSuccessHandler,
                           OidcFailureHandler oidcFailureHandler, RateLimitPolicyRegistry rateLimitPolicies,
-                          RedisRateLimiter redisRateLimiter) {
+                          RedisRateLimiter redisRateLimiter,
+                          org.springframework.beans.factory.ObjectProvider<com.ticketbox.api.module.audit.services.AuditLogService> auditLogServiceProvider) {
         this.jwtFilter = jwtFilter;
         this.oidcSuccessHandler = oidcSuccessHandler;
         this.oidcFailureHandler = oidcFailureHandler;
         this.rateLimitPolicies = rateLimitPolicies;
         this.redisRateLimiter = redisRateLimiter;
+        this.auditLogServiceProvider = auditLogServiceProvider;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -76,6 +79,7 @@ public class SecurityConfig {
                         .hasAnyRole("AUDIENCE", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/concerts/**")
                         .permitAll()
+                        .requestMatchers("/admin/audit-logs/**").hasRole("ADMIN")
                         .requestMatchers("/admin/**").hasAnyRole("ADMIN", "ORGANIZER")
                         .anyRequest().authenticated())
                 .oauth2Login(oauth2 -> oauth2
@@ -122,6 +126,14 @@ public class SecurityConfig {
     @Bean
     public AccessDeniedHandler customAccessDeniedHandler() {
         return (request, response, accessDeniedException) -> {
+            auditLogServiceProvider.ifAvailable(auditLogService -> {
+                auditLogService.logInvestigativeFailure(
+                        com.ticketbox.api.module.audit.domain.entities.AuditAction.ACCESS_DENIED,
+                        "SECURITY",
+                        request.getRequestURI(),
+                        java.util.Map.of("method", request.getMethod())
+                );
+            });
             ApiProblemWriter.write(objectMapper, request, response, HttpServletResponse.SC_FORBIDDEN,
                     "FORBIDDEN", "Access denied: insufficient permissions");
         };
