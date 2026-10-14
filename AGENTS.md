@@ -62,6 +62,7 @@ npm run dev
 - Prefer durable repo artifacts over chat summaries.
 - Avoid Fully Qualified Class Names (FQCN) in code and tests; always use explicit `import` and simple class names.
 - Always validate plan & implementation with `DECISIONS.md`.
+- Whe reciew a task, use skill `interview-me` to clarify requirements.
 
 ## Definition Of Done
 - A feature is done only when all of the following are true:
