@@ -1,144 +1,206 @@
-# Thanh toán khi cổng lỗi: luồng tối giản cho TicketBox
+# Đặc tả Kiến trúc: Thanh toán chống lỗi và Phục hồi sự cố (Payment Resilience & Fault Tolerance)
 
-> **Phạm vi:** tạo URL thanh toán và nhận IPN của MoMo/VNPay khi gặp timeout hoặc HTTP 5xx. Giữ ý tưởng ban đầu của người phát triển TicketBox: MoMo có CREATING, VNPay bắt đầu PENDING, kết quả chưa rõ thì giữ payment để đối soát. Đây là kế hoạch sửa code, chưa phải hành vi đang chạy. Ưu tiên cách xử lý dễ hiểu, có thể kiểm tra được; hoàn tiền tự động và các cơ chế tối ưu tải để ở giai đoạn sau.
+## 1. Mục tiêu và Nguyên tắc cốt lõi
 
-## 1. Chỉ cần nhớ ba quy tắc
+Đặc tả này quy định kiến trúc chống chịu lỗi, xử lý bất đồng bộ và tự động phục hồi cho phân hệ thanh toán của TicketBox, giải quyết triệt để các rủi ro mạng, trễ pha và phân mảnh dữ liệu giữa TicketBox và các cổng thanh toán (VNPAY, MoMo).
 
-1. **Có URL chưa có nghĩa đã thanh toán.** PENDING chỉ nói TicketBox đã có URL hợp lệ để khách mở. Chỉ IPN hoặc query đã xác minh mới xác nhận tiền.
-2. **Timeout/5xx không phải kết quả giao dịch.** Khi TicketBox gọi MoMo xin URL và không nhận phản hồi rõ ràng, ta chưa biết MoMo đã tạo yêu cầu hay chưa. Khi MoMo/VNPay gọi IPN mà TicketBox timeout/5xx, cổng có thể đã thu tiền rồi.
-3. **Chỉ báo “đã nhận IPN” sau khi ghi DB thành công.** Nếu phản hồi bị mất sau khi ghi DB, IPN gửi lại phải an toàn và không phát vé hai lần.
+### 4 Nguyên tắc cốt lõi:
+1. **Tách biệt trạng thái Thanh toán và Đơn hàng:**
+   - Trạng thái thanh toán (`PaymentStatus`: `INITIATED`, `PENDING`, `SUCCESS`, `FAILED`, `CANCELLED`, `EXPIRED`) phản ánh dòng tiền thực tế với cổng.
+   - Trạng thái đơn hàng (`OrderStatus`: `HELD`, `CONFIRMED`, `CANCELLED`, `EXPIRED`) phản ánh quyền sở hữu vé của khán giả.
+   - *Hệ quả:* "Tiền đã thu thành công" không đồng nghĩa "Vé đã phát hành". Khi tiền về muộn lúc vé đã hết hạn giữ chỗ, thanh toán vẫn được ghi nhận `SUCCESS` nhưng đơn hàng không phát vé và hệ thống tự động hoàn tiền.
+2. **Khóa chống trùng 3 tầng (3-Tier Deduplication & Idempotency):**
+   - *Tầng 1 (API Client)*: Redis Idempotency Store + `Idempotency-Key` (UUID v4) + Request Fingerprint (SHA-256).
+   - *Tầng 2 (Sự kiện Cổng)*: Bảng `payment_events` với khóa duy nhất `UNIQUE (provider, dedupe_key)` chặn đứng mọi Webhook/IPN trùng lặp ngay từ tầng cơ sở dữ liệu.
+   - *Tầng 3 (Giao dịch & Hoàn tiền)*: Bảng `payments` với `merchant_txn_ref` (UNIQUE) và bảng `refunds` với `idempotency_key` (UNIQUE).
+3. **Điểm hội tụ xử lý duy nhất (Single Convergence Point):**
+   - Mọi tín hiệu kết quả (IPN webhook, Query DR định kỳ, hoặc ReturnUrl query) đều được quy đổi thành cấu trúc chuẩn `PaymentOutcome` và chuyển qua một hàm xử lý duy nhất `processPaymentResult`.
+   - Hàm này thực hiện khóa bi quan `SELECT ... FOR UPDATE` theo `merchant_txn_ref`, loại bỏ hoàn toàn tình trạng race-condition giữa nhiều nguồn dữ liệu.
+4. **Kiểm soát đồng thời lạc quan (Optimistic Concurrency Control):**
+   - Bảng `payments` chứa cột `version BIGINT` (`@Version`), ngăn chặn xung đột khi có sự phản hồi muộn từ cổng đè lên thao tác timeout/reconcile của hệ thống.
 
-| Thuật ngữ | Hiểu đơn giản |
-| --- | --- |
-| CREATING | Payment MoMo đã được TicketBox lưu nhưng chưa có URL để đưa cho khách. |
-| PENDING | URL đã có; đang chờ kết quả thanh toán. |
-| IPN | Cổng gọi vào server TicketBox để báo kết quả, độc lập với trình duyệt của khách. |
-| Query/đối soát | TicketBox chủ động hỏi lại cổng khi thiếu kết quả IPN. |
-| Circuit breaker | Tạm ngừng lời gọi **ra ngoài** tới cổng khi cổng đang lỗi liên tiếp; IPN gọi **vào** TicketBox không đi qua breaker này. |
-| next_reconcile_at | Lịch hẹn worker kiểm tra payment tiếp theo; không phải trạng thái thanh toán. |
+---
 
-**Hai hướng gọi khác nhau:**
+## 2. Mô hình Thực thể Dữ liệu Mới
 
-~~~text
-Xin URL MoMo: TicketBox ──HTTP──> MoMo      (MoMo có thể trả 5xx/timeout)
-Nhận IPN:     MoMo/VNPay ──HTTP──> TicketBox (TicketBox có thể trả 5xx/timeout)
-Tạo URL VNPay: TicketBox tự ký URL tại chỗ  (không có HTTP xin URL từ VNPay)
+~~~mermaid
+erDiagram
+    orders ||--o{ payments : "1 đơn có thể có nhiều lượt thanh toán"
+    payments ||--o{ payment_events : "lưu vết mọi webhook / IPN / query"
+    payments ||--o{ refunds : "lệnh hoàn tiền khi lỗi / trễ hạn"
+
+    payments {
+        uuid id PK
+        uuid order_id FK
+        varchar provider
+        varchar merchant_txn_ref UK "Mã tham chiếu hệ thống tự sinh"
+        varchar provider_txn_id "Mã cổng cấp, UNIQUE(provider, provider_txn_id)"
+        numeric amount "Số tiền thanh toán"
+        varchar currency "Mặc định VND"
+        varchar status "INITIATED, PENDING, SUCCESS, FAILED, CANCELLED, EXPIRED"
+        text payment_url "URL cổng cấp"
+        varchar failure_code
+        text failure_message
+        bigint version "Optimistic locking"
+        timestamptz paid_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    payment_events {
+        uuid id PK
+        uuid payment_id FK "Nullable để lưu cả event không khớp payment"
+        varchar provider
+        varchar event_source "IPN, RETURN_URL, QUERY_API, INTERNAL"
+        varchar dedupe_key UK "Khóa chống trùng cùng provider"
+        varchar event_type "PAYMENT_SUCCESS, PAYMENT_FAILED, ..."
+        jsonb raw_payload "Dữ liệu gốc phục vụ đối soát"
+        boolean signature_valid "Ghi lại cả chữ ký sai để điều tra"
+        varchar processing_status "RECEIVED, PROCESSED, FAILED, IGNORED"
+        text error_message
+        timestamptz received_at
+        timestamptz processed_at
+    }
+
+    refunds {
+        uuid id PK
+        uuid payment_id FK
+        numeric amount "Số tiền hoàn"
+        varchar currency
+        varchar idempotency_key UK "Chống tạo lệnh hoàn tiền trùng"
+        varchar status "REQUESTED, PROCESSING, SUCCESS, FAILED"
+        varchar provider_refund_id "Mã hoàn tiền do cổng cấp"
+        text reason
+        uuid requested_by "Actor yêu cầu (user hoặc system)"
+        varchar failure_code
+        text failure_message
+        timestamptz requested_at
+        timestamptz completed_at
+    }
 ~~~
 
-## 2. Code hiện tại đang làm gì và thiếu gì?
+---
 
-| Vị trí | Hành vi hiện tại | Vì sao cần sửa |
-| --- | --- | --- |
-| [PaymentServiceImpl](../../backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentServiceImpl.java) | Lưu **mọi** payment là PENDING trước khi tạo URL, sau đó mới lưu URL. | MoMo timeout/5xx để lại PENDING với URL rỗng, dù khách chưa thể thanh toán. |
-| [MomoGateway](../../backend/src/main/java/com/ticketbox/api/module/payment/gateways/MomoGateway.java) | Mỗi lần gọi tạo requestId mới; lỗi HTTP và mã trả về bất kỳ bị gom thành MOMO_CREATE_FAILED/502. | Không thể thử lại đúng yêu cầu cũ và không phân biệt “bị từ chối chắc chắn” với “chưa biết kết quả”. Client HTTP chưa cấu hình timeout rõ ràng. |
-| [IdempotencyService](../../backend/src/main/java/com/ticketbox/api/module/shared/idempotency/IdempotencyService.java) | Lưu lỗi AppException theo idempotency key. | Retry cùng key có thể nhận lại lỗi cũ; key mới bị payment PENDING cũ chặn. |
-| [PaymentController](../../backend/src/main/java/com/ticketbox/api/module/payment/controllers/PaymentController.java) | MoMo IPN luôn trả 204 nếu service không ném exception, kể cả chữ ký sai, không tìm thấy payment hoặc sai số tiền. | Cổng có thể hiểu TicketBox đã nhận kết quả trong khi DB chưa ghi nhận. |
-| [OrderInventoryServiceImpl](../../backend/src/main/java/com/ticketbox/api/module/order/services/OrderInventoryServiceImpl.java) | Xác nhận order khi còn HELD, chưa kiểm tra đã quá thời hạn giữ vé hay chưa. | IPN đến muộn vẫn có thể xác nhận order và phát vé. |
-| [CheckoutPage](../../frontend/src/routes/audience/CheckoutPage.tsx) | Giả định response tạo payment luôn có URL và chuyển trình duyệt tới URL đó. | Cần hiển thị CREATING khi URL chưa có; không redirect với giá trị rỗng. |
+## 3. Xử lý 4 Ca lỗi Biên Trọng điểm (Fault Scenarios)
 
-Ngoài ra, chưa có worker hết hạn order, query bù hoặc refund trong payment/order module. Việc phát sự kiện sau khi commit DB hiện có thể thất bại riêng: payment đã SUCCEEDED nhưng sự kiện phát vé chưa được gửi; IPN lặp lại sẽ bị coi là đã xử lý. Cần giải quyết điểm này trước khi coi luồng IPN là hoàn chỉnh.
+### Ca 1: Timeout khi gọi Gateway tạo URL thanh toán (MoMo)
+- **Tình huống:** TicketBox gửi request khởi tạo giao dịch sang MoMo nhưng gặp HTTP 5xx, timeout hoặc mất mạng. Chưa rõ MoMo đã ghi nhận yêu cầu hay chưa.
+- **Xử lý:**
+  1. Lưu `payments` ở trạng thái `INITIATED`, lưu `failure_code = 'GATEWAY_TIMEOUT'`.
+  2. Giữ nguyên đơn hàng `orders` ở trạng thái `HELD` (nếu còn trong thời hạn `hold_expires_at`).
+  3. API trả về thông tin payment với trạng thái `INITIATED` (chưa có URL). Client hiển thị trạng thái chuẩn bị và bắt đầu polling.
+  4. Worker chạy nền sẽ thực hiện gọi Query API sang MoMo bằng `merchant_txn_ref` (kèm backoff):
+     - Nếu MoMo báo giao dịch **chưa tồn tại**: Cho phép chuyển payment sang `FAILED` và người dùng có thể thử lại với `merchant_txn_ref` mới.
+     - Nếu MoMo báo giao dịch **đang chờ / đã có**: Lấy URL hoặc cập nhật kết quả thật vào payment.
+     - Tuyệt đối không gửi request tạo mới mù quáng với cùng `merchant_txn_ref` nếu chưa query đối soát.
 
-## 3. Luồng A — tạo URL thanh toán
+### Ca 2: Gateway trả URL sau khi hệ thống đã coi là Timeout (Late Response)
+- **Tình huống:** Request tạo URL bị timeout ở phía TicketBox, nhưng vài giây sau MoMo mới trả kết quả về, hoặc worker đã can thiệp đánh dấu thất bại.
+- **Xử lý:**
+  1. Sử dụng cập nhật có điều kiện qua khóa lạc quan:
+     ```sql
+     UPDATE payments
+     SET status = 'PENDING', payment_url = :url, version = version + 1
+     WHERE id = :id AND status = 'INITIATED' AND version = :expectedVersion;
+     ```
+  2. Nếu cập nhật thành công (1 row): Lưu URL bình thường, người dùng có thể tiếp tục thanh toán.
+  3. Nếu cập nhật thất bại (0 row - payment đã `FAILED` hoặc `EXPIRED`): Từ chối lưu URL, ghi sự kiện vào `payment_events` với `event_source = 'INTERNAL'` để lưu vết. Không mở URL cho người dùng.
 
-### 3.1. VNPay
+### Ca 3: Không nhận được IPN trong thời gian giữ vé (Missing IPN)
+- **Tình huống:** Người dùng đã thanh toán trên cổng nhưng mạng bị đứt, cổng không gửi được IPN hoặc TicketBox không nhận được.
+- **Xử lý:**
+  1. Worker định kỳ (mỗi 1 - 2 phút) quét các payment `PENDING` đã tồn tại quá ngưỡng cho phép (ví dụ > 2 phút kể từ khi tạo).
+  2. Chủ động gọi Query API (Query DR của VNPAY, Query API của MoMo).
+  3. Đưa kết quả xác minh vào hàm hội tụ `processPaymentResult`:
+     - Nếu cổng báo **SUCCESS**: Xử lý hoàn tất đơn hàng và phát hành vé bình thường (nếu hold còn hạn). `dedupe_key` được tính bằng `provider_txn_id + "_SUCCESS"` để nếu sau đó IPN thật có về cũng sẽ bị chặn trùng lặp.
+     - Nếu cổng báo **FAILED / CANCELLED**: Cập nhật payment tương ứng.
+     - Nếu cổng báo **chưa thanh toán** và đơn hàng đã quá hạn `hold_expires_at`: Worker chuyển payment sang `EXPIRED`, nhả kho giữ vé.
 
-1. TicketBox tạo payment và tự ký URL VNPay tại chỗ.
-2. Lưu URL cùng PENDING trong một transaction, sau đó trả URL cho trình duyệt.
-3. Bước này **không có** trường hợp “VNPay trả 5xx/timeout”, vì chưa gọi VNPay. Nếu TicketBox tự lỗi, retry cùng idempotency key phải đọc lại payment/URL đã lưu hoặc tạo lại URL cho payment chưa hoàn tất.
+### Ca 4: IPN thành công đến sau khi thời hạn giữ vé đã hết hạn (Late IPN)
+- **Tình huống:** Cổng trừ tiền thành công của khách, nhưng IPN bị trễ nhiều phút và đến sau khi đơn hàng đã bị `OrderExpirationScheduler` nhả kho và chuyển sang `EXPIRED`. Ghế có thể đã bị người khác mua.
+- **Chính sách chốt:** **TUYỆT ĐỐI KHÔNG TÁI CẤP VÉ — TỰ ĐỘNG HOÀN TIỀN 100%**.
+- **Xử lý chi tiết:**
+  1. Xác thực chữ ký số hợp lệ, lưu `payment_events`.
+  2. Khóa dòng `payments` bằng `SELECT ... FOR UPDATE WHERE merchant_txn_ref = :ref`.
+  3. Kiểm tra số tiền hợp lệ.
+  4. Kiểm tra trạng thái đơn: `order.status != HELD` hoặc `now >= order.hold_expires_at`.
+  5. Cập nhật `payments`:
+     - `status = 'SUCCESS'` (ghi nhận sự thật tài chính: tiền đã về tài khoản).
+     - `paid_at = now()`.
+     - `failure_code = 'LATE_PAYMENT_REFUND_INITIATED'`.
+     - `failure_message = 'Thanh toán thành công sau khi hết hạn giữ chỗ. Hệ thống tự động hoàn tiền.'`.
+  6. Đơn hàng `orders` **giữ nguyên trạng thái `EXPIRED`**, **không phát hành vé**.
+  7. Tạo bản ghi `refunds`:
+     - `payment_id = payment.id`
+     - `amount = payment.amount`
+     - `idempotency_key = "LATE_REFUND_" + payment.merchant_txn_ref`
+     - `status = 'REQUESTED'`
+     - `reason = 'Late payment after hold expiry'`
+     - `requested_by = SYSTEM_ACTOR_UUID`
+  8. Gọi trực tiếp `RefundGateway.refund(...)` sang cổng:
+     - **Nếu cổng xác nhận thành công**: Cập nhật `refunds.status = 'SUCCESS'`, `completed_at = now()`, lưu `provider_refund_id`.
+     - **Nếu cổng phản hồi đang xử lý hoặc timeout**: Cập nhật `refunds.status = 'PROCESSING'` để worker retry đối soát tiếp theo hoàn tất.
+     - **Nếu cổng từ chối**: Cập nhật `refunds.status = 'FAILED'`, bắn cảnh báo khẩn cho quản trị viên đối soát thủ công.
+  9. Đánh dấu `payment_events.processing_status = 'PROCESSED'` và trả mã thành công (VNPAY `00`, MoMo `204`) cho cổng.
 
-### 3.2. MoMo
+---
 
-1. Lưu payment CREATING trước khi gọi cổng. Dùng mã payment làm orderId MoMo và dùng một requestId cố định cho lệnh create (có thể dùng chính mã payment nếu kiểm thử sandbox xác nhận phù hợp). URL đang rỗng; mọi lần thử lại phải gửi cùng payload.
-2. Gọi MoMo create một lần. Cấu hình timeout HTTP rõ ràng; tài liệu MoMo yêu cầu tối thiểu **30 giây** cho lời gọi API. Có thể đặt circuit breaker Resilience4j tại lời gọi này.
-3. Nếu MoMo trả thành công và có payUrl hợp lệ: lưu URL, chuyển PENDING trong cùng transaction, rồi mới trả URL cho khách.
-4. Nếu MoMo **từ chối rõ ràng vì dữ liệu/yêu cầu không hợp lệ**: chuyển FAILED, hiển thị lỗi. Đây là kết luận từ phản hồi nghiệp vụ, không phải từ HTTP timeout.
-5. Nếu MoMo trả **HTTP 5xx, timeout, mất kết nối hoặc breaker từ chối**: giữ CREATING, URL rỗng; API TicketBox trả payment_id và status=CREATING. Frontend hiển thị “Đang chuẩn bị thanh toán” và đọc lại trạng thái payment; không redirect, không tự tạo payment thứ hai.
-6. Worker thử lại **chính request cũ, cùng payload và requestId** khi order còn hạn. Nếu nhận payUrl, chuyển PENDING; nếu MoMo báo đang xử lý, giữ CREATING và hẹn lại. Nếu order đã hết hạn, không cấp URL mới; chỉ đối soát giao dịch.
+## 4. Điểm hội tụ xử lý kết quả (`processPaymentResult`)
+
+Mọi luồng tiếp nhận kết quả (IPN webhook, kết quả truy vấn Query API, callback ReturnUrl) đều phải đi qua luồng chuẩn hóa sau:
 
 ~~~mermaid
 flowchart TD
-  A[Tạo payment MoMo: CREATING, URL rỗng] --> B[Gọi create bằng requestId cố định]
-  B -->|payUrl hợp lệ| C[Lưu URL và PENDING]
-  B -->|Từ chối nghiệp vụ rõ ràng| D[FAILED]
-  B -->|5xx hoặc timeout| E[Giữ CREATING, hẹn worker]
-  E --> F{Order còn hạn?}
-  F -->|Có| G[Thử lại cùng requestId để lấy URL]
-  F -->|Không| H[Không cấp URL, đối soát tiền]
-  G -->|Có payUrl| C
+    A[Nhận tín hiệu: IPN / Query API / ReturnUrl] --> B[Ghi nhận vào payment_events: status = RECEIVED]
+    B -->|Vi phạm UNIQUE provider + dedupe_key| C[Sự kiện trùng: ACK idempotency ngay, DỪNG]
+    B -->|Thành công| D{Kiểm tra chữ ký số?}
+    D -->|Sai| E[Cập nhật signature_valid = FALSE, status = IGNORED; Báo lỗi cổng]
+    D -->|Đúng| F[Khóa bi quan payment: SELECT ... FOR UPDATE]
+    F --> G{Kiểm tra số tiền amount?}
+    G -->|Không khớp| H[payment_events: FAILED; Báo lỗi lệch tiền]
+    G -->|Khớp| I{Trạng thái hiện tại của payment?}
+    I -->|Đã SUCCESS / Terminal| J[Đã xử lý trước đó: ACK idempotency trùng]
+    I -->|INITIATED hoặc PENDING| K{Kết quả giao dịch?}
+    K -->|FAILED / CANCELLED| L[Cập nhật payment FAILED/CANCELLED; Order giữ HELD nếu còn hạn]
+    K -->|SUCCESS| M{Hold của order còn hạn?}
+    M -->|Còn hạn| N[payment: SUCCESS; order: CONFIRMED; Settle kho & Phát hành vé]
+    M -->|Hết hạn| O[payment: SUCCESS; order: EXPIRED; Tạo refunds & Gọi Gateway Refund API]
+    L --> P[payment_events: PROCESSED]
+    N --> P
+    O --> P
+    P --> Q[Commit Database Transaction]
+    Q --> R[Trả phản hồi ACK cho cổng: VNPAY 00, MoMo 204]
 ~~~
 
-MoMo hỗ trợ retry bằng cùng requestId; phản hồi 7000 có thể nghĩa là yêu cầu cũ còn đang xử lý. API MoMo query **không trả payUrl**, nên không dùng query để “lấy lại URL”; query chỉ hỏi tình trạng giao dịch. [MoMo idempotency](https://developers.momo.vn/v3/docs/payment/api/result-handling/idempotency/), [query](https://developers.momo.vn/v3/docs/payment/api/payment-api/query/), [timeout](https://developers.momo.vn/v3/docs/payment/onboarding/integration-process/). VNPay tạo URL tại merchant theo [tài liệu PAY](https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html).
+---
 
-## 4. Luồng B — nhận IPN và phản hồi cho cổng
+## 5. Kiến trúc Triển khai Worker theo Profile
 
-1. Cổng xử lý thanh toán và gửi IPN tới TicketBox. Lúc này kết quả thanh toán ở cổng **không phụ thuộc** vào việc TicketBox có trả lời HTTP được hay không.
-2. TicketBox kiểm tra chữ ký, provider, mã payment và số tiền. Sai thì **không đổi payment và không báo đã ghi nhận thành công**.
-3. Với IPN hợp lệ, khóa payment/order và ghi kết quả trong transaction. Chỉ xử lý một lần: IPN trùng thì đọc kết quả đã ghi, không cộng vé hoặc phát sự kiện lần nữa.
-4. Nếu order còn hạn và chưa xác nhận: thanh toán thành công chuyển payment SUCCEEDED, order CONFIRMED và xử lý vé. Nếu order đã quá hạn: ghi nhận **đã thu tiền**, không cấp vé; đưa vào danh sách cần hoàn tiền.
-5. **Sau khi DB commit**, trả MoMo HTTP 204 trong 15 giây; trả VNPay JSON RspCode=00 (đã xử lý) hoặc 02 (đã xử lý trước đó). Nếu DB lỗi trước commit, không trả mã thành công: MoMo nhận lỗi HTTP; VNPay nhận RspCode=99 nếu TicketBox còn trả lời được.
+Để phục vụ môi trường monolith hiện tại đồng thời sẵn sàng mở rộng sang kiến trúc container độc lập trong production, các tác vụ nền được phân tách theo Spring Profile:
 
-~~~mermaid
-flowchart TD
-  A[Cổng gửi IPN] --> B{Chữ ký, payment và số tiền hợp lệ?}
-  B -->|Không| C[Không đổi DB; phản hồi lỗi]
-  B -->|Có| D[Khóa payment và order]
-  D --> E{Giao dịch này đã xử lý?}
-  E -->|Có, cùng kết quả| F[Không xử lý lần hai]
-  F --> G[ACK trùng: MoMo 204; VNPay 02]
-  E -->|Có, kết quả mâu thuẫn| S[Không ghi đè; cảnh báo đối soát]
-  E -->|Chưa| H{Kết quả cổng?}
-  H -->|Thất bại| I[Ghi payment FAILED]
-  H -->|Thành công| J{Order còn hạn?}
-  J -->|Có| K[Ghi SUCCEEDED, CONFIRMED và việc phát vé]
-  J -->|Không| L[Ghi đã thu tiền; không phát vé; cần hoàn]
-  I --> M{DB commit thành công?}
-  K --> M
-  L --> M
-  M -->|Không| N[Rollback; không ACK thành công]
-  M -->|Có| O[ACK: MoMo 204; VNPay 00]
-  O --> P{Cổng nhận được ACK?}
-  P -->|Có| Q[Kết thúc]
-  P -->|Không, timeout hoặc 5xx| R[IPN có thể được gửi lại]
-  R --> A
-~~~
+- **Profile `worker`**:
+  - Chịu trách nhiệm quét `OrderExpirationScheduler` (nhả kho khi hết hạn).
+  - Quét `PaymentReconciliationScheduler` (đối soát bù các giao dịch treo).
+  - Quét `RefundProcessingScheduler` (xử lý lại các lệnh hoàn tiền đang `REQUESTED` hoặc `PROCESSING`).
+- **Cấu hình Spring:**
+  ```java
+  @Configuration
+  @Profile({"worker", "default"}) // Mặc định chạy trong app ở môi trường dev; tách biệt ở production
+  public class PaymentWorkerConfig {
+      // Scheduler beans initialization
+  }
+  ```
+- **Chạy ứng dụng:**
+  - Ở local/dev: Chạy mặc định `./mvnw spring-boot:run` (bao gồm cả web và worker).
+  - Ở production: Tách làm 2 service:
+    1. Web API Pods: `--spring.profiles.active=prod,no-worker` (chỉ xử lý REST API và Webhook tốc độ cao, không chạy scheduled jobs).
+    2. Dedicated Worker Pod: `--spring.profiles.active=prod,worker` (chỉ chạy background schedulers, không mở public traffic).
 
-Nếu không có IPN gửi lại và payment vẫn chưa có kết quả, worker sẽ query cổng như phần dưới; query đã xác minh đi qua cùng quy tắc ghi DB và chống xử lý trùng.
+---
 
-### Nếu IPN bị timeout hoặc TicketBox trả 5xx thì sao?
+## 6. Ma trận Cổng thanh toán & Tích hợp Refund API
 
-| Thời điểm xảy ra lỗi | Trạng thái thực tế có thể có | Việc cần làm |
-| --- | --- | --- |
-| Trước khi DB commit | Chưa ghi kết quả | Không ACK thành công; IPN gửi lại hoặc worker query bù sẽ xử lý. |
-| Sau khi DB commit nhưng trước khi cổng nhận ACK | DB đã ghi, cổng vẫn thấy timeout/5xx | IPN gửi lại phải trả lời “đã xử lý”, không ghi/phát vé lần hai. |
-| Không có IPN gửi lại | TicketBox vẫn chưa biết kết quả | Worker query cổng; query timeout/5xx thì giữ trạng thái cũ và thử lại sau. |
-
-VNPay mô tả retry IPN khi nhận RspCode không thành công hoặc IPN timeout; **không nên giả định mọi HTTP 5xx đều được retry**. Tài liệu MoMo yêu cầu 204 trong 15 giây nhưng không cam kết lịch retry IPN. Vì vậy query bù là lưới an toàn tối thiểu, không dựa hoàn toàn vào gateway gửi lại. [MoMo IPN](https://developers.momo.vn/v3/docs/payment/api/result-handling/notification/), [VNPay IPN](https://sandbox.vnpayment.vn/apis/docs/thanh-toan-pay/pay.html).
-
-**Return URL của trình duyệt chỉ để hiển thị trạng thái.** Nó không thay IPN hoặc query đã xác minh.
-
-## 5. Phần triển khai tối thiểu
-
-1. **Trạng thái và API:** thêm CREATING cho MoMo; VNPay tạo URL cùng PENDING; checkout_url cho phép rỗng khi CREATING. Retry cùng idempotency key đọc payment hiện tại, không cache lỗi mạng thành kết quả thanh toán.
-2. **Gọi MoMo:** bảo đảm requestId create ổn định, có thể suy ra từ payment ID để khỏi thêm cột; timeout rõ ràng; Resilience4j circuit breaker ở lời gọi create và query. Trước mắt chưa cần nhiều breaker/bulkhead, retry nhiều tầng hoặc gateway_state.
-3. **IPN:** xác minh rồi ghi DB idempotent, ACK đúng giao thức sau commit. Sửa MoMo endpoint để không trả 204 cho chữ ký/số tiền sai. Bảo đảm bước phát vé không mất sau khi payment đã commit; có thể đưa vào cùng transaction nếu phù hợp, hoặc dùng một bản ghi sự kiện bền vững.
-4. **Một worker đối soát payment:** dùng next_reconcile_at để (a) thử lại create MoMo cùng requestId khi CREATING và order còn hạn; (b) query MoMo/VNPay khi PENDING thiếu IPN; (c) kiểm tra kết quả tài chính của CREATING đã hết hạn. Query lỗi/timeout/5xx thì hẹn lại, không đổi thành FAILED.
-5. **Hết hạn và hoàn tiền:** worker hết hạn order nhả vé/quota. IPN/query thành công sau hạn không được phát vé. Giai đoạn đầu chỉ cần **ghi và cảnh báo khoản cần hoàn tiền để xử lý thủ công**; tự động gọi API refund là bước sau. Không được âm thầm bỏ qua khoản đã thu.
-
-~~~text
-MoMo bình thường: CREATING → PENDING (đã lưu URL) → SUCCEEDED/FAILED (IPN hoặc query)
-VNPay bình thường: PENDING (đã lưu URL) → SUCCEEDED/FAILED (IPN hoặc query)
-Timeout/5xx xin URL MoMo: giữ CREATING; timeout/5xx IPN: giữ kết quả DB đã commit hoặc chờ query bù.
-~~~
-
-Ngoại lệ: nếu cổng xác minh đã thu tiền khi payment vẫn CREATING (TicketBox chưa từng lưu URL), vẫn phải ghi nhận khoản tiền, **không cấp vé** và đưa vào danh sách cần hoàn; không ép giao dịch đi qua PENDING chỉ để giữ sơ đồ đẹp.
-
-## 6. Bốn trường hợp bắt buộc kiểm thử trước khi dùng thật
-
-| Tình huống | Kết quả mong đợi |
-| --- | --- |
-| MoMo create timeout hoặc trả 5xx sau khi nhận request | Payment CREATING, không URL; retry cùng requestId nhận lại URL hoặc tiếp tục chờ, không tạo attempt mới. |
-| IPN hợp lệ nhưng DB lỗi trước commit | Không ACK thành công; payment chưa đổi; gửi lại/query bù có thể xử lý. |
-| DB commit thành công nhưng ACK IPN bị mất | IPN lặp lại được ACK; order/vé chỉ xử lý một lần. |
-| IPN thành công đến sau hạn giữ vé | Ghi đã thu tiền; order không được xác nhận, không cấp vé; có mục cần hoàn tiền. |
-
-**Giới hạn có chủ ý:** tài liệu này chưa thiết kế hoàn tiền tự động, nhiều tầng retry hay đối soát tài chính toàn diện. Nó giữ ba điều thiết yếu: không coi timeout là thất bại thanh toán, không báo đã nhận IPN trước khi lưu thành công, và không mất dấu khoản tiền đã thu.
+| Cổng | Tạo URL | Nhận IPN Webhook | Query Trạng thái | Hoàn tiền tự động (Refund) |
+|---|---|---|---|---|
+| **VNPAY** | Ký HMAC-SHA512 tại chỗ (Local) | `GET /payments/vnpay/ipn` (RspCode `00`, `02`, `97`, `04`, `99`) | VNPAY Query DR API (`vnp_Command=querydr`) | VNPAY Refund API (`vnp_Command=refund`, TransactionType `02` hoặc `03`) |
+| **MoMo** | HTTP POST `/v2/gateway/api/create` (Bảo vệ bằng Circuit Breaker) | `POST /payments/momo/ipn` (HTTP 204, 400, 404, 422, 409) | MoMo Query API (`/v2/gateway/api/query`) | MoMo Refund API (`/v2/gateway/api/refund`) |

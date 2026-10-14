@@ -43,11 +43,13 @@
 | 6 | Kho vé | [`user_ticket_type_counters`](details/user_ticket_type_counters.md) | Bộ đếm số vé mỗi người đang giữ/đã mua theo loại vé (để áp giới hạn `max_per_user`) |
 | 7 | Đặt vé | [`orders`](details/orders.md) | Đơn hàng; vòng đời giữ chỗ → xác nhận/hủy/hết hạn |
 | 8 | Đặt vé | [`order_items`](details/order_items.md) | Các dòng của đơn hàng (loại vé, số lượng, đơn giá) |
-| 9 | Thanh toán | [`payments`](details/payments.md) | Giao dịch thanh toán của đơn hàng qua cổng thanh toán, kèm dữ liệu webhook và đối soát |
-| 10 | Vé | [`tickets`](details/tickets.md) | Vé điện tử đã phát hành, mã QR, trạng thái check-in |
-| 11 | AI | [`artist_bio_jobs`](details/artist_bio_jobs.md) | Tác vụ nền tạo tiểu sử nghệ sĩ bằng AI từ file nguồn |
-| 12 | Thông báo | [`notifications`](details/notifications.md) | Nhật ký/hàng đợi thông báo (app, email, SMS, Zalo) |
-| 13 | Kiểm toán | [`audit_logs`](details/audit_logs.md) | Nhật ký hành động để truy vết |
+| 9 | Thanh toán | [`payments`](details/payments.md) | Giao dịch thanh toán của đơn hàng qua cổng thanh toán, mã tham chiếu và khóa lạc quan |
+| 10 | Thanh toán | [`payment_events`](details/payment_events.md) **(V4)** | Nhật ký sự kiện webhook/IPN/query bất biến, chống trùng lặp theo dedupe_key |
+| 11 | Thanh toán | [`refunds`](details/refunds.md) **(V4)** | Lệnh hoàn tiền độc lập, chống trùng bằng idempotency_key, tích hợp API hoàn tiền của cổng |
+| 12 | Vé | [`tickets`](details/tickets.md) | Vé điện tử đã phát hành, mã QR, trạng thái check-in |
+| 13 | AI | [`artist_bio_jobs`](details/artist_bio_jobs.md) | Tác vụ nền tạo tiểu sử nghệ sĩ bằng AI từ file nguồn |
+| 14 | Thông báo | [`notifications`](details/notifications.md) | Nhật ký/hàng đợi thông báo (app, email, SMS, Zalo) |
+| 15 | Kiểm toán | [`audit_logs`](details/audit_logs.md) | Nhật ký hành động để truy vết |
 
 ---
 
@@ -60,6 +62,8 @@
 | `ticket_types (seat_zone_id, concert_id)` → `seat_zones` | CASCADE |
 | `user_ticket_type_counters.ticket_type_id` → `ticket_types` | CASCADE |
 | `order_items.order_id`, `payments.order_id` → `orders` | CASCADE |
+| `payment_events.payment_id` → `payments` | SET NULL |
+| `refunds.payment_id` → `payments` | NO ACTION / RESTRICT |
 | `orders`, `tickets`, `notifications`, `audit_logs`, `order_items.ticket_type_id` và các FK còn lại | Không khai báo (mặc định `NO ACTION` — chặn xóa nếu còn bản ghi tham chiếu) |
 
 Hệ quả: dữ liệu giao dịch (đơn hàng, vé, thông báo, nhật ký) được bảo vệ khỏi việc xóa nhầm bản ghi cha như `users` hay `concerts`.

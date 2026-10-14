@@ -17,3 +17,4 @@
 | 01 | Chuẩn hóa chuyển đổi đối tượng Entity <-> DTO bằng MapStruct | [Link](.agents/DECISIONS/01-mapstruct-object-mapping.md) |
 | 02 | Chuẩn hóa Partial Update (API PATCH) bằng JsonNullable | [Link](.agents/DECISIONS/02-json-nullable-partial-update.md) |
 | 03 | Cơ chế Audit Log hai nhóm sự kiện và đảm bảo tính tin cậy tuyệt đối | [Link](.agents/DECISIONS/03-audit-logging-dual-event-categories.md) |
+| 04 | Kiến trúc thanh toán chống lỗi: Tách biệt Payment-Events-Refund, hội tụ xử lý kết quả và xử lý trễ hạn giữ chỗ | [Link](.agents/DECISIONS/04-payment-resilience-events-and-refunds.md) |
