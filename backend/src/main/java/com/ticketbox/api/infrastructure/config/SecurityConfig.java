@@ -24,6 +24,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.beans.factory.ObjectProvider;
+import com.ticketbox.api.module.audit.services.AuditLogService;
+
+
+
 
 import java.util.List;
 
@@ -37,12 +42,12 @@ public class SecurityConfig {
     private final OidcSuccessHandler oidcSuccessHandler;
     private final RateLimitPolicyRegistry rateLimitPolicies;
     private final RedisRateLimiter redisRateLimiter;
-    private final org.springframework.beans.factory.ObjectProvider<com.ticketbox.api.module.audit.services.AuditLogService> auditLogServiceProvider;
+    private final ObjectProvider<AuditLogService> auditLogServiceProvider;
 
     public SecurityConfig(JwtFilter jwtFilter, OidcSuccessHandler oidcSuccessHandler,
                           OidcFailureHandler oidcFailureHandler, RateLimitPolicyRegistry rateLimitPolicies,
                           RedisRateLimiter redisRateLimiter,
-                          org.springframework.beans.factory.ObjectProvider<com.ticketbox.api.module.audit.services.AuditLogService> auditLogServiceProvider) {
+                          ObjectProvider<AuditLogService> auditLogServiceProvider) {
         this.jwtFilter = jwtFilter;
         this.oidcSuccessHandler = oidcSuccessHandler;
         this.oidcFailureHandler = oidcFailureHandler;

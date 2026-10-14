@@ -68,11 +68,11 @@ Truy cập [localhost:3001](http://localhost:3001). Build frontend bằng `npm r
 
 ## Đăng nhập
 
-organizer@ticketbox.com
-audience1@ticketbox.com
-Password123@
-
-
+| Role | Account | Password |
+| --- | --- | --- |
+| ADMIN | admin@ticketbox.com | Password123@ |
+| ORGANIZER | organizer@ticketbox.com | Password123@ |
+| AUDIENCE | audience1@ticketbox.com | Password123@ |
 
 ## Nginx và Backend
 

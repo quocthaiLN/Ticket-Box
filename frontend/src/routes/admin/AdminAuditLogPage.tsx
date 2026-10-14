@@ -218,7 +218,13 @@ export function AdminAuditLogPage() {
 }
 
 function AuditRow({ log, expanded, onToggle }: { log: AdminAuditLog; expanded: boolean; onToggle: () => void }) {
-  const hasDetail = log.metadata !== null || log.user_agent !== null;
+  const hasDetail = log.metadata !== null || Boolean(log.user_agent ?? log.userAgent);
+  const createdAt = log.created_at || log.createdAt;
+  const actorName = log.actor?.full_name || (log.actor as any)?.fullName || log.actor?.role || "Hệ thống";
+  const entityType = log.entity_type || log.entityType || "—";
+  const entityId = log.entity_id ?? log.entityId;
+  const ipAddress = log.ip_address ?? log.ipAddress ?? "—";
+  const userAgent = log.user_agent ?? log.userAgent;
 
   return (
     <>
@@ -226,11 +232,11 @@ function AuditRow({ log, expanded, onToggle }: { log: AdminAuditLog; expanded: b
         className="cursor-pointer border-b border-white/[0.04] transition-colors last:border-b-0 hover:bg-white/[0.03]"
         onClick={onToggle}
       >
-        <td className="whitespace-nowrap px-4 py-3 text-xs text-[#8585A0]">{formatDateTime(log.created_at)}</td>
+        <td className="whitespace-nowrap px-4 py-3 text-xs text-[#8585A0]">{formatDateTime(createdAt)}</td>
         <td className="px-4 py-3 text-xs">
           {log.actor ? (
             <div className="min-w-0 max-w-[240px]">
-              <p className="break-words text-[#F0EDEB]">{log.actor.full_name || log.actor.role}</p>
+              <p className="break-words text-[#F0EDEB]">{actorName}</p>
               <LongText value={log.actor.email} className="text-[11px] text-[#8585A0]" />
             </div>
           ) : (
@@ -241,10 +247,10 @@ function AuditRow({ log, expanded, onToggle }: { log: AdminAuditLog; expanded: b
           <span className="rounded-full bg-[#7B61FF]/10 px-2 py-1 font-mono text-[11px] font-semibold text-[#C9BCFF]">{log.action}</span>
         </td>
         <td className="px-4 py-3 text-xs text-[#8585A0]">
-          <p className="text-[#F0EDEB]">{log.entity_type}</p>
-          {log.entity_id && <LongText value={log.entity_id} copyable className="max-w-[220px] text-[11px]" />}
+          <p className="text-[#F0EDEB]">{entityType}</p>
+          {entityId && <LongText value={entityId} copyable className="max-w-[220px] text-[11px]" />}
         </td>
-        <td className="whitespace-nowrap px-4 py-3 text-xs text-[#8585A0]">{log.ip_address ?? "—"}</td>
+        <td className="whitespace-nowrap px-4 py-3 text-xs text-[#8585A0]">{ipAddress}</td>
         <td className="px-4 py-3 text-right">
           {hasDetail && (expanded ? <ChevronUp className="ml-auto h-4 w-4 text-[#8585A0]" /> : <ChevronDown className="ml-auto h-4 w-4 text-[#8585A0]" />)}
         </td>
@@ -257,7 +263,7 @@ function AuditRow({ log, expanded, onToggle }: { log: AdminAuditLog; expanded: b
                 {JSON.stringify(log.metadata, null, 2)}
               </pre>
             )}
-            {log.user_agent && <p className="break-words text-[11px] text-[#8585A0]">User agent: {log.user_agent}</p>}
+            {userAgent && <p className="break-words text-[11px] text-[#8585A0]">User agent: {userAgent}</p>}
           </td>
         </tr>
       )}
@@ -292,7 +298,10 @@ function toIsoOrEmpty(value?: string) {
   return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
 }
 
-function formatDateTime(value: string) {
+function formatDateTime(value?: string | null) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "—";
   return new Intl.DateTimeFormat("vi-VN", {
     day: "2-digit",
     month: "2-digit",
@@ -300,5 +309,5 @@ function formatDateTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-  }).format(new Date(value));
+  }).format(parsed);
 }
