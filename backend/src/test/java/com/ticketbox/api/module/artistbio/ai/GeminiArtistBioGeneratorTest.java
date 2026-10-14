@@ -3,6 +3,7 @@ package com.ticketbox.api.module.artistbio.ai;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketbox.api.module.artistbio.domain.exception.ArtistBioProcessingException;
 import java.net.SocketTimeoutException;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -59,7 +60,7 @@ class GeminiArtistBioGeneratorTest {
                 .hasMessageNotContaining("secret").extracting("retryable").isEqualTo(retryable);
     }
     private String response(String bio) throws Exception {
-        return mapper.writeValueAsString(Map.of("candidates", java.util.List.of(Map.of("finishReason", "STOP",
-                "content", Map.of("parts", java.util.List.of(Map.of("text", mapper.writeValueAsString(Map.of("bio", bio)))))))));
+        return mapper.writeValueAsString(Map.of("candidates", List.of(Map.of("finishReason", "STOP",
+                "content", Map.of("parts", List.of(Map.of("text", mapper.writeValueAsString(Map.of("bio", bio)))))))));
     }
 }

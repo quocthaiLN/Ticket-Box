@@ -2,9 +2,11 @@ package com.ticketbox.api.module.artistbio.services;
 
 import com.ticketbox.api.module.artistbio.domain.entities.*;
 import com.ticketbox.api.module.artistbio.domain.exception.ArtistBioJobNotFoundException;
+import com.ticketbox.api.module.artistbio.domain.mappers.ArtistBioMapperImpl;
 import com.ticketbox.api.module.artistbio.messaging.ArtistBioProducer;
 import com.ticketbox.api.module.artistbio.repositories.ArtistBioJobRepository;
 import com.ticketbox.api.module.artistbio.storage.ArtistBioStorage;
+import com.ticketbox.api.module.audit.domain.entities.AuditAction;
 import com.ticketbox.api.module.audit.services.AuditLogService;
 import com.ticketbox.api.module.auth.domain.entities.*;
 import com.ticketbox.api.module.catalog.domain.entities.*;
@@ -36,7 +38,7 @@ class ArtistBioServiceTest {
         protected void doRollback(DefaultTransactionStatus status) {}
     };
     private final ArtistBioService service = new ArtistBioServiceImpl(concertService, jobs, storage, producer, audit, new TransactionTemplate(tx),
-            new com.ticketbox.api.module.artistbio.domain.mappers.ArtistBioMapperImpl());
+            new ArtistBioMapperImpl());
     private final MockMultipartFile file = new MockMultipartFile("file", "kit.pdf", "application/pdf", "%PDF-1.7".getBytes());
     @BeforeEach void setup() {
         when(concertService.getConcertForArtistBioUpload(concert.getOrganizer(), concert.getId())).thenReturn(concert);
@@ -54,7 +56,7 @@ class ArtistBioServiceTest {
                 .when(producer).generate(any());
         var result = service.upload(actor, concert.getId(), file);
         assertThat(result.status()).isEqualTo(ArtistBioJobStatus.PENDING);
-        verify(audit).logBusinessSuccess(eq(com.ticketbox.api.module.audit.domain.entities.AuditAction.CREATE_ARTIST_BIO_JOB),
+        verify(audit).logBusinessSuccess(eq(AuditAction.CREATE_ARTIST_BIO_JOB),
                 eq("ARTIST_BIO_JOB"), eq(result.id().toString()), anyMap());
         verify(producer).generate(result.id());
         verify(storage, never()).delete(any());

@@ -19,6 +19,9 @@ import com.ticketbox.api.module.auth.domain.exception.InvalidOtpException;
 import com.ticketbox.api.module.auth.domain.exception.PhoneAlreadyExistsException;
 import com.ticketbox.api.module.auth.domain.exception.RevokedRefreshTokenException;
 import com.ticketbox.api.module.auth.domain.exception.UserNotFoundException;
+import com.ticketbox.api.module.audit.domain.entities.AuditAction;
+import com.ticketbox.api.module.audit.services.AuditLogService;
+import com.ticketbox.api.module.auth.domain.mappers.UserMapper;
 import com.ticketbox.api.module.auth.producer.AuthProducer;
 import com.ticketbox.api.module.auth.repositories.UserAccountRepository;
 import com.ticketbox.api.module.auth.repositories.UserRepository;
@@ -33,6 +36,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -47,8 +52,8 @@ public class UserServiceImpl implements UserService {
     private final TokenBlacklistService tokenBlacklistService;
     private final AuthProducer authProducer;
     private final StringRedisTemplate stringRedisTemplate;
-    private final com.ticketbox.api.module.auth.domain.mappers.UserMapper userMapper;
-    private final com.ticketbox.api.module.audit.services.AuditLogService auditLogService;
+    private final UserMapper userMapper;
+    private final AuditLogService auditLogService;
 
     @Value("${app.otp.ttl-minutes:5}")
     private long otpTtlMinutes;
@@ -167,13 +172,13 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
-        java.util.Optional<User> userOpt = userRepository.findByEmail(request.getEmail());
+        Optional<User> userOpt = userRepository.findByEmail(request.getEmail());
         if (userOpt.isEmpty()) {
             auditLogService.logInvestigativeFailure(
-                    com.ticketbox.api.module.audit.domain.entities.AuditAction.LOGIN_FAILED,
+                    AuditAction.LOGIN_FAILED,
                     "USER",
                     maskEmail(request.getEmail()),
-                    java.util.Map.of("reason", "USER_NOT_FOUND")
+                    Map.of("reason", "USER_NOT_FOUND")
             );
             throw new InvalidCredentialsException();
         }
@@ -182,20 +187,20 @@ public class UserServiceImpl implements UserService {
 
         if (user.getStatus() == UserStatus.PENDING) {
             auditLogService.logInvestigativeFailure(
-                    com.ticketbox.api.module.audit.domain.entities.AuditAction.LOGIN_FAILED,
+                    AuditAction.LOGIN_FAILED,
                     "USER",
                     user.getId().toString(),
-                    java.util.Map.of("reason", "ACCOUNT_NOT_VERIFIED")
+                    Map.of("reason", "ACCOUNT_NOT_VERIFIED")
             );
             throw new AccountNotVerifiedException();
         }
 
         if (user.getStatus() != UserStatus.ACTIVE || user.getDeletedAt() != null) {
             auditLogService.logInvestigativeFailure(
-                    com.ticketbox.api.module.audit.domain.entities.AuditAction.LOGIN_FAILED,
+                    AuditAction.LOGIN_FAILED,
                     "USER",
                     user.getId().toString(),
-                    java.util.Map.of("reason", "ACCOUNT_DISABLED")
+                    Map.of("reason", "ACCOUNT_DISABLED")
             );
             throw new AccountDisabledException();
         }
@@ -209,10 +214,10 @@ public class UserServiceImpl implements UserService {
 
         if (localAccount == null || !bCryptPasswordEncoder.matches(request.getPassword(), localAccount.getPasswordHash())) {
             auditLogService.logInvestigativeFailure(
-                    com.ticketbox.api.module.audit.domain.entities.AuditAction.LOGIN_FAILED,
+                    AuditAction.LOGIN_FAILED,
                     "USER",
                     user.getId().toString(),
-                    java.util.Map.of("reason", "INVALID_CREDENTIALS")
+                    Map.of("reason", "INVALID_CREDENTIALS")
             );
             throw new InvalidCredentialsException();
         }

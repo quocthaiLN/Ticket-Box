@@ -2,10 +2,13 @@ package com.ticketbox.api.module.auth.services;
 
 import com.ticketbox.api.infrastructure.security.JwtUtils;
 import com.ticketbox.api.infrastructure.security.TokenBlacklistService;
+import com.ticketbox.api.module.audit.domain.entities.AuditAction;
+import com.ticketbox.api.module.audit.services.AuditLogService;
 import com.ticketbox.api.module.auth.domain.dtos.LoginRequest;
 import com.ticketbox.api.module.auth.domain.dtos.LoginResponse;
 import com.ticketbox.api.module.auth.domain.dtos.RegisterRequest;
 import com.ticketbox.api.module.auth.domain.dtos.UserResponse;
+import com.ticketbox.api.module.auth.domain.dtos.VerifyOtpRequest;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.auth.domain.entities.UserAccount;
 import com.ticketbox.api.module.auth.domain.entities.UserAccountStatus;
@@ -23,6 +26,10 @@ import com.ticketbox.api.module.auth.domain.exception.InvalidOtpException;
 import com.ticketbox.api.module.auth.domain.exception.PhoneAlreadyExistsException;
 import com.ticketbox.api.module.auth.domain.exception.RevokedRefreshTokenException;
 import com.ticketbox.api.module.auth.domain.exception.UserNotFoundException;
+import com.ticketbox.api.module.auth.domain.mappers.UserMapper;
+import com.ticketbox.api.module.auth.domain.mappers.UserMapperImpl;
+import com.ticketbox.api.module.auth.producer.AuthProducer;
+import com.ticketbox.api.module.shared.exception.ErrorType;
 import com.ticketbox.api.module.shared.validation.RequestValidationException;
 import com.ticketbox.api.module.auth.repositories.UserAccountRepository;
 import com.ticketbox.api.module.auth.repositories.UserRepository;
@@ -31,7 +38,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.util.Optional;
@@ -61,19 +71,19 @@ class UserServiceTest {
     private TokenBlacklistService tokenBlacklistService;
 
     @Mock
-    private com.ticketbox.api.module.auth.producer.AuthProducer authProducer;
+    private AuthProducer authProducer;
 
     @Mock
-    private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
+    private StringRedisTemplate stringRedisTemplate;
 
     @Mock
-    private org.springframework.data.redis.core.ValueOperations<String, String> valueOperations;
+    private ValueOperations<String, String> valueOperations;
 
     @Mock
-    private com.ticketbox.api.module.audit.services.AuditLogService auditLogService;
+    private AuditLogService auditLogService;
 
-    @org.mockito.Spy
-    private com.ticketbox.api.module.auth.domain.mappers.UserMapper userMapper = new com.ticketbox.api.module.auth.domain.mappers.UserMapperImpl();
+    @Spy
+    private UserMapper userMapper = new UserMapperImpl();
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -172,9 +182,9 @@ class UserServiceTest {
         InvalidCredentialsException ex = assertThrows(InvalidCredentialsException.class, () -> userService.login(request));
         assertEquals(AuthErrorCode.INVALID_CREDENTIALS, ex.getErrorCode());
         assertEquals("INVALID_CREDENTIALS", ex.getErrorCode().code());
-        assertEquals(com.ticketbox.api.module.shared.exception.ErrorType.UNAUTHORIZED, ex.getErrorCode().type());
+        assertEquals(ErrorType.UNAUTHORIZED, ex.getErrorCode().type());
         verify(auditLogService).logInvestigativeFailure(
-                eq(com.ticketbox.api.module.audit.domain.entities.AuditAction.LOGIN_FAILED),
+                eq(AuditAction.LOGIN_FAILED),
                 eq("USER"),
                 eq(sampleUser.getId().toString()),
                 any()
@@ -193,7 +203,7 @@ class UserServiceTest {
         assertThrows(InvalidCredentialsException.class, () -> userService.login(request));
 
         verify(auditLogService).logInvestigativeFailure(
-                eq(com.ticketbox.api.module.audit.domain.entities.AuditAction.LOGIN_FAILED),
+                eq(AuditAction.LOGIN_FAILED),
                 eq("USER"),
                 eq("j***e@example.com"),
                 argThat(map -> "USER_NOT_FOUND".equals(map.get("reason")))
@@ -252,7 +262,7 @@ class UserServiceTest {
 
     @Test
     void verifyOtp_rejectsInvalidOtpMissingUserAndAlreadyVerifiedAccount() {
-        var request = com.ticketbox.api.module.auth.domain.dtos.VerifyOtpRequest.builder()
+        var request = VerifyOtpRequest.builder()
                 .email("test@example.com").otp("000000").build();
         when(valueOperations.get("otp:register:test@example.com")).thenReturn("111111");
         assertEquals("INVALID_OTP", assertThrows(InvalidOtpException.class,

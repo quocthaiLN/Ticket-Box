@@ -13,6 +13,8 @@ import com.ticketbox.api.module.order.domain.dtos.OrderResponse;
 import com.ticketbox.api.module.order.domain.entities.Order;
 import com.ticketbox.api.module.order.domain.exception.PerUserLimitExceededException;
 import com.ticketbox.api.module.order.domain.exception.TicketSoldOutException;
+import com.ticketbox.api.module.order.domain.mappers.OrderMapper;
+import com.ticketbox.api.module.order.domain.mappers.OrderMapperImpl;
 import com.ticketbox.api.module.order.repositories.OrderRepository;
 import com.ticketbox.api.module.order.repositories.UserTicketTypeCounterRepository;
 import com.ticketbox.api.module.shared.cache.CacheService;
@@ -25,6 +27,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -75,8 +78,8 @@ class OrderServiceImplTest {
     @Mock
     private CacheService cacheService;
 
-    @org.mockito.Spy
-    private com.ticketbox.api.module.order.domain.mappers.OrderMapper orderMapper = new com.ticketbox.api.module.order.domain.mappers.OrderMapperImpl();
+    @Spy
+    private OrderMapper orderMapper = new OrderMapperImpl();
 
     @InjectMocks
     private OrderServiceImpl orderService;

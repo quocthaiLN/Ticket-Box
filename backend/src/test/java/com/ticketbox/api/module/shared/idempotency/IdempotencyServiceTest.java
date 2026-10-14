@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -188,7 +189,7 @@ class IdempotencyServiceTest {
                         () -> Optional.empty(), () -> { throw new OrderNotSettlableException(); }));
 
         assertEquals("ORDER_NOT_SETTLABLE", thrown.getErrorCode().code());
-        org.mockito.ArgumentCaptor<String> storedValue = org.mockito.ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> storedValue = ArgumentCaptor.forClass(String.class);
         verify(stringRedisTemplate).execute(any(DefaultRedisScript.class), eq(List.of(REDIS_KEY)),
                 anyString(), storedValue.capture(), anyString());
         var status = objectMapper.readTree(storedValue.getValue()).get("http_status");

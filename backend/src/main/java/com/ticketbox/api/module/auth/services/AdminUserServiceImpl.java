@@ -1,11 +1,13 @@
 package com.ticketbox.api.module.auth.services;
 
+import com.ticketbox.api.module.audit.domain.entities.AuditAction;
 import com.ticketbox.api.module.audit.services.AuditLogService;
 import com.ticketbox.api.module.auth.domain.dtos.UserResponse;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.auth.domain.entities.UserStatus;
 import com.ticketbox.api.module.auth.domain.entities.UserAccountStatus;
 import com.ticketbox.api.module.auth.domain.exception.UserNotFoundException;
+import com.ticketbox.api.module.auth.domain.mappers.UserMapper;
 import com.ticketbox.api.module.auth.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -23,7 +25,7 @@ public class AdminUserServiceImpl implements AdminUserService {
 
     private final UserRepository userRepository;
     private final AuditLogService auditLogService;
-    private final com.ticketbox.api.module.auth.domain.mappers.UserMapper userMapper;
+    private final UserMapper userMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -71,7 +73,7 @@ public class AdminUserServiceImpl implements AdminUserService {
         User updatedUser = userRepository.save(user);
 
         auditLogService.logBusinessSuccess(
-                com.ticketbox.api.module.audit.domain.entities.AuditAction.UPDATE_USER_STATUS,
+                AuditAction.UPDATE_USER_STATUS,
                 "USER",
                 user.getId().toString(),
                 Map.of("old_status", oldStatus.name(), "new_status", newStatus.name()));

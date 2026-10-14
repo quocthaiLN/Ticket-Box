@@ -18,10 +18,15 @@ import com.ticketbox.api.module.catalog.repositories.SeatZoneRepository;
 import com.ticketbox.api.module.catalog.repositories.TicketTypeRepository;
 import com.ticketbox.api.module.shared.cache.CacheService;
 import com.ticketbox.api.module.shared.storage.StorageService;
+import com.ticketbox.api.module.audit.domain.entities.AuditAction;
 import com.ticketbox.api.module.audit.services.AuditLogService;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -274,10 +279,10 @@ public class ConcertServiceImpl implements ConcertService {
                 || request.getCapacity() == null || request.getCapacity() <= 0) {
             throw validation("Invalid seat zone fields");
         }
-        String code = request.getCode().trim().toUpperCase(java.util.Locale.ROOT);
+        String code = request.getCode().trim().toUpperCase(Locale.ROOT);
 
         if (seatZoneRepository.existsByConcertIdAndCode(concertId, code)) {
-            throw new SeatZoneCodeAlreadyExistsException(request.getCode() == null ? "" : request.getCode().trim().toUpperCase(java.util.Locale.ROOT));
+            throw new SeatZoneCodeAlreadyExistsException(request.getCode() == null ? "" : request.getCode().trim().toUpperCase(Locale.ROOT));
         }
 
         SeatZone zone = seatZoneMapper.toEntity(request);
@@ -292,7 +297,7 @@ public class ConcertServiceImpl implements ConcertService {
             savedZone = seatZoneRepository.saveAndFlush(zone);
         } catch (DataIntegrityViolationException exception) {
             if (exception.getMessage() != null && exception.getMessage().toLowerCase().contains("code")) {
-                throw new SeatZoneCodeAlreadyExistsException(request.getCode() == null ? "" : request.getCode().trim().toUpperCase(java.util.Locale.ROOT));
+                throw new SeatZoneCodeAlreadyExistsException(request.getCode() == null ? "" : request.getCode().trim().toUpperCase(Locale.ROOT));
             }
             throw exception;
         }
@@ -333,7 +338,7 @@ public class ConcertServiceImpl implements ConcertService {
         if (zone.getCapacity() == null || zone.getCapacity() <= 0 || allocated != null && allocated > zone.getCapacity()) {
             throw new ZoneCapacityExceededException();
         }
-        if (java.util.Objects.equals(before, savedZoneSnapshot(zone))) return seatZoneMapper.toAdminResponse(zone);
+        if (Objects.equals(before, savedZoneSnapshot(zone))) return seatZoneMapper.toAdminResponse(zone);
         SeatZone updatedZone = seatZoneRepository.save(zone);
         audit(currentUser, "UPDATE_SEAT_ZONE", "SEAT_ZONE", zone.getId(), before, savedZoneSnapshot(zone));
         invalidateAfterCommit(concert.getId());
@@ -447,7 +452,7 @@ public class ConcertServiceImpl implements ConcertService {
             }
         }
 
-        if (java.util.Objects.equals(before, ticketSnapshot(ticketType))) return ticketTypeMapper.toAdminResponse(ticketType);
+        if (Objects.equals(before, ticketSnapshot(ticketType))) return ticketTypeMapper.toAdminResponse(ticketType);
         TicketType updatedTicketType;
         try {
             updatedTicketType = ticketTypeRepository.saveAndFlush(ticketType);
@@ -497,13 +502,13 @@ public class ConcertServiceImpl implements ConcertService {
         return value;
     }
 
-    private void validatePrice(java.math.BigDecimal price) {
+    private void validatePrice(BigDecimal price) {
         if (price.signum() < 0 || price.scale() > 2 || price.precision() > 12) {
             throw validation("price must fit NUMERIC(12,2) and be non-negative");
         }
     }
 
-    private void validatePriceAndQuantity(java.math.BigDecimal price, Integer quantity, Integer maxPerUser) {
+    private void validatePriceAndQuantity(BigDecimal price, Integer quantity, Integer maxPerUser) {
         validatePrice(price);
         if (quantity == null || quantity < 0 || maxPerUser == null || maxPerUser < 1) throw validation("Invalid ticket quantity or max_per_user");
     }
@@ -520,15 +525,15 @@ public class ConcertServiceImpl implements ConcertService {
     }
 
     private boolean sameConcert(Concert a, Concert b) {
-        return java.util.Objects.equals(a.getTitle(), b.getTitle()) && java.util.Objects.equals(a.getVenue(), b.getVenue())
-                && java.util.Objects.equals(a.getDescription(), b.getDescription()) && java.util.Objects.equals(a.getArtistName(), b.getArtistName())
-                && java.util.Objects.equals(a.getArtistBio(), b.getArtistBio()) && java.util.Objects.equals(a.getStartsAt(), b.getStartsAt())
-                && java.util.Objects.equals(a.getEndsAt(), b.getEndsAt()) && java.util.Objects.equals(a.getCoverImageUrl(), b.getCoverImageUrl())
-                && java.util.Objects.equals(a.getSeatMapUrl(), b.getSeatMapUrl());
+        return Objects.equals(a.getTitle(), b.getTitle()) && Objects.equals(a.getVenue(), b.getVenue())
+                && Objects.equals(a.getDescription(), b.getDescription()) && Objects.equals(a.getArtistName(), b.getArtistName())
+                && Objects.equals(a.getArtistBio(), b.getArtistBio()) && Objects.equals(a.getStartsAt(), b.getStartsAt())
+                && Objects.equals(a.getEndsAt(), b.getEndsAt()) && Objects.equals(a.getCoverImageUrl(), b.getCoverImageUrl())
+                && Objects.equals(a.getSeatMapUrl(), b.getSeatMapUrl());
     }
 
     private Map<String, Object> savedZoneSnapshot(SeatZone z) {
-        Map<String, Object> snapshot = new java.util.HashMap<>();
+        Map<String, Object> snapshot = new HashMap<>();
         snapshot.put("id", z.getId().toString()); snapshot.put("concert_id", z.getConcert().getId().toString());
         snapshot.put("code", z.getCode()); snapshot.put("name", z.getName()); snapshot.put("description", z.getDescription());
         snapshot.put("capacity", z.getCapacity()); snapshot.put("svg_path", z.getSvgPath()); snapshot.put("sort_order", z.getSortOrder());
@@ -536,7 +541,7 @@ public class ConcertServiceImpl implements ConcertService {
     }
 
     private Map<String, Object> ticketSnapshot(TicketType t) {
-        Map<String, Object> snapshot = new java.util.HashMap<>();
+        Map<String, Object> snapshot = new HashMap<>();
         snapshot.put("id", t.getId().toString()); snapshot.put("concert_id", t.getConcert().getId().toString());
         snapshot.put("seat_zone_id", t.getSeatZone().getId().toString()); snapshot.put("name", t.getName());
         snapshot.put("description", t.getDescription()); snapshot.put("price", t.getPrice()); snapshot.put("currency", t.getCurrency());
@@ -548,7 +553,7 @@ public class ConcertServiceImpl implements ConcertService {
     }
 
     private void audit(User actor, String action, String entity, UUID id, Object before, Object after) {
-        Map<String, Object> metadata = new java.util.HashMap<>();
+        Map<String, Object> metadata = new HashMap<>();
         if (before != null) metadata.put("before", before instanceof Concert c ? concertSnapshot(c) : before);
         if (after != null) metadata.put("after", after instanceof Concert c ? concertSnapshot(c) : after);
         if (after instanceof Map<?, ?> map && map.containsKey("reason")) {
@@ -556,17 +561,17 @@ public class ConcertServiceImpl implements ConcertService {
             Object snapshot = map.get("after");
             if (snapshot instanceof Concert c) metadata.put("after", concertSnapshot(c));
         }
-        com.ticketbox.api.module.audit.domain.entities.AuditAction auditAction;
+        AuditAction auditAction;
         try {
-            auditAction = com.ticketbox.api.module.audit.domain.entities.AuditAction.valueOf(action);
+            auditAction = AuditAction.valueOf(action);
         } catch (Exception e) {
-            auditAction = com.ticketbox.api.module.audit.domain.entities.AuditAction.UPDATE_CONCERT;
+            auditAction = AuditAction.UPDATE_CONCERT;
         }
         auditLogService.logBusinessSuccess(auditAction, entity, id.toString(), metadata);
     }
 
     private Map<String, Object> concertSnapshot(Concert c) {
-        Map<String, Object> snapshot = new java.util.HashMap<>();
+        Map<String, Object> snapshot = new HashMap<>();
         snapshot.put("id", c.getId().toString()); snapshot.put("title", c.getTitle()); snapshot.put("slug", c.getSlug());
         snapshot.put("venue", c.getVenue()); snapshot.put("description", c.getDescription()); snapshot.put("artist_name", c.getArtistName());
         snapshot.put("artist_bio", c.getArtistBio()); snapshot.put("starts_at", c.getStartsAt()); snapshot.put("ends_at", c.getEndsAt());

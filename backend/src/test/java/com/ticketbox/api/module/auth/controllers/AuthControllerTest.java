@@ -24,6 +24,7 @@ import java.util.UUID;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -91,7 +92,7 @@ class AuthControllerTest {
                 .andExpect(header().string("Set-Cookie", containsString("refresh_token=")))
                 .andExpect(header().string("Set-Cookie", containsString("Max-Age=0")));
 
-        org.mockito.Mockito.verify(userService).logout("mock_refresh_token");
+        verify(userService).logout("mock_refresh_token");
     }
 
     @Test

@@ -25,12 +25,11 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.beans.factory.ObjectProvider;
+import com.ticketbox.api.module.audit.domain.entities.AuditAction;
 import com.ticketbox.api.module.audit.services.AuditLogService;
 
-
-
-
 import java.util.List;
+import java.util.Map;
 
 @Configuration
 @EnableMethodSecurity
@@ -133,10 +132,10 @@ public class SecurityConfig {
         return (request, response, accessDeniedException) -> {
             auditLogServiceProvider.ifAvailable(auditLogService -> {
                 auditLogService.logInvestigativeFailure(
-                        com.ticketbox.api.module.audit.domain.entities.AuditAction.ACCESS_DENIED,
+                        AuditAction.ACCESS_DENIED,
                         "SECURITY",
                         request.getRequestURI(),
-                        java.util.Map.of("method", request.getMethod())
+                        Map.of("method", request.getMethod())
                 );
             });
             ApiProblemWriter.write(objectMapper, request, response, HttpServletResponse.SC_FORBIDDEN,

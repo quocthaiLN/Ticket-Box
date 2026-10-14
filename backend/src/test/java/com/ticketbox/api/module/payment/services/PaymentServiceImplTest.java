@@ -9,11 +9,16 @@ import com.ticketbox.api.infrastructure.exception.AppException;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.auth.domain.entities.UserRole;
 import com.ticketbox.api.module.order.domain.entities.Order;
+import com.ticketbox.api.module.order.repositories.OrderRepository;
+import com.ticketbox.api.module.order.services.OrderInventoryService;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentResponse;
 import com.ticketbox.api.module.payment.domain.entities.Payment;
 import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
 import com.ticketbox.api.module.payment.domain.entities.PaymentStatus;
+import com.ticketbox.api.module.payment.domain.mappers.PaymentMapper;
+import com.ticketbox.api.module.payment.domain.mappers.PaymentMapperImpl;
 import com.ticketbox.api.module.payment.repositories.PaymentRepository;
+import com.ticketbox.api.module.shared.idempotency.IdempotencyService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -22,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -39,16 +45,16 @@ class PaymentServiceImplTest {
     private ApplicationEventPublisher eventPublisher;
 
     @Mock
-    private com.ticketbox.api.module.order.repositories.OrderRepository orderRepository;
+    private OrderRepository orderRepository;
 
     @Mock
-    private com.ticketbox.api.module.shared.idempotency.IdempotencyService idempotencyService;
+    private IdempotencyService idempotencyService;
 
     @Mock
-    private com.ticketbox.api.module.order.services.OrderInventoryService orderInventoryService;
+    private OrderInventoryService orderInventoryService;
 
-    @org.mockito.Spy
-    private com.ticketbox.api.module.payment.domain.mappers.PaymentMapper paymentMapper = new com.ticketbox.api.module.payment.domain.mappers.PaymentMapperImpl();
+    @Spy
+    private PaymentMapper paymentMapper = new PaymentMapperImpl();
 
     @InjectMocks
     private PaymentServiceImpl paymentService;

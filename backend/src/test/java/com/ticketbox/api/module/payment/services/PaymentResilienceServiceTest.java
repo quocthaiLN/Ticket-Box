@@ -14,6 +14,7 @@ import com.ticketbox.api.module.payment.domain.dtos.PaymentGatewayRequest;
 import com.ticketbox.api.module.payment.domain.entities.Payment;
 import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
 import com.ticketbox.api.module.payment.domain.entities.PaymentStatus;
+import com.ticketbox.api.module.payment.domain.mappers.PaymentMapperImpl;
 import com.ticketbox.api.module.payment.events.PaymentCompletedEvent;
 import com.ticketbox.api.module.payment.gateways.GatewayQueryResult;
 import com.ticketbox.api.module.payment.gateways.MomoGateway;
@@ -90,7 +91,7 @@ class PaymentResilienceServiceTest {
         service = new PaymentServiceImpl(orderRepository, paymentRepository, List.of(momoGateway),
                 List.of(queryGateway), idempotencyService, transactionTemplate, orderInventoryService,
                 eventPublisher, new ObjectMapper(), ticketIssuer,
-                new com.ticketbox.api.module.payment.domain.mappers.PaymentMapperImpl());
+                new PaymentMapperImpl());
         lenient().when(momoGateway.getProvider()).thenReturn(PaymentProvider.MOMO);
         lenient().when(momoGateway.transactionReference(PAYMENT_ID)).thenReturn(PAYMENT_ID.toString());
         lenient().when(queryGateway.getProvider()).thenReturn(PaymentProvider.MOMO);

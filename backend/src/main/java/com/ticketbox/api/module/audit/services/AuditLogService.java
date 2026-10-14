@@ -3,6 +3,7 @@ package com.ticketbox.api.module.audit.services;
 import com.ticketbox.api.module.audit.domain.dtos.AuditLogDetailResponse;
 import com.ticketbox.api.module.audit.domain.dtos.AuditLogResponse;
 import com.ticketbox.api.module.audit.domain.entities.AuditAction;
+import com.ticketbox.api.module.audit.domain.exception.AuditLogNotFoundException;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -58,7 +59,7 @@ public interface AuditLogService {
     /**
      * Xem thông tin chi tiết một bản ghi audit log kèm metadata.
      *
-     * @throws com.ticketbox.api.module.audit.domain.exception.AuditLogNotFoundException nếu không tìm thấy ID
+     * @throws AuditLogNotFoundException nếu không tìm thấy ID
      */
     AuditLogDetailResponse getAuditLogById(UUID id);
 }
