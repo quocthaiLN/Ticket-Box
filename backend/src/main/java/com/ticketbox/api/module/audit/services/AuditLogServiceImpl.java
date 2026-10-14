@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import com.ticketbox.api.module.audit.domain.mappers.AuditLogMapper;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -41,6 +42,7 @@ public class AuditLogServiceImpl implements AuditLogService {
 
     private final AuditLogRepository auditLogRepository;
     private final ObjectMapper objectMapper;
+    private final AuditLogMapper auditLogMapper;
 
     private static final Set<String> SENSITIVE_KEY_WORDS = Set.of(
             "password", "secret", "token", "accesstoken", "refreshtoken",
@@ -131,7 +133,7 @@ public class AuditLogServiceImpl implements AuditLogService {
                                                 LocalDateTime from, LocalDateTime to, Pageable pageable) {
         Pageable effectivePageable = ensureSort(pageable);
         Specification<AuditLog> spec = buildSpecification(action, actorUserId, entityType, entityId, from, to);
-        return auditLogRepository.findAll(spec, effectivePageable).map(this::toResponse);
+        return auditLogRepository.findAll(spec, effectivePageable).map(auditLogMapper::toResponse);
     }
 
     @Override
@@ -139,7 +141,7 @@ public class AuditLogServiceImpl implements AuditLogService {
     public AuditLogDetailResponse getAuditLogById(UUID id) {
         AuditLog auditLog = auditLogRepository.findById(id)
                 .orElseThrow(() -> new AuditLogNotFoundException(id));
-        return toDetailResponse(auditLog);
+        return auditLogMapper.toDetailResponse(auditLog);
     }
 
     private User resolveCurrentActor() {
@@ -260,50 +262,5 @@ public class AuditLogServiceImpl implements AuditLogService {
             }
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-    }
-
-    private AuditLogResponse toResponse(AuditLog auditLog) {
-        return AuditLogResponse.builder()
-                .id(auditLog.getId())
-                .actor(toActorDto(auditLog.getActor()))
-                .action(auditLog.getAction())
-                .entityType(auditLog.getEntityType())
-                .entityId(auditLog.getEntityId())
-                .ipAddress(auditLog.getIpAddress())
-                .userAgent(auditLog.getUserAgent())
-                .createdAt(auditLog.getCreatedAt())
-                .build();
-    }
-
-    private AuditLogDetailResponse toDetailResponse(AuditLog auditLog) {
-        Object metadataObj = null;
-        if (auditLog.getMetadata() != null && !auditLog.getMetadata().isBlank()) {
-            try {
-                metadataObj = objectMapper.readTree(auditLog.getMetadata());
-            } catch (Exception e) {
-                metadataObj = auditLog.getMetadata();
-            }
-        }
-
-        return AuditLogDetailResponse.builder()
-                .id(auditLog.getId())
-                .actor(toActorDto(auditLog.getActor()))
-                .action(auditLog.getAction())
-                .entityType(auditLog.getEntityType())
-                .entityId(auditLog.getEntityId())
-                .metadata(metadataObj)
-                .ipAddress(auditLog.getIpAddress())
-                .userAgent(auditLog.getUserAgent())
-                .createdAt(auditLog.getCreatedAt())
-                .build();
-    }
-
-    private ActorDto toActorDto(User actor) {
-        if (actor == null) return null;
-        return ActorDto.builder()
-                .id(actor.getId())
-                .email(actor.getEmail())
-                .fullName(actor.getFullName())
-                .build();
     }
 }

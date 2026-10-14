@@ -10,6 +10,8 @@ import com.ticketbox.api.module.audit.repositories.AuditLogRepository;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.auth.domain.entities.UserRole;
 import com.ticketbox.api.module.auth.services.CustomUserDetails;
+import com.ticketbox.api.module.audit.domain.mappers.AuditLogMapper;
+import com.ticketbox.api.module.audit.domain.mappers.AuditLogMapperImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,6 +49,9 @@ class AuditLogServiceTest {
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
+    @Spy
+    private AuditLogMapper auditLogMapper = new AuditLogMapperImpl();
+
     @InjectMocks
     private AuditLogServiceImpl auditLogService;
 
@@ -55,6 +60,7 @@ class AuditLogServiceTest {
 
     @BeforeEach
     void setUp() {
+        auditLogMapper.setObjectMapper(objectMapper);
         sampleUser = User.builder()
                 .id(UUID.randomUUID())
                 .email("admin@ticketbox.vn")

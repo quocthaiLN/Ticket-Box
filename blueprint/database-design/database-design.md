@@ -12,9 +12,8 @@
 
 1. [Quy ước chung](#1-quy-ước-chung)
 2. [Phụ lục: Danh sách bảng chính](#2-phụ-lục-danh-sách-bảng-chính)
-3. [Sơ đồ quan hệ tổng quan](#3-sơ-đồ-quan-hệ-tổng-quan)
-4. [Tổng hợp hành vi xóa (ON DELETE)](#4-tổng-hợp-hành-vi-xóa-on-delete)
-5. [Ghi chú & điểm cần lưu ý](#5-ghi-chú--điểm-cần-lưu-ý)
+3. [Tổng hợp hành vi xóa (ON DELETE)](#3-tổng-hợp-hành-vi-xóa-on-delete)
+4. [Ghi chú & điểm cần lưu ý](#4-ghi-chú--điểm-cần-lưu-ý)
 
 ---
 

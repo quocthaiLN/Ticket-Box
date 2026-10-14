@@ -347,7 +347,7 @@ Frontend dual parser đã có nhưng vẫn kiểm tra error messages, field erro
 
 ### Bước 6 — Dọn legacy
 
-Sau khi mọi caller và record cũ đã migrate: xóa AppException, ErrorResponse/writer cũ và handler tương thích nếu không còn import; bỏ reader cũ sau TTL. Cập nhật quy ước lỗi trong `AGENT.md`. Kiểm tra không còn raw string business codes rải trong service, không có HTTP import trong shared exception/module exception và không còn nhiều handler cạnh tranh.
+Sau khi mọi caller và record cũ đã migrate: xóa AppException, ErrorResponse/writer cũ và handler tương thích nếu không còn import; bỏ reader cũ sau TTL. Cập nhật quy ước lỗi trong `AGENTS.md`. Kiểm tra không còn raw string business codes rải trong service, không có HTTP import trong shared exception/module exception và không còn nhiều handler cạnh tranh.
 
 ## 11. Tệp cần xem/chỉnh sửa khi triển khai
 
@@ -355,7 +355,7 @@ Quy ước: `J = backend/src/main/java/com/ticketbox/api`, `T = backend/src/test
 
 | Nhóm | Đường dẫn | Trách nhiệm |
 | --- | --- | --- |
-| Đã xem | `backend/pom.xml`, `AGENT.md`, `blueprint/api-design/base-api.md` | Stack, quy ước hiện tại, compatibility |
+| Đã xem | `backend/pom.xml`, `AGENTS.md`, `blueprint/api-design/base-api.md` | Stack, quy ước hiện tại, compatibility |
 | Tạo mới | `J/module/shared/exception/{ErrorType,ErrorCode,BusinessException,NotFoundException,ConflictException,BusinessRuleException,ForbiddenException,UnauthorizedException}.java` | Shared hierarchy |
 | Tạo mới | `J/module/shared/validation/RequestValidationException.java` | Lỗi input trung lập HTTP |
 | Tạo mới | `J/module/{auth,catalog,order,payment,ticket}/domain/exception/` | Enum và exception theo danh mục; không tạo module chưa dùng |
@@ -376,7 +376,7 @@ Quy ước: `J = backend/src/main/java/com/ticketbox/api`, `T = backend/src/test
 | Có thể ảnh hưởng | `J/module/*/domain/entities/`, `J/module/shared/cache/SingleFlight.java`, consumers/schedulers | Chỉ đổi khi phân loại call site chứng minh cần; không blanket replace |
 | Chỉnh sửa khi cutover | `frontend/src/lib/api-client.ts`, `frontend/src/routes/auth/AuthPage.tsx` | Expose trace/details khi cần, hỗ trợ mã và input errors |
 | Có thể ảnh hưởng | `frontend/src/routes/audience/CheckoutPage.tsx`, các service/frontend caller khác | Rà xử lý code/status checkout mới |
-| Chỉnh sửa spec | `blueprint/api-design/{base-api,auth-rbac-api,catalog-api,order-checkout-api,e-ticket-api}.md`, `AGENT.md` | Contract đích, bảng status, coding convention |
+| Chỉnh sửa spec | `blueprint/api-design/{base-api,auth-rbac-api,catalog-api,order-checkout-api,e-ticket-api}.md`, `AGENTS.md` | Contract đích, bảng status, coding convention |
 | Có thể ảnh hưởng | `postman/auth/auth.json`, `postman/order/order.json`, `postman/catalog/public/public.json`, request YAML auth | Assertion lỗi/formats |
 | Chỉnh sửa test | `T/module/auth/services/UserServiceTest.java`, `T/module/catalog/services/{AdminConcertServiceTest,PublicConcertServiceTest}.java`, `T/module/order/services/{OrderServiceImplTest,OrderSettlementServiceImplTest}.java`, `T/module/payment/services/{PaymentServiceImplTest,PaymentResilienceServiceTest}.java`, `T/module/shared/idempotency/IdempotencyServiceTest.java` | Exception, type, replay, rollback/resilience |
 | Chỉnh sửa test | `T/module/{auth,order,payment}/controllers/`, `T/infrastructure/rateLimit/RateLimitFilterTest.java` | Schema/status/header và protocol regression |

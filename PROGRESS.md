@@ -1,0 +1,109 @@
+# Task Progress
+
+- File này được sử dụng để theo dõi một task được thực hiện qua nhiều Session.
+- Mỗi khi được yêu cầu kết thúc một Session cần tổng kết các thông tin: Goal, Completed, Commits, Files or artifacts updated, Known risk or unresolved issue, Next best step.
+
+## Task Description
+- Name: Triển khai cơ chế Audit Log
+- Description: 
+  - Viết lại đặc tả `blueprint/specs/details/16-audit-logging.md` phân định rõ 2 nhóm sự kiện (Nghiệp vụ thành công: REQUIRED; Sự kiện thất bại điều tra: REQUIRES_NEW).
+  - Bổ sung tài liệu API Design `blueprint/api-design/details/audit-log-api.md` (truy vấn danh sách, chi tiết audit log dành cho Admin) và cập nhật mục lục `blueprint/api-design/api-design.md`.
+  - Triển khai `AuditLogService`/`AuditLogServiceImpl` chuẩn hóa theo 7 nguyên tắc chốt cơ chế (enum tập trung `AuditAction`, ngữ cảnh tự động từ SecurityContext và RequestContext, không lộ PII/secrets, bất biến/chỉ INSERT và SELECT, chỉ ADMIN được đọc).
+  - Tích hợp ghi nhận audit log vào các module phát sinh sự kiện (`catalog`, `auth`, `artistbio`, `security`).
+  - Viết đầy đủ unit tests, integration tests và E2E tests xác minh 100% các kịch bản.
+- Goal: Hệ thống Audit Trail đáng tin cậy, không thất thoát log nghiệp vụ thành công, lưu vết thất bại điều tra dù rollback, bảo mật và test pass 100%.
+- Acceptance criteria:
+  - [x] Spec `16-audit-logging.md` và API Design `audit-log-api.md` hoàn thiện, chuẩn hóa theo quy ước TicketBox.
+  - [x] `AuditLogService` cung cấp 2 nhóm phương thức tách bạch propagation (`REQUIRED` cho business success, `REQUIRES_NEW` cho investigative failure).
+  - [x] Lấy `actor` và `client IP`, `User-Agent` tự động từ context, không để caller truyền thủ công.
+  - [x] Sử dụng centralized enum `AuditAction`.
+  - [x] Che giấu dữ liệu nhạy cảm (sensitive keys và email) trong metadata và entityId.
+  - [x] Endpoint `GET /admin/audit-logs` và `GET /admin/audit-logs/{id}` chỉ dành cho ADMIN, hỗ trợ filter/pagination và tự ghi audit `READ_AUDIT_LOGS`.
+  - [x] Toàn bộ test suite `./mvnw test` đạt 206/206 tests passed (0 failures, 0 errors, 2 skipped).
+  - [x] Script chuẩn `./init.sh` chạy thành công 100% (docker up, backend test, frontend install + build).
+
+## Session Logs
+
+- Session 001
+  - Goal: Khởi tạo task, kiểm tra baseline hệ thống, inspect codebase và lập danh sách các file cần đọc để xây dựng Specs và API Design.
+  - Completed:
+    - Baseline verification: `git log --oneline -5`, `./mvnw clean test` (186/186 passed, 0 failures, 0 errors, 2 skipped), `npm run build` (build thành công 100%).
+    - Clear và khởi tạo `PROGRESS.md` cho task mới.
+    - Inspect toàn diện kiến trúc hiện tại của dự án: blueprint, database schema, exception handling, authentication/security context, các service đang sử dụng audit (`AdminUserServiceImpl`, `ConcertServiceImpl`, `ArtistBioServiceImpl`).
+    - Lập danh sách đầy đủ các file cần đọc để thiết kế Specs và API Design.
+  - Commits: Đang thực hiện.
+
+- Session 002
+  - Goal: Hoàn thiện Spec, API Design, triển khai mã nguồn, tích hợp các module và kiểm thử tự động toàn diện.
+  - Completed:
+    - **Deliverable 1 (Specs)**: Viết lại toàn bộ [`blueprint/specs/details/16-audit-logging.md`](blueprint/specs/details/16-audit-logging.md) cụ thể hóa 7 nguyên tắc chốt cơ chế, ma trận phân loại logic theo 2 nhóm sự kiện (`REQUIRED` vs `REQUIRES_NEW`), quy tắc xử lý lỗi và bảo mật PII/secret.
+    - **Deliverable 2 (API Design)**: Tạo mới [`blueprint/api-design/details/audit-log-api.md`](blueprint/api-design/details/audit-log-api.md) đặc tả `GET /admin/audit-logs` và `GET /admin/audit-logs/{id}`, phân trang, lọc, problem details, quyền `ADMIN` và side effect `READ_AUDIT_LOGS`. Cập nhật mục lục [`blueprint/api-design/api-design.md`](blueprint/api-design/api-design.md).
+    - **Deliverable 3 (Implementation)**:
+      - Định nghĩa enum tập trung [`AuditAction.java`](backend/src/main/java/com/ticketbox/api/module/audit/domain/entities/AuditAction.java).
+      - Cập nhật entity [`AuditLog.java`](backend/src/main/java/com/ticketbox/api/module/audit/domain/entities/AuditLog.java) với `updatable = false` trên mọi cột để đảm bảo tính bất biến ở tầng JPA.
+      - Nâng cấp [`AuditLogRepository.java`](backend/src/main/java/com/ticketbox/api/module/audit/repositories/AuditLogRepository.java) kế thừa `JpaSpecificationExecutor`.
+      - Xây dựng DTOs [`AuditLogResponse.java`](backend/src/main/java/com/ticketbox/api/module/audit/domain/dtos/AuditLogResponse.java), [`AuditLogDetailResponse.java`](backend/src/main/java/com/ticketbox/api/module/audit/domain/dtos/AuditLogDetailResponse.java), [`ActorDto.java`](backend/src/main/java/com/ticketbox/api/module/audit/domain/dtos/ActorDto.java) và domain exception [`AuditLogNotFoundException.java`](backend/src/main/java/com/ticketbox/api/module/audit/domain/exception/AuditLogNotFoundException.java).
+      - Triển khai [`AuditLogServiceImpl.java`](backend/src/main/java/com/ticketbox/api/module/audit/services/AuditLogServiceImpl.java): tách bạch `logBusinessSuccess` (`REQUIRED`, không nuốt lỗi) và `logInvestigativeFailure` (`REQUIRES_NEW`, bắt lỗi và log SLF4J), tự động trích xuất actor từ `SecurityContextHolder` và IP/User-Agent từ `RequestContextHolder`, cơ chế sanitize/masking các key nhạy cảm trong metadata.
+      - Tạo controller quản trị [`AdminAuditLogController.java`](backend/src/main/java/com/ticketbox/api/module/audit/controllers/AdminAuditLogController.java) có `@PreAuthorize("hasRole('ADMIN')")` và tự ghi nhận `READ_AUDIT_LOGS`.
+      - Cập nhật [`SecurityConfig.java`](backend/src/main/java/com/ticketbox/api/infrastructure/config/SecurityConfig.java) bảo vệ route `/admin/audit-logs/**` và tự động ghi log điều tra `ACCESS_DENIED` khi bị từ chối quyền truy cập 403.
+      - Tích hợp call sites: [`UserServiceImpl.java`](backend/src/main/java/com/ticketbox/api/module/auth/services/UserServiceImpl.java) (ghi `LOGIN_FAILED` kèm email masking trước khi throw), [`AdminUserServiceImpl.java`](backend/src/main/java/com/ticketbox/api/module/auth/services/AdminUserServiceImpl.java), [`ConcertServiceImpl.java`](backend/src/main/java/com/ticketbox/api/module/catalog/services/ConcertServiceImpl.java), [`ArtistBioServiceImpl.java`](backend/src/main/java/com/ticketbox/api/module/artistbio/services/ArtistBioServiceImpl.java).
+    - **Deliverable 4 (Testing & Verification)**:
+      - Unit tests [`AuditLogServiceTest.java`](backend/src/test/java/com/ticketbox/api/module/audit/services/AuditLogServiceTest.java) (6 tests: context resolution, sanitization, rethrowing vs error-swallowing, pagination, not found).
+      - Controller tests [`AdminAuditLogControllerTest.java`](backend/src/test/java/com/ticketbox/api/module/audit/controllers/AdminAuditLogControllerTest.java) (4 tests: 200 list, filtering, 200 detail, 404 problem detail, self-auditing `READ_AUDIT_LOGS`).
+      - Transaction rollback integration test [`AuditLogTransactionIntegrationTest.java`](backend/src/test/java/com/ticketbox/api/module/audit/AuditLogTransactionIntegrationTest.java) (3 tests: rollback business log khi outer tx rollback, commit business log khi outer tx commit, và persistance của investigative failure log kể cả khi outer tx rollback).
+      - Security RBAC integration test [`AuditLogSecurityIntegrationTest.java`](backend/src/test/java/com/ticketbox/api/module/audit/AuditLogSecurityIntegrationTest.java) (4 tests: unauthenticated 401, audience 403 kèm lưu `ACCESS_DENIED`, admin 200 kèm lưu `READ_AUDIT_LOGS`, immutability rejection của POST/PUT/DELETE).
+      - Cập nhật các test suite liên quan: [`AdminUserServiceTest.java`](backend/src/test/java/com/ticketbox/api/module/auth/services/AdminUserServiceTest.java), [`UserServiceTest.java`](backend/src/test/java/com/ticketbox/api/module/auth/services/UserServiceTest.java), [`ArtistBioServiceTest.java`](backend/src/test/java/com/ticketbox/api/module/artistbio/services/ArtistBioServiceTest.java).
+      - Kiểm thử toàn diện: `./mvnw test` đạt **206/206 tests passed** (0 failures, 0 errors, 2 skipped). Script `./init.sh` vượt qua 100%.
+  - Commits: Sẵn sàng commit.
+  - Files or artifacts updated:
+    - `blueprint/specs/details/16-audit-logging.md`
+    - `blueprint/api-design/details/audit-log-api.md`
+    - `blueprint/api-design/api-design.md`
+    - `backend/src/main/java/com/ticketbox/api/module/audit/domain/entities/AuditAction.java`
+    - `backend/src/main/java/com/ticketbox/api/module/audit/domain/entities/AuditLog.java`
+    - `backend/src/main/java/com/ticketbox/api/module/audit/domain/exception/AuditErrorCode.java`
+    - `backend/src/main/java/com/ticketbox/api/module/audit/domain/exception/AuditLogNotFoundException.java`
+    - `backend/src/main/java/com/ticketbox/api/module/audit/domain/dtos/ActorDto.java`
+    - `backend/src/main/java/com/ticketbox/api/module/audit/domain/dtos/AuditLogResponse.java`
+    - `backend/src/main/java/com/ticketbox/api/module/audit/domain/dtos/AuditLogDetailResponse.java`
+    - `backend/src/main/java/com/ticketbox/api/module/audit/repositories/AuditLogRepository.java`
+    - `backend/src/main/java/com/ticketbox/api/module/audit/services/AuditLogService.java`
+    - `backend/src/main/java/com/ticketbox/api/module/audit/services/AuditLogServiceImpl.java`
+    - `backend/src/main/java/com/ticketbox/api/module/audit/controllers/AdminAuditLogController.java`
+    - `backend/src/main/java/com/ticketbox/api/infrastructure/config/SecurityConfig.java`
+    - `backend/src/main/java/com/ticketbox/api/module/auth/services/AdminUserServiceImpl.java`
+    - `backend/src/main/java/com/ticketbox/api/module/auth/services/UserServiceImpl.java`
+    - `backend/src/main/java/com/ticketbox/api/module/catalog/services/ConcertServiceImpl.java`
+    - `backend/src/main/java/com/ticketbox/api/module/artistbio/services/ArtistBioServiceImpl.java`
+    - `backend/src/test/java/com/ticketbox/api/module/audit/services/AuditLogServiceTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/audit/controllers/AdminAuditLogControllerTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/audit/AuditLogTransactionIntegrationTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/audit/AuditLogSecurityIntegrationTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/auth/services/AdminUserServiceTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/auth/services/UserServiceTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/artistbio/services/ArtistBioServiceTest.java`
+    - `DESISIONS.md`
+    - `.agents/desisions/03-audit-logging-dual-event-categories.md`
+    - `PROGRESS.md`
+  - Known risk or unresolved issue: Không có rủi ro nào.
+  - Next best step: Trình bày chi tiết triển khai cho người dùng theo skill `implementation-explain` để tiến hành review và commit.
+
+- Session 003
+  - Goal: Refactor Audit Log Service chuyển từ các hàm `private to...` thủ công sang MapStruct `AuditLogMapper` theo quyết định kiến trúc 01 trong DECISIONS.md. Giới hạn phạm vi chỉ trong module Audit Log.
+  - Completed:
+    - Tạo [`AuditLogMapper.java`](backend/src/main/java/com/ticketbox/api/module/audit/domain/mappers/AuditLogMapper.java): cấu hình componentModel = "spring", hỗ trợ ánh xạ `toResponse`, `toDetailResponse` (deserialization metadata JSON), và `toActorDto`.
+    - Cập nhật [`AuditLogServiceImpl.java`](backend/src/main/java/com/ticketbox/api/module/audit/services/AuditLogServiceImpl.java): tiêm `AuditLogMapper`, thay thế các lời gọi `toResponse` và `toDetailResponse`, loại bỏ hoàn toàn các hàm private `toResponse`, `toDetailResponse`, `toActorDto`.
+    - Tạo unit test chuyên biệt [`AuditLogMapperTest.java`](backend/src/test/java/com/ticketbox/api/module/audit/domain/mappers/AuditLogMapperTest.java) (6 tests: toResponse, null actor, valid JSON metadata, null/empty/malformed metadata, toActorDto).
+    - Cập nhật [`AuditLogServiceTest.java`](backend/src/test/java/com/ticketbox/api/module/audit/services/AuditLogServiceTest.java) tích hợp `AuditLogMapper`.
+    - Đảm bảo 100% không chạm hay sửa đổi các module khác ngoài Audit Log.
+    - Chạy toàn bộ test suite backend: **212/212 tests passed** (0 failures, 0 errors, 2 skipped).
+    - Chạy toàn bộ test frontend: **17/17 tests passed**.
+  - Commits: Sẵn sàng commit.
+  - Files or artifacts updated:
+    - `backend/src/main/java/com/ticketbox/api/module/audit/domain/mappers/AuditLogMapper.java`
+    - `backend/src/main/java/com/ticketbox/api/module/audit/services/AuditLogServiceImpl.java`
+    - `backend/src/test/java/com/ticketbox/api/module/audit/domain/mappers/AuditLogMapperTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/audit/services/AuditLogServiceTest.java`
+    - `PROGRESS.md`
+  - Known risk or unresolved issue: Không có.
+  - Next best step: Trình bày chi tiết theo skill `implementation-explain` cho người dùng.
