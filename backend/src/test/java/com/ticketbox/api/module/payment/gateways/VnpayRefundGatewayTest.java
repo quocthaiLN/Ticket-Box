@@ -139,14 +139,17 @@ class VnpayRefundGatewayTest {
 
     @ParameterizedTest
     @CsvSource({
-            "91, '', PROCESSING",
-            "94, '', PROCESSING",
-            "00, '01', PROCESSING",
-            "00, '02', FAILED",
-            "99, '', FAILED",
-            "02, '', FAILED"
+            "91, '', PROCESSING, 91",
+            "94, '', PROCESSING, 94",
+            "00, '01', PROCESSING, 00",
+            "00, '05', PROCESSING, 00",
+            "00, '06', PROCESSING, 00",
+            "00, '02', FAILED, TXN_STATUS_02",
+            "00, '09', FAILED, TXN_STATUS_09",
+            "99, '', FAILED, 99",
+            "02, '', FAILED, 02"
     })
-    void mapsResponseCodesCorrectly(String responseCode, String transactionStatus, RefundStatus expectedStatus) throws Exception {
+    void mapsResponseCodesCorrectly(String responseCode, String transactionStatus, RefundStatus expectedStatus, String expectedResolvedCode) throws Exception {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         VnpayRefundGateway gateway = gateway(builder.build(), CircuitBreaker.ofDefaults("test-vnpay-mapping"));
@@ -165,7 +168,7 @@ class VnpayRefundGatewayTest {
         RefundGatewayResult result = gateway.refund(request);
 
         assertThat(result.status()).isEqualTo(expectedStatus);
-        assertThat(result.responseCode()).isEqualTo(responseCode);
+        assertThat(result.responseCode()).isEqualTo(expectedResolvedCode);
         server.verify();
     }
 

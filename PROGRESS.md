@@ -298,10 +298,43 @@
         - `pendingPaymentWithProvisionalProviderTxnId_updatesToOfficialIpnTxnIdWithoutConflict`: Xác nhận payment `PENDING` được cập nhật mã IPN chính thức mà không bị báo lỗi.
         - `terminalPaymentWithDifferentProviderTxnId_isRejectedAsConflictingResult`: Xác nhận payment `SUCCEEDED` từ chối mã transaction khác và báo `CONFLICTING_RESULT`.
       - Chạy toàn diện `./init.sh`: Backend đạt **276/276 passed** (0 failures, 0 errors, 2 skipped), Frontend build pass 100%.
-  - Commits: Sẵn sàng commit.
+  - Commits: `caaec4d` - fix(payment): permit official provider txn id override during pending state and record conflict audit.
   - Files or artifacts updated:
     - `backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentServiceImpl.java`
     - `backend/src/test/java/com/ticketbox/api/module/payment/services/PaymentResilienceServiceTest.java`
     - `PROGRESS.md`
   - Known risk or unresolved issue: Không có.
   - Next best step: Tiến hành test lại luồng thanh toán thực tế Late IPN trên VNPay Sandbox.
+
+- Session 009
+  - Goal: Khắc phục hiện tượng Refund bị lưu status FAILED với mã `00 - Refund success`, lưu vết `provider_refund_id` khi hoàn tiền thất bại/đang xử lý, và loại trừ hiện tượng Poison Pill trong `NotificationConsumer`.
+  - Completed:
+    - **Chẩn đoán nguyên nhân**:
+      - Trong `VnpayRefundGateway.java`: `mapResponseCode` chỉ map mã `00` và `01`, khiến các mã hoàn tiền đang được ngân hàng/VNPay thụ lý (`05` - VNPAY đang xử lý, `06` - VNPAY đã gửi yêu cầu sang ngân hàng) bị coi nhầm là `FAILED`. Đồng thời khi giao dịch thất bại tại cổng (mã `02`/`09`), code lưu nhầm `vnp_ResponseCode` (`00`) và `vnp_Message` (`Refund success`) thay vì mã lỗi từ chối của giao dịch (`TXN_STATUS_02`/`09`).
+      - Trong `RefundServiceImpl.java`: Cột `provider_refund_id` chỉ được gán khi trạng thái là `SUCCESS`, làm mất dấu mã giao dịch đối soát của VNPay (`vnp_TransactionNo`) khi hoàn tiền đang xử lý hoặc thất bại.
+      - Trong `NotificationConsumer.java`: Phương thức `recipientEmail` ném `IllegalStateException` khi không tìm thấy user id trong DB (tàn dư từ các lần test trước hoặc user bị xóa), dẫn tới việc Spring AMQP `ConditionalRejectingErrorHandler` reject nhưng liên tục redeliver message (Poison Pill), làm nghẽn queue và spam log.
+    - **Triển khai Backend**:
+      - Cập nhật [`VnpayRefundGateway.java`](backend/src/main/java/com/ticketbox/api/module/payment/gateways/VnpayRefundGateway.java):
+        - Bổ sung `vnp_TransactionStatus` `05` và `06` vào trạng thái `RefundStatus.PROCESSING`.
+        - Khi giao dịch hoàn tiền bị cổng từ chối nhưng API tiếp nhận thành công (`vnp_ResponseCode == 00`), ánh xạ `responseCode` thành `TXN_STATUS_...` và thông báo lỗi rõ ràng.
+      - Cập nhật [`RefundServiceImpl.java`](backend/src/main/java/com/ticketbox/api/module/payment/services/RefundServiceImpl.java): Luôn gán `provider_refund_id` nếu cổng trả về mã giao dịch hoàn tiền (`vnp_TransactionNo` hoặc `vnp_ResponseId`) cho mọi trạng thái (`SUCCESS`, `PROCESSING`, `FAILED`).
+      - Cập nhật [`NotificationConsumer.java`](backend/src/main/java/com/ticketbox/api/module/notification/consumer/NotificationConsumer.java):
+        - Chuyển `findRecipientEmail` thành trả về `Optional<String>`, ghi log warning và ack message an toàn khi không tìm thấy người dùng.
+        - Thay thế Lombok `@RequiredArgsConstructor` bằng constructor tường minh, tuân thủ quy tắc dự án.
+        - Purge sạch 2 message rác tồn đọng trong `notification.payment-failed.queue` trên RabbitMQ.
+    - **Unit & Integration Tests**:
+      - Cập nhật [`VnpayRefundGatewayTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/gateways/VnpayRefundGatewayTest.java) kiểm thử đầy đủ các mã trạng thái `05`, `06`, `02`, `09` (15/15 passed).
+      - Bổ sung test `testProcessRefund_gatewayFailedWithProviderRefundId` trong [`RefundServiceImplTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/services/RefundServiceImplTest.java) (6/6 passed).
+      - Bổ sung tests `skipsPaymentFailedEmailWhenUserNotFound` và `skipsTicketIssuedEmailWhenUserNotFound` trong [`NotificationConsumerTest.java`](backend/src/test/java/com/ticketbox/api/module/notification/consumer/NotificationConsumerTest.java) (5/5 passed).
+      - Chạy toàn diện `./init.sh`: Backend đạt **282/282 passed** (0 failures, 0 errors, 2 skipped), Frontend build hoàn tất 100%.
+  - Commits: Sẵn sàng commit.
+  - Files or artifacts updated:
+    - `backend/src/main/java/com/ticketbox/api/module/notification/consumer/NotificationConsumer.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/gateways/VnpayRefundGateway.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/services/RefundServiceImpl.java`
+    - `backend/src/test/java/com/ticketbox/api/module/notification/consumer/NotificationConsumerTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/gateways/VnpayRefundGatewayTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/services/RefundServiceImplTest.java`
+    - `PROGRESS.md`
+  - Known risk or unresolved issue: Không có.
+  - Next best step: Sẵn sàng commit và chạy lại luồng kiểm thử thực tế.

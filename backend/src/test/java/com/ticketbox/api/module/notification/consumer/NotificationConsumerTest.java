@@ -19,6 +19,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -57,5 +58,29 @@ class NotificationConsumerTest {
         notificationConsumer.receiveTicketIssued(event);
 
         verify(emailService).sendTicketIssuedEmail("buyer@example.com", event);
+    }
+
+    @Test
+    void skipsPaymentFailedEmailWhenUserNotFound() {
+        UUID userId = UUID.randomUUID();
+        PaymentCompletedEvent event = new PaymentCompletedEvent(UUID.randomUUID(), UUID.randomUUID(), userId,
+                PaymentProvider.MOMO, PaymentStatus.FAILED, BigDecimal.valueOf(100_000), "VND", "provider-txn");
+        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+        notificationConsumer.receivePaymentFailed(event);
+
+        verifyNoInteractions(emailService);
+    }
+
+    @Test
+    void skipsTicketIssuedEmailWhenUserNotFound() {
+        UUID userId = UUID.randomUUID();
+        TicketIssuedEvent event = new TicketIssuedEvent(UUID.randomUUID(), userId,
+                List.of(UUID.randomUUID()));
+        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+        notificationConsumer.receiveTicketIssued(event);
+
+        verifyNoInteractions(emailService);
     }
 }

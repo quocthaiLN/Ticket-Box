@@ -179,11 +179,19 @@ public class VnpayRefundGateway implements PaymentRefundGateway {
                 ? transactionNoResponse
                 : (!responseId.isBlank() ? responseId : null);
 
+        String resolvedCode = responseCode;
+        String resolvedMessage = message;
+        if (status == RefundStatus.FAILED && "00".equals(responseCode) && !transactionStatus.isBlank()) {
+            resolvedCode = "TXN_STATUS_" + transactionStatus;
+            resolvedMessage = "VNPay refund rejected with transaction status " + transactionStatus
+                    + (message.isBlank() ? "" : ": " + message);
+        }
+
         return RefundGatewayResult.builder()
                 .providerRefundId(providerRefundId)
                 .status(status)
-                .responseCode(responseCode)
-                .message(message)
+                .responseCode(resolvedCode)
+                .message(resolvedMessage)
                 .build();
     }
 
@@ -192,7 +200,7 @@ public class VnpayRefundGateway implements PaymentRefundGateway {
             if ("00".equals(transactionStatus) || transactionStatus.isBlank()) {
                 return RefundStatus.SUCCESS;
             }
-            if ("01".equals(transactionStatus)) {
+            if ("01".equals(transactionStatus) || "05".equals(transactionStatus) || "06".equals(transactionStatus)) {
                 return RefundStatus.PROCESSING;
             }
             return RefundStatus.FAILED;

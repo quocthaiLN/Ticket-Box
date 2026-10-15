@@ -137,9 +137,11 @@ public class RefundServiceImpl implements RefundService {
         final RefundGatewayResult finalResult = result;
         return transactionTemplate.execute(status -> {
             Refund r = refundRepository.findByIdForUpdate(refundId).orElseThrow();
+            if (finalResult.providerRefundId() != null && !finalResult.providerRefundId().isBlank()) {
+                r.setProviderRefundId(finalResult.providerRefundId());
+            }
             if (finalResult.status() == RefundStatus.SUCCESS) {
                 r.setStatus(RefundStatus.SUCCESS);
-                r.setProviderRefundId(finalResult.providerRefundId());
                 r.setCompletedAt(LocalDateTime.now());
                 r.setFailureCode(null);
                 r.setFailureMessage(null);
@@ -151,7 +153,7 @@ public class RefundServiceImpl implements RefundService {
                         r.getId().toString(),
                         Map.of(
                                 "payment_id", r.getPayment().getId().toString(),
-                                "provider_refund_id", finalResult.providerRefundId() != null ? finalResult.providerRefundId() : "",
+                                "provider_refund_id", r.getProviderRefundId() != null ? r.getProviderRefundId() : "",
                                 "amount", r.getAmount().toString()));
             } else if (finalResult.status() == RefundStatus.FAILED) {
                 r.setStatus(RefundStatus.FAILED);

@@ -8,18 +8,23 @@ import com.ticketbox.api.module.payment.events.PaymentCompletedEvent;
 import com.ticketbox.api.module.shared.domain.dtos.AuthOtpMessageDTO;
 import com.ticketbox.api.module.ticket.events.TicketIssuedEvent;
 
-import lombok.RequiredArgsConstructor;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class NotificationConsumer {
 
     private final EmailService emailService;
     private final UserRepository userRepository;
+
+    public NotificationConsumer(EmailService emailService, UserRepository userRepository) {
+        this.emailService = emailService;
+        this.userRepository = userRepository;
+    }
 
     @RabbitListener(queues = RabbitMqConstants.AUTH_OTP_QUEUE)
     public void receiveOtpMessage(AuthOtpMessageDTO message) {
@@ -36,17 +41,26 @@ public class NotificationConsumer {
 
     @RabbitListener(queues = RabbitMqConstants.NOTIFICATION_PAYMENT_FAILED_QUEUE)
     public void receivePaymentFailed(PaymentCompletedEvent event) {
-        emailService.sendPaymentFailedEmail(recipientEmail(event.userId()), event);
+        findRecipientEmail(event.userId()).ifPresentOrElse(
+                email -> emailService.sendPaymentFailedEmail(email, event),
+                () -> log.warn("Cannot send payment failed email: recipient user {} not found for payment {}",
+                        event.userId(), event.paymentId())
+        );
     }
 
     @RabbitListener(queues = RabbitMqConstants.NOTIFICATION_TICKET_ISSUED_QUEUE)
     public void receiveTicketIssued(TicketIssuedEvent event) {
-        emailService.sendTicketIssuedEmail(recipientEmail(event.userId()), event);
+        findRecipientEmail(event.userId()).ifPresentOrElse(
+                email -> emailService.sendTicketIssuedEmail(email, event),
+                () -> log.warn("Cannot send ticket issued email: recipient user {} not found for order {}",
+                        event.userId(), event.orderId())
+        );
     }
 
-    private String recipientEmail(java.util.UUID userId) {
-        return userRepository.findById(userId)
-                .map(User::getEmail)
-                .orElseThrow(() -> new IllegalStateException("Notification recipient no longer exists"));
+    private Optional<String> findRecipientEmail(UUID userId) {
+        if (userId == null) {
+            return Optional.empty();
+        }
+        return userRepository.findById(userId).map(User::getEmail);
     }
 }

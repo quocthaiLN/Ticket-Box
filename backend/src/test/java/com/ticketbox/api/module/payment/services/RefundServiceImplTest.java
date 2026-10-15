@@ -262,4 +262,37 @@ class RefundServiceImplTest {
                 eq(refundId.toString()),
                 any());
     }
+
+    @Test
+    @DisplayName("processRefund persists providerRefundId even when status is FAILED")
+    void testProcessRefund_gatewayFailedWithProviderRefundId() {
+        Refund refund = Refund.builder()
+                .id(refundId)
+                .payment(testPayment)
+                .amount(new BigDecimal("250000.00"))
+                .currency("VND")
+                .idempotencyKey("LATE_REFUND_TBX_REF_123456")
+                .status(RefundStatus.REQUESTED)
+                .build();
+
+        when(refundRepository.updateStatusIfExpected(refundId, RefundStatus.REQUESTED, RefundStatus.PROCESSING))
+                .thenReturn(1);
+        when(refundRepository.findById(refundId)).thenReturn(Optional.of(refund));
+        when(refundRepository.findByIdForUpdate(refundId)).thenReturn(Optional.of(refund));
+
+        when(momoRefundGateway.refund(any(RefundGatewayRequest.class))).thenReturn(
+                RefundGatewayResult.builder()
+                        .providerRefundId("MOMO_REF_FAILED_001")
+                        .status(RefundStatus.FAILED)
+                        .responseCode("TXN_STATUS_02")
+                        .message("Gateway rejected")
+                        .build());
+
+        when(refundRepository.saveAndFlush(any(Refund.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RefundResponse response = refundService.processRefund(refundId);
+
+        assertEquals(RefundStatus.FAILED, response.status());
+        assertEquals("MOMO_REF_FAILED_001", response.providerRefundId());
+    }
 }
