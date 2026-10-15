@@ -453,4 +453,57 @@ class PaymentResilienceIntegrationTest {
 
         verifyNoInteractions(ticketIssuer);
     }
+
+    @Test
+    @DisplayName("VNPay IPN với mã tham chiếu 32 ký tự hex (không hyphens) tra cứu thành công payment và retry idempotent")
+    void vnpayIpnWith32HexReferenceResolvesPaymentAndSucceeds() {
+        Order order = orderRepository.save(Order.builder()
+                .user(testUser)
+                .concert(testConcert)
+                .totalAmount(new BigDecimal("150000.00"))
+                .currency("VND")
+                .status(OrderStatus.HELD)
+                .holdExpiresAt(LocalDateTime.now().plusMinutes(15))
+                .idempotencyKey(UUID.randomUUID().toString())
+                .build());
+
+        String merchantTxnRef = "TBX_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        Payment payment = paymentRepository.save(Payment.builder()
+                .order(order)
+                .provider(PaymentProvider.VNPAY)
+                .merchantTxnRef(merchantTxnRef)
+                .idempotencyKey(UUID.randomUUID().toString())
+                .amount(new BigDecimal("150000.00"))
+                .currency("VND")
+                .status(PaymentStatus.PENDING)
+                .build());
+
+        // VNPay gửi vnp_TxnRef là UUID bỏ dấu gạch ngang (32 ký tự hex)
+        String vnpay32HexTxnRef = payment.getId().toString().replace("-", "");
+        String dedupeKey = "VNPAY_TXN_999999_SUCCEEDED";
+
+        PaymentOutcome outcome = PaymentOutcome.builder()
+                .provider(PaymentProvider.VNPAY)
+                .source(PaymentEventSource.IPN)
+                .dedupeKey(dedupeKey)
+                .merchantTxnRef(vnpay32HexTxnRef)
+                .providerTxnId("999999")
+                .targetStatus(PaymentStatus.SUCCEEDED)
+                .amount(new BigDecimal("150000.00"))
+                .signatureValid(true)
+                .rawPayload(Map.of("vnp_TxnRef", vnpay32HexTxnRef, "vnp_TransactionNo", "999999"))
+                .build();
+
+        // Lần 1: Xử lý thành công
+        CallbackHandlingResult result1 = paymentService.processPaymentResult(outcome);
+        assertEquals(CallbackHandlingResult.PROCESSED, result1);
+
+        Payment updatedPayment = paymentRepository.findById(payment.getId()).orElseThrow();
+        assertTrue(updatedPayment.getStatus() == PaymentStatus.SUCCESS || updatedPayment.getStatus() == PaymentStatus.SUCCEEDED);
+        assertEquals("999999", updatedPayment.getProviderTransactionId());
+
+        // Lần 2 (VNPay Retry với cùng dedupeKey): Không bị ném Unique Constraint Exception, trả về ALREADY_PROCESSED
+        CallbackHandlingResult result2 = paymentService.processPaymentResult(outcome);
+        assertEquals(CallbackHandlingResult.ALREADY_PROCESSED, result2);
+    }
 }

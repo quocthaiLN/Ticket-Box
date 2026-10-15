@@ -43,7 +43,7 @@ export function PaymentResultPage() {
         if (stopped) return;
         setPollError("");
 
-        if (payment.status === "SUCCEEDED") {
+        if (payment.status === "SUCCEEDED" || payment.status === "SUCCESS") {
           if (payment.refund_required) {
             writePendingCheckout({ ...checkout, paymentStatus: payment.status, refundRequired: true });
             setRemainingHeldCount(readHeldCheckouts().filter((item) => item.expiresAt > Date.now()).length);

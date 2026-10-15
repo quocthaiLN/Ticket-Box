@@ -70,6 +70,47 @@ class VnpayPaymentStatusQueryGatewayTest {
     }
 
     @Test
+    void verifiesStandard13FieldResponseWithoutPromotion() throws Exception {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        VnpayPaymentStatusQueryGateway gateway = gateway(builder.build());
+
+        Map<String, String> response = new HashMap<>();
+        response.put("vnp_ResponseId", "resp13");
+        response.put("vnp_Command", "querydr");
+        response.put("vnp_ResponseCode", "00");
+        response.put("vnp_Message", "Success");
+        response.put("vnp_TmnCode", TMN_CODE);
+        response.put("vnp_TxnRef", TXN_REF);
+        response.put("vnp_Amount", "123450");
+        response.put("vnp_BankCode", "NCB");
+        response.put("vnp_PayDate", "20261001120100");
+        response.put("vnp_TransactionNo", "1234567");
+        response.put("vnp_TransactionType", "01");
+        response.put("vnp_TransactionStatus", "00");
+        response.put("vnp_OrderInfo", "Payment order");
+        String data13 = String.join("|",
+                response.get("vnp_ResponseId"), response.get("vnp_Command"),
+                response.get("vnp_ResponseCode"), response.get("vnp_Message"),
+                response.get("vnp_TmnCode"), response.get("vnp_TxnRef"),
+                response.get("vnp_Amount"), response.get("vnp_BankCode"),
+                response.get("vnp_PayDate"), response.get("vnp_TransactionNo"),
+                response.get("vnp_TransactionType"), response.get("vnp_TransactionStatus"),
+                response.get("vnp_OrderInfo"));
+        response.put("vnp_SecureHash", hmac(data13));
+
+        server.expect(once(), requestTo(QUERY_URL))
+                .andRespond(withSuccess(objectMapper.writeValueAsString(response), MediaType.APPLICATION_JSON));
+
+        GatewayQueryResult result = gateway.query(payment());
+
+        assertThat(result.merchantReference()).isEqualTo(TXN_REF);
+        assertThat(result.status()).isEqualTo(PaymentStatus.SUCCEEDED);
+        assertThat(result.providerTransactionId()).isEqualTo("1234567");
+        server.verify();
+    }
+
+    @Test
     void rejectsTamperedSignedResponse() throws Exception {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();

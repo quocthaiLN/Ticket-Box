@@ -231,7 +231,7 @@ public class PaymentServiceImpl implements PaymentService {
                         .errorMessage("Payment not found for reference: " + outcome.merchantTxnRef())
                         .receivedAt(LocalDateTime.now())
                         .build();
-                paymentEventRepository.saveAndFlush(event);
+                saveOrUpdateEvent(existingEvent, event);
 
                 auditLogService.logInvestigativeFailure(
                         AuditAction.PAYMENT_WEBHOOK_REJECTED,
@@ -259,7 +259,7 @@ public class PaymentServiceImpl implements PaymentService {
                         .errorMessage("Amount mismatch: expected " + payment.getAmount() + " but got " + outcome.amount())
                         .receivedAt(LocalDateTime.now())
                         .build();
-                paymentEventRepository.saveAndFlush(event);
+                saveOrUpdateEvent(existingEvent, event);
 
                 auditLogService.logInvestigativeFailure(
                         AuditAction.PAYMENT_WEBHOOK_REJECTED,
@@ -300,7 +300,7 @@ public class PaymentServiceImpl implements PaymentService {
                         .errorMessage("Payment result conflict: stored=" + currentStatus + ", incoming=" + targetStatus)
                         .receivedAt(LocalDateTime.now())
                         .build();
-                paymentEventRepository.saveAndFlush(event);
+                saveOrUpdateEvent(existingEvent, event);
 
                 auditLogService.logInvestigativeFailure(
                         AuditAction.PAYMENT_RESULT_CONFLICT,
@@ -355,7 +355,7 @@ public class PaymentServiceImpl implements PaymentService {
                         .receivedAt(LocalDateTime.now())
                         .processedAt(LocalDateTime.now())
                         .build();
-                paymentEventRepository.saveAndFlush(event);
+                saveOrUpdateEvent(existingEvent, event);
 
                 auditLogService.logBusinessSuccess(
                         AuditAction.FAIL_PAYMENT,
@@ -401,7 +401,7 @@ public class PaymentServiceImpl implements PaymentService {
                         .receivedAt(LocalDateTime.now())
                         .processedAt(LocalDateTime.now())
                         .build();
-                paymentEventRepository.saveAndFlush(event);
+                saveOrUpdateEvent(existingEvent, event);
 
                 auditLogService.logBusinessSuccess(
                         AuditAction.COMPLETE_PAYMENT,
@@ -441,7 +441,7 @@ public class PaymentServiceImpl implements PaymentService {
                         .receivedAt(LocalDateTime.now())
                         .processedAt(LocalDateTime.now())
                         .build();
-                paymentEventRepository.saveAndFlush(event);
+                saveOrUpdateEvent(existingEvent, event);
 
                 auditLogService.logBusinessSuccess(
                         AuditAction.RECORD_LATE_PAYMENT,
@@ -482,6 +482,25 @@ public class PaymentServiceImpl implements PaymentService {
         return current == target;
     }
 
+    private UUID parseUuid(String reference) {
+        if (reference == null || reference.isBlank()) {
+            return null;
+        }
+        if (reference.length() == 32 && reference.matches("^[0-9a-fA-F]{32}$")) {
+            String hyphenated = reference.replaceFirst("(.{8})(.{4})(.{4})(.{4})(.{12})", "$1-$2-$3-$4-$5");
+            try {
+                return UUID.fromString(hyphenated);
+            } catch (IllegalArgumentException ignored) {
+                return null;
+            }
+        }
+        try {
+            return UUID.fromString(reference);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
     private Payment findPaymentOrNull(String reference) {
         if (reference == null || reference.isBlank()) {
             return null;
@@ -490,12 +509,11 @@ public class PaymentServiceImpl implements PaymentService {
         if (payment.isPresent()) {
             return payment.get();
         }
-        try {
-            UUID id = UUID.fromString(reference);
+        UUID id = parseUuid(reference);
+        if (id != null) {
             return paymentRepository.findById(id).orElse(null);
-        } catch (IllegalArgumentException ignored) {
-            return null;
         }
+        return null;
     }
 
     private Optional<Payment> findPaymentForUpdate(String reference) {
@@ -506,12 +524,26 @@ public class PaymentServiceImpl implements PaymentService {
         if (payment.isPresent()) {
             return payment;
         }
-        try {
-            UUID id = UUID.fromString(reference);
+        UUID id = parseUuid(reference);
+        if (id != null) {
             return paymentRepository.findByIdForUpdate(id);
-        } catch (IllegalArgumentException ignored) {
-            return Optional.empty();
         }
+        return Optional.empty();
+    }
+
+    private PaymentEvent saveOrUpdateEvent(Optional<PaymentEvent> existing, PaymentEvent newEvent) {
+        if (existing != null && existing.isPresent()) {
+            PaymentEvent current = existing.get();
+            current.setPayment(newEvent.getPayment());
+            current.setEventType(newEvent.getEventType());
+            current.setRawPayload(newEvent.getRawPayload());
+            current.setSignatureValid(newEvent.getSignatureValid());
+            current.setProcessingStatus(newEvent.getProcessingStatus());
+            current.setErrorMessage(newEvent.getErrorMessage());
+            current.setProcessedAt(newEvent.getProcessedAt());
+            return paymentEventRepository.saveAndFlush(current);
+        }
+        return paymentEventRepository.saveAndFlush(newEvent);
     }
 
     private CreatePaymentResponse createNewPayment(User currentUser, String idempotencyKey,

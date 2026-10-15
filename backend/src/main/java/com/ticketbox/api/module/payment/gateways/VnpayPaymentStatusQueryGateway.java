@@ -24,6 +24,8 @@ import java.util.Map;
 import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -34,6 +36,7 @@ import org.springframework.web.client.RestClient;
 
 @Component
 public class VnpayPaymentStatusQueryGateway implements PaymentStatusQueryGateway {
+    private static final Logger log = LoggerFactory.getLogger(VnpayPaymentStatusQueryGateway.class);
     private static final String VERSION = "2.1.0";
     private static final String COMMAND = "querydr";
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
@@ -154,14 +157,36 @@ public class VnpayPaymentStatusQueryGateway implements PaymentStatusQueryGateway
         if (supplied == null || supplied.isBlank()) {
             return false;
         }
-        String data = String.join("|", value(response, "vnp_ResponseId"), value(response, "vnp_Command"),
-                value(response, "vnp_ResponseCode"), value(response, "vnp_Message"),
-                value(response, "vnp_TmnCode"), value(response, "vnp_TxnRef"),
-                value(response, "vnp_Amount"), value(response, "vnp_BankCode"),
-                value(response, "vnp_PayDate"), value(response, "vnp_TransactionNo"),
-                value(response, "vnp_TransactionType"), value(response, "vnp_TransactionStatus"),
-                value(response, "vnp_OrderInfo"), value(response, "vnp_PromotionCode"),
-                value(response, "vnp_PromotionAmount"));
+        String data13 = String.join("|",
+                value(response, "vnp_ResponseId"),
+                value(response, "vnp_Command"),
+                value(response, "vnp_ResponseCode"),
+                value(response, "vnp_Message"),
+                value(response, "vnp_TmnCode"),
+                value(response, "vnp_TxnRef"),
+                value(response, "vnp_Amount"),
+                value(response, "vnp_BankCode"),
+                value(response, "vnp_PayDate"),
+                value(response, "vnp_TransactionNo"),
+                value(response, "vnp_TransactionType"),
+                value(response, "vnp_TransactionStatus"),
+                value(response, "vnp_OrderInfo"));
+
+        if (matchesHash(data13, supplied)) {
+            return true;
+        }
+
+        String data15 = data13 + "|" + value(response, "vnp_PromotionCode") + "|" + value(response, "vnp_PromotionAmount");
+        if (matchesHash(data15, supplied)) {
+            return true;
+        }
+
+        log.debug("VNPay query signature mismatch. ResponseCode={}, Message={}, TransactionStatus={}",
+                response.get("vnp_ResponseCode"), response.get("vnp_Message"), response.get("vnp_TransactionStatus"));
+        return false;
+    }
+
+    private boolean matchesHash(String data, String supplied) {
         try {
             return MessageDigest.isEqual(HexFormat.of().parseHex(hmacSha512(data)),
                     HexFormat.of().parseHex(supplied));

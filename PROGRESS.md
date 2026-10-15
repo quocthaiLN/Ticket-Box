@@ -209,7 +209,7 @@
       - Cập nhật [`PaymentControllerTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/controllers/PaymentControllerTest.java).
       - Toàn bộ backend test suite đạt **270/270 passed** (0 failures, 0 errors, 2 skipped).
       - Chạy `./init.sh` toàn diện: Backend tests pass 100%, Frontend Vite build pass 100%.
-  - Commits: Sẵn sàng commit Phase 4 & Phase 5.
+  - Commits: `118735b` - feat(payment): implement Phase 4 and 5 - schedulers, rabbitmq worker queue dispatch, and verification.
   - Files or artifacts updated:
     - `backend/src/main/java/com/ticketbox/api/infrastructure/config/RabbitMqConstants.java`
     - `backend/src/main/java/com/ticketbox/api/module/payment/config/PaymentRabbitConfig.java`
@@ -231,4 +231,30 @@
     - `backend/src/test/java/com/ticketbox/api/module/payment/controllers/PaymentControllerTest.java`
     - `PROGRESS.md`
   - Known risk or unresolved issue: Không có.
-  - Next best step: Toàn bộ 5 Phase của kiến trúc thanh toán chống lỗi đã hoàn tất và sẵn sàng đưa vào vận hành.
+  - Next best step: Chạy thử luồng thanh toán thực tế với VNPay.
+
+- Session 006
+  - Goal: Khắc phục triệt để 4 lỗi phát sinh trong luồng thanh toán thực tế với VNPay (Lỗi parse UUID 32-hex, lỗi Checksum QueryDR 13 trường, lỗi Duplicate Key khi IPN retry, và đồng bộ trạng thái Frontend).
+  - Completed:
+    - **Backend Fixes**:
+      - Bổ sung helper `parseUuid(reference)` trong [`PaymentServiceImpl.java`](backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentServiceImpl.java) để tự động nhận diện và chèn hyphens cho chuỗi 32 hex format của VNPay, áp dụng cho cả `findPaymentForUpdate` và `findPaymentOrNull`.
+      - Bổ sung helper `saveOrUpdateEvent` trong [`PaymentServiceImpl.java`](backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentServiceImpl.java) để cập nhật an toàn các `PaymentEvent` trước đó bị FAILED khi VNPay retry IPN, bảo vệ constraint `uk_payment_events_provider_dedupe`.
+      - Cập nhật hàm `validSignature` trong [`VnpayPaymentStatusQueryGateway.java`](backend/src/main/java/com/ticketbox/api/module/payment/gateways/VnpayPaymentStatusQueryGateway.java) hỗ trợ cả chuẩn 13 trường (VNPay Sandbox không voucher) và 15 trường (có voucher), bổ sung debug logging.
+    - **Frontend Fixes**:
+      - Mở rộng kiểu `PaymentStatus` trong [`order.service.ts`](frontend/src/services/order.service.ts) chấp nhận giá trị `"SUCCESS"`.
+      - Cập nhật [`PaymentResultPage.tsx`](frontend/src/routes/payment/PaymentResultPage.tsx) kiểm tra cả `SUCCEEDED` và `SUCCESS` để hiển thị thành công và xóa pending checkout.
+    - **Unit & Integration Tests**:
+      - Thêm test `verifiesStandard13FieldResponseWithoutPromotion` trong [`VnpayPaymentStatusQueryGatewayTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/gateways/VnpayPaymentStatusQueryGatewayTest.java) (4/4 tests passed).
+      - Thêm test `vnpayIpnWith32HexReferenceResolvesPaymentAndSucceeds` trong [`PaymentResilienceIntegrationTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/PaymentResilienceIntegrationTest.java) (7/7 tests passed).
+      - Chạy toàn diện `./init.sh`: Backend tests đạt **272/272 passed** (0 failures, 0 errors, 2 skipped), Frontend build hoàn tất không lỗi.
+  - Commits: Sẵn sàng commit bug fix cho VNPay payment resilience.
+  - Files or artifacts updated:
+    - `backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentServiceImpl.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/gateways/VnpayPaymentStatusQueryGateway.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/gateways/VnpayPaymentStatusQueryGatewayTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/PaymentResilienceIntegrationTest.java`
+    - `frontend/src/services/order.service.ts`
+    - `frontend/src/routes/payment/PaymentResultPage.tsx`
+    - `PROGRESS.md`
+  - Known risk or unresolved issue: Không có.
+  - Next best step: Chạy lại luồng kiểm thử thực tế trên browser/Sandbox để nghiệm thu giao dịch end-to-end.

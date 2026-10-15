@@ -2,7 +2,7 @@ import { apiGet, apiPost, type ApiResponse } from "../lib/api-client";
 
 export type PaymentProvider = "VNPAY" | "MOMO";
 export type OrderStatus = "HELD" | "CONFIRMED" | "CANCELLED" | "EXPIRED";
-export type PaymentStatus = "CREATING" | "PENDING" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "REFUNDED";
+export type PaymentStatus = "CREATING" | "PENDING" | "SUCCEEDED" | "SUCCESS" | "FAILED" | "CANCELLED" | "REFUNDED";
 
 export type CreateOrderItemInput = {
   ticket_type_id: string;
