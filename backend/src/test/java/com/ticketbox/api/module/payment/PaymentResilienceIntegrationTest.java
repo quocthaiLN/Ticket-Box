@@ -40,6 +40,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -505,5 +506,61 @@ class PaymentResilienceIntegrationTest {
         // Lần 2 (VNPay Retry với cùng dedupeKey): Không bị ném Unique Constraint Exception, trả về ALREADY_PROCESSED
         CallbackHandlingResult result2 = paymentService.processPaymentResult(outcome);
         assertEquals(CallbackHandlingResult.ALREADY_PROCESSED, result2);
+    }
+
+    @Test
+    @DisplayName("Late IPN for VNPay payment passes 32-hex merchantTxnRef to RefundGateway")
+    void testLatePaymentVNPay_passes32HexMerchantTxnRefToRefundGateway() {
+        Order expiredOrder = orderRepository.save(Order.builder()
+                .user(testUser)
+                .concert(testConcert)
+                .totalAmount(new BigDecimal("300000.00"))
+                .currency("VND")
+                .status(OrderStatus.EXPIRED)
+                .holdExpiresAt(LocalDateTime.now().minusMinutes(5))
+                .expiredAt(LocalDateTime.now().minusMinutes(5))
+                .idempotencyKey(UUID.randomUUID().toString())
+                .build());
+
+        Payment payment = paymentRepository.saveAndFlush(Payment.builder()
+                .order(expiredOrder)
+                .provider(PaymentProvider.VNPAY)
+                .merchantTxnRef("INIT_" + UUID.randomUUID().toString().replace("-", ""))
+                .idempotencyKey(UUID.randomUUID().toString())
+                .amount(new BigDecimal("300000.00"))
+                .currency("VND")
+                .status(PaymentStatus.PENDING)
+                .build());
+
+        String vnpay32HexRef = payment.getId().toString().replace("-", "");
+        payment.setMerchantTxnRef(vnpay32HexRef);
+        payment = paymentRepository.saveAndFlush(payment);
+
+        when(vnpayRefundGateway.refund(any(RefundGatewayRequest.class))).thenReturn(RefundGatewayResult.builder()
+                .status(RefundStatus.SUCCESS)
+                .providerRefundId("REFUND_VNP_999")
+                .responseCode("00")
+                .message("Success")
+                .build());
+
+        String dedupeKey = "VNP_TXN_REFUND_32HEX";
+        PaymentOutcome outcome = PaymentOutcome.builder()
+                .provider(PaymentProvider.VNPAY)
+                .source(PaymentEventSource.IPN)
+                .dedupeKey(dedupeKey)
+                .merchantTxnRef(vnpay32HexRef)
+                .providerTxnId("VNP_TXN_REFUND_32HEX_ID")
+                .targetStatus(PaymentStatus.SUCCESS)
+                .amount(new BigDecimal("300000.00"))
+                .signatureValid(true)
+                .rawPayload(Map.of("vnp_ResponseCode", "00", "vnp_Amount", "30000000"))
+                .build();
+
+        CallbackHandlingResult result = paymentService.processPaymentResult(outcome);
+        assertEquals(CallbackHandlingResult.PROCESSED, result);
+
+        ArgumentCaptor<RefundGatewayRequest> refundCaptor = ArgumentCaptor.forClass(RefundGatewayRequest.class);
+        verify(vnpayRefundGateway).refund(refundCaptor.capture());
+        assertEquals(vnpay32HexRef, refundCaptor.getValue().merchantTxnRef());
     }
 }

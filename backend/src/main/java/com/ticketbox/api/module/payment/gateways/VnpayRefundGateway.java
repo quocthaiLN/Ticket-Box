@@ -158,10 +158,13 @@ public class VnpayRefundGateway implements PaymentRefundGateway {
             throw new IllegalStateException("VNPay refund returned no response");
         }
 
+        log.info("VNPay refund raw response: {}", rawResponse);
+
         Map<String, String> response = new HashMap<>();
         rawResponse.forEach((key, value) -> response.put(key, value == null ? "" : value.toString()));
 
         if (!validSignature(response)) {
+            log.error("VNPay refund signature mismatch. Response: {}", response);
             throw new IllegalStateException("VNPay refund response has invalid checksum");
         }
 

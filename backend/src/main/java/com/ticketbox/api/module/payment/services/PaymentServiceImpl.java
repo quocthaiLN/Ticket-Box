@@ -602,18 +602,23 @@ public class PaymentServiceImpl implements PaymentService {
             throw new AppException(HttpStatus.CONFLICT, "ORDER_ALREADY_PAID", "Order has already been paid");
         }
 
-        String merchantTxnRef = "TBX_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        PaymentGatewayStrategy gateway = resolveGateway(request.getProvider());
+        String initialTxnRef = "INIT_" + UUID.randomUUID().toString().replace("-", "");
 
         Payment payment = paymentRepository.saveAndFlush(Payment.builder()
                 .order(order)
                 .provider(request.getProvider())
-                .merchantTxnRef(merchantTxnRef)
+                .merchantTxnRef(initialTxnRef)
                 .idempotencyKey(idempotencyKey)
                 .amount(order.getTotalAmount())
                 .currency(order.getCurrency())
                 .status(request.getProvider() == PaymentProvider.MOMO ? PaymentStatus.CREATING : PaymentStatus.PENDING)
                 .nextReconcileAt(request.getProvider() == PaymentProvider.MOMO ? nextReconcileAt() : null)
                 .build());
+
+        String merchantTxnRef = gateway.transactionReference(payment.getId());
+        payment.setMerchantTxnRef(merchantTxnRef);
+        payment = paymentRepository.saveAndFlush(payment);
 
         auditLogService.logBusinessSuccess(
                 AuditAction.CREATE_PAYMENT,
@@ -731,7 +736,9 @@ public class PaymentServiceImpl implements PaymentService {
             }
 
             GatewayQueryResult result = resolveQueryGateway(payment.getProvider()).query(payment);
-            String expectedReference = resolveGateway(payment.getProvider()).transactionReference(paymentId);
+            String expectedReference = payment.getMerchantTxnRef() != null
+                    ? payment.getMerchantTxnRef()
+                    : resolveGateway(payment.getProvider()).transactionReference(paymentId);
             if (!expectedReference.equals(result.merchantReference())
                     || result.amount() == null || payment.getAmount().compareTo(result.amount()) != 0) {
                 throw new IllegalStateException("Gateway query result does not match payment " + paymentId);
@@ -782,7 +789,9 @@ public class PaymentServiceImpl implements PaymentService {
 
     private PaymentGatewayRequest gatewayRequest(Payment payment, CreatePaymentRequest request, String clientIp,
             PaymentGatewayStrategy gateway) {
-        String transactionReference = gateway.transactionReference(payment.getId());
+        String transactionReference = payment.getMerchantTxnRef() != null
+                ? payment.getMerchantTxnRef()
+                : gateway.transactionReference(payment.getId());
         return PaymentGatewayRequest.builder()
                 .orderId(request.getOrderId())
                 .amount(payment.getAmount())

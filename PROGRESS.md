@@ -247,7 +247,7 @@
       - Thêm test `verifiesStandard13FieldResponseWithoutPromotion` trong [`VnpayPaymentStatusQueryGatewayTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/gateways/VnpayPaymentStatusQueryGatewayTest.java) (4/4 tests passed).
       - Thêm test `vnpayIpnWith32HexReferenceResolvesPaymentAndSucceeds` trong [`PaymentResilienceIntegrationTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/PaymentResilienceIntegrationTest.java) (7/7 tests passed).
       - Chạy toàn diện `./init.sh`: Backend tests đạt **272/272 passed** (0 failures, 0 errors, 2 skipped), Frontend build hoàn tất không lỗi.
-  - Commits: Sẵn sàng commit bug fix cho VNPay payment resilience.
+  - Commits: `e00c4d2` - fix(payment): resolve 32-hex UUID lookup, querydr checksum verification, and idempotent retry.
   - Files or artifacts updated:
     - `backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentServiceImpl.java`
     - `backend/src/main/java/com/ticketbox/api/module/payment/gateways/VnpayPaymentStatusQueryGateway.java`
@@ -258,3 +258,27 @@
     - `PROGRESS.md`
   - Known risk or unresolved issue: Không có.
   - Next best step: Chạy lại luồng kiểm thử thực tế trên browser/Sandbox để nghiệm thu giao dịch end-to-end.
+
+- Session 007
+  - Goal: Khắc phục lỗi lệch mã tham chiếu giao dịch (`merchant_txn_ref` vs `vnp_TxnRef`) trong luồng Late IPN tự động hoàn tiền (Refund) và bổ sung chẩn đoán logging.
+  - Completed:
+    - **Chẩn đoán nguyên nhân gốc**:
+      - Lúc khởi tạo payment sang VNPay, cổng nhận mã `vnp_TxnRef` là chuỗi 32 hex không dấu `-` (`gateway.transactionReference(payment.getId())`), nhưng cột `payments.merchant_txn_ref` lại bị gán ngẫu nhiên `TBX_...`.
+      - Khi IPN muộn đến, hệ thống tự động gọi `RefundGateway.refund` với `payment.merchant_txn_ref` (`TBX_...`). VNPay không tìm thấy giao dịch nên trả về gói tin lỗi, dẫn tới `VnpayRefundGateway.validSignature` không khớp và ném exception `invalid checksum`, che giấu mã lỗi thật.
+    - **Backend Fixes**:
+      - Đồng bộ `merchant_txn_ref` trong [`PaymentServiceImpl.java`](backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentServiceImpl.java): gán chính xác `gateway.transactionReference(payment.getId())` (đối với VNPay là 32-hex UUID, đối với MoMo là UUID đầy đủ) ngay khi khởi tạo payment, đảm bảo định danh đồng nhất giữa DB, Webhook và Refund API.
+      - Cập nhật `gatewayRequest` và `reconcilePayment` trong `PaymentServiceImpl.java` sử dụng `payment.getMerchantTxnRef()` nhất quán.
+      - Bổ sung logging chi tiết `rawResponse` và log cảnh báo khi chữ ký không khớp trong [`VnpayRefundGateway.java`](backend/src/main/java/com/ticketbox/api/module/payment/gateways/VnpayRefundGateway.java).
+    - **Unit & Integration Tests**:
+      - Bổ sung unit test `vnpayCreatePaymentSetsMerchantTxnRefMatching32HexTransactionReference` trong [`PaymentResilienceServiceTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/services/PaymentResilienceServiceTest.java) (14/14 passed).
+      - Bổ sung integration test `testLatePaymentVNPay_passes32HexMerchantTxnRefToRefundGateway` trong [`PaymentResilienceIntegrationTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/PaymentResilienceIntegrationTest.java) (8/8 passed).
+      - Chạy toàn diện `./init.sh`: Backend đạt **274/274 passed** (0 failures, 0 errors, 2 skipped), Frontend build hoàn tất 100%.
+  - Commits: Sẵn sàng commit.
+  - Files or artifacts updated:
+    - `backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentServiceImpl.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/gateways/VnpayRefundGateway.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/services/PaymentResilienceServiceTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/PaymentResilienceIntegrationTest.java`
+    - `PROGRESS.md`
+  - Known risk or unresolved issue: Trên môi trường VNPay Sandbox, chức năng hoàn tiền (Refund API) có thể bị hạn chế cấp quyền tùy cấu hình merchant test của VNPay. Log `rawResponse` đã được bổ sung để hiển thị rõ mã phản hồi thật từ VNPay.
+  - Next best step: Chạy thử luồng Late IPN thực tế để kiểm tra log phản hồi hoàn tiền từ cổng VNPay Sandbox.

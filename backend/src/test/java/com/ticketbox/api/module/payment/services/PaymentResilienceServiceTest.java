@@ -73,6 +73,7 @@ class PaymentResilienceServiceTest {
     @Mock private PaymentRepository paymentRepository;
     @Mock private PaymentEventRepository paymentEventRepository;
     @Mock private PaymentGatewayStrategy momoGateway;
+    @Mock private PaymentGatewayStrategy vnpayGateway;
     @Mock private PaymentStatusQueryGateway queryGateway;
     @Mock private IdempotencyService idempotencyService;
     @Mock private TransactionTemplate transactionTemplate;
@@ -95,7 +96,7 @@ class PaymentResilienceServiceTest {
                 .holdExpiresAt(LocalDateTime.now().plusMinutes(10)).totalAmount(AMOUNT).currency("VND").build();
         stored = new AtomicReference<>();
         service = new PaymentServiceImpl(orderRepository, paymentRepository, paymentEventRepository,
-                List.of(momoGateway), List.of(queryGateway), idempotencyService, transactionTemplate,
+                List.of(momoGateway, vnpayGateway), List.of(queryGateway), idempotencyService, transactionTemplate,
                 orderInventoryService, eventPublisher, new ObjectMapper(), ticketIssuer,
                 new PaymentMapperImpl(), refundService, auditLogService);
         lenient().when(momoGateway.getProvider()).thenReturn(PaymentProvider.MOMO);
@@ -308,8 +309,32 @@ class PaymentResilienceServiceTest {
                 });
     }
 
+    @Test
+    void vnpayCreatePaymentSetsMerchantTxnRefMatching32HexTransactionReference() {
+        stubCreateAction();
+        String expected32Hex = PAYMENT_ID.toString().replace("-", "");
+        when(vnpayGateway.getProvider()).thenReturn(PaymentProvider.VNPAY);
+        when(vnpayGateway.transactionReference(PAYMENT_ID)).thenReturn(expected32Hex);
+        when(vnpayGateway.createPaymentUrl(any())).thenReturn("https://sandbox.vnpayment.vn/test-pay");
+
+        CreatePaymentRequest request = new CreatePaymentRequest();
+        request.setOrderId(ORDER_ID);
+        request.setProvider(PaymentProvider.VNPAY);
+
+        CreatePaymentResponse response = service.createPayment(user, UUID.randomUUID().toString(), request, "127.0.0.1");
+
+        assertThat(response.status()).isEqualTo("PENDING");
+        assertThat(response.checkoutUrl()).isEqualTo("https://sandbox.vnpayment.vn/test-pay");
+        assertThat(stored.get().getMerchantTxnRef()).isEqualTo(expected32Hex);
+
+        ArgumentCaptor<PaymentGatewayRequest> gatewayReq = ArgumentCaptor.forClass(PaymentGatewayRequest.class);
+        verify(vnpayGateway).createPaymentUrl(gatewayReq.capture());
+        assertThat(gatewayReq.getValue().txnRef()).isEqualTo(expected32Hex);
+    }
+
     private Payment pendingPayment(PaymentStatus status) {
         Payment payment = Payment.builder().id(PAYMENT_ID).order(order).provider(PaymentProvider.MOMO)
+                .merchantTxnRef(PAYMENT_ID.toString())
                 .idempotencyKey(UUID.randomUUID().toString()).amount(AMOUNT).currency("VND")
                 .status(status).checkoutUrl(status == PaymentStatus.PENDING ? "https://momo.test/pay" : null)
                 .build();
