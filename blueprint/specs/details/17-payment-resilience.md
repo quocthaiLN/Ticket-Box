@@ -199,27 +199,68 @@ flowchart TD
 
 ---
 
-## 5. Kiến trúc Triển khai Worker theo Profile
+## 5. Kiến trúc Triển khai Worker theo Nguyên tắc Modular Monolith
 
-Để phục vụ môi trường monolith hiện tại đồng thời sẵn sàng mở rộng sang kiến trúc container độc lập trong production, các tác vụ nền được phân tách theo Spring Profile:
+Để tuân thủ nghiêm ngặt ranh giới module (module boundaries) trong kiến trúc **Modular Monolith**, TicketBox áp dụng mô hình:
+> **Worker publish message $\rightarrow$ Module consume message**:
+> Worker (Scheduler) chỉ làm nhiệm vụ quét định kỳ và đẩy định danh cần xử lý vào hàng đợi RabbitMQ. Toàn bộ logic nghiệp vụ, transaction và ghi Audit Log nằm trọn vẹn bên trong Consumer của từng module.
 
-- **Profile `worker`**:
-  - Chịu trách nhiệm quét `OrderExpirationScheduler` (nhả kho khi hết hạn).
-  - Quét `PaymentReconciliationScheduler` (đối soát bù các giao dịch treo).
-  - Quét `RefundProcessingScheduler` (xử lý lại các lệnh hoàn tiền đang `REQUESTED` hoặc `PROCESSING`).
-- **Cấu hình Spring:**
-  ```java
-  @Configuration
-  @Profile({"worker", "default"}) // Mặc định chạy trong app ở môi trường dev; tách biệt ở production
-  public class PaymentWorkerConfig {
-      // Scheduler beans initialization
-  }
-  ```
-- **Chạy ứng dụng:**
-  - Ở local/dev: Chạy mặc định `./mvnw spring-boot:run` (bao gồm cả web và worker).
-  - Ở production: Tách làm 2 service:
-    1. Web API Pods: `--spring.profiles.active=prod,no-worker` (chỉ xử lý REST API và Webhook tốc độ cao, không chạy scheduled jobs).
-    2. Dedicated Worker Pod: `--spring.profiles.active=prod,worker` (chỉ chạy background schedulers, không mở public traffic).
+### 5.1. Sơ đồ điều phối bất đồng bộ
+
+~~~mermaid
+flowchart LR
+    subgraph WorkerProcess["Worker Process (Profile: worker)"]
+        W1[OrderExpirationScheduler]
+        W2[PaymentReconciliationScheduler]
+        W3[RefundProcessingScheduler]
+    end
+
+    subgraph RabbitMQ["RabbitMQ Message Broker"]
+        Q1[("q.order.expiration-check")]
+        Q2[("q.payment.reconcile-check")]
+        Q3[("q.payment.refund-process")]
+    end
+
+    subgraph OrderModule["Order Module"]
+        C1[OrderExpirationConsumer]
+        S1[OrderInventoryService]
+    end
+
+    subgraph PaymentModule["Payment Module"]
+        C2[PaymentReconciliationConsumer]
+        C3[RefundProcessingConsumer]
+        S2[PaymentService]
+        S3[RefundService]
+    end
+
+    W1 -- "Publish order_id" --> Q1
+    W2 -- "Publish payment_id" --> Q2
+    W3 -- "Publish refund_id" --> Q3
+
+    Q1 --> C1 --> S1 -- "Audit RELEASE_ORDER" --> DB1[(orders & quota)]
+    Q2 --> C2 --> S2 -- "Audit COMPLETE/FAIL/EXPIRE" --> DB2[(payments & events)]
+    Q3 --> C3 --> S3 -- "Audit COMPLETE/FAIL_REFUND" --> DB3[(refunds)]
+~~~
+
+### 5.2. Ba kênh hàng đợi chuyên biệt
+
+1. **`q.order.expiration-check`** (`order.exchange` $\rightarrow$ `order.expire`):
+   - **Worker:** Quét các đơn hàng `HELD` có `hold_expires_at <= now()`, gửi message `{ orderId: UUID }` vào queue. Không trực tiếp cập nhật DB đơn hàng.
+   - **Order Consumer:** `@RabbitListener` nhận message, mở transaction: gọi `orderInventoryService.expireHeldOrder(...)`, hoàn kho `held_quantity`/`held_count`, ghi audit log `RELEASE_ORDER`, xóa cache concert.
+   - *Lưu ý:* Đây là **nguồn nhả kho duy nhất**. Worker đối soát payment tuyệt đối không chạm vào kho vé hay đơn hàng.
+2. **`q.payment.reconcile-check`** (`payment.exchange` $\rightarrow$ `payment.reconcile`):
+   - **Worker:** Quét các payment có trạng thái `INITIATED` hoặc `PENDING` có `next_reconcile_at <= now()`, gửi message `{ paymentId: UUID }` vào queue.
+   - **Payment Consumer:** Nhận message, gọi Query API sang cổng (VNPAY / MoMo), đưa kết quả vào hàm hội tụ `processPaymentResult`. Ghi audit log tương ứng (`COMPLETE_PAYMENT`, `FAIL_PAYMENT`, hoặc `EXPIRE_PAYMENT`).
+3. **`q.payment.refund-process`** (`payment.exchange` $\rightarrow$ `payment.refund-process`):
+   - **Worker:** Quét các lệnh hoàn tiền ở trạng thái `REQUESTED` hoặc `PROCESSING` quá hạn, gửi message `{ refundId: UUID }` vào queue.
+   - **Payment Consumer:** Nhận message, claim trạng thái (`REQUESTED → PROCESSING`), gọi API Refund sang cổng ngoài transaction, sau đó cập nhật kết quả trong Transaction 2 riêng và ghi audit log (`COMPLETE_REFUND` hoặc `FAIL_REFUND`).
+
+### 5.3. Cấu hình Spring Profile
+- Ở local/dev: Chạy mặc định profile `default` (kết hợp cả Web và Worker).
+- Ở production:
+  1. **Web API Instances** (`--spring.profiles.active=prod,no-worker`): Chỉ phục vụ REST API và Webhook IPN tốc độ cao, tắt scheduler nền.
+  2. **Dedicated Worker Instance** (`--spring.profiles.active=prod,worker`): Chạy các scheduled tasks, chỉ quét và đẩy message vào RabbitMQ.
+  3. **Module Consumers**: Chạy trên các instance có cấu hình lắng nghe queue, đảm bảo khả năng mở rộng (scale) độc lập theo tải.
 
 ---
 

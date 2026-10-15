@@ -20,7 +20,7 @@
   - [x] Ghi nhận Quyết định kiến trúc 04 vào `DECISIONS.md` và `.agents/DECISIONS/04-payment-resilience-events-and-refunds.md`.
   - [x] Lập Implementation Plan và Test Plan cụ thể, khả thi qua nhiều Session.
   - [x] Triển khai Phase 1: Flyway Migration V4, JPA Entities (`Payment`, `PaymentEvent`, `Refund`), Repositories, DTOs & Mappers.
-  - [ ] Triển khai Phase 2: Gateway Refund Clients (`MomoRefundGateway`, `VnpayRefundGateway`) và unit tests.
+  - [x] Triển khai Phase 2: Gateway Refund Clients (`MomoRefundGateway`, `VnpayRefundGateway`) và unit tests.
   - [ ] Triển khai Phase 3: Refactor `PaymentServiceImpl` (hàm hội tụ `processPaymentResult`, khóa bi quan, xử lý Late IPN refund), `RefundService`.
   - [ ] Triển khai Phase 4: Schedulers & Worker Profile (`@Profile("worker")`, `PaymentReconciliationScheduler`, `RefundProcessingScheduler`).
   - [ ] Triển khai Phase 5: Integration Tests toàn diện (`PaymentResilienceIntegrationTest`) và kiểm thử `./init.sh`.
@@ -106,3 +106,36 @@
     - `PROGRESS.md`
   - Known risk or unresolved issue: Không có.
   - Next best step: Tiến hành Phase 2 (Gateway Refund Clients cho MoMo và VNPay).
+
+- Session 003
+  - Goal: Triển khai hoàn thiện Phase 2: Gateway Refund Clients (`MomoRefundGateway`, `VnpayRefundGateway`), DTOs, cấu hình và unit tests.
+  - Completed:
+    - **DTOs & Interfaces**:
+      - Tạo [`RefundGatewayRequest.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/RefundGatewayRequest.java) (refundId, merchantTxnRef, providerTxnId, amount, reason, transDate).
+      - Tạo [`RefundGatewayResult.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/RefundGatewayResult.java) (providerRefundId, status, responseCode, message).
+      - Tạo interface [`PaymentRefundGateway.java`](backend/src/main/java/com/ticketbox/api/module/payment/gateways/PaymentRefundGateway.java).
+    - **Configuration**:
+      - Bổ sung cấu hình `refund-url` cho MoMo và VNPay trong [`application.yml`](backend/src/main/resources/application.yml) và [`application.yml`](backend/src/test/resources/application.yml).
+    - **Gateway Implementations**:
+      - Triển khai [`MomoRefundGateway.java`](backend/src/main/java/com/ticketbox/api/module/payment/gateways/MomoRefundGateway.java): Ký HMAC-SHA256 chuẩn MoMo API v2, bọc qua CircuitBreaker ("momo-refund"), xử lý timeout/lỗi mạng trả về `PROCESSING` kèm mã `GATEWAY_TIMEOUT` để scheduler tiếp tục đối soát, xử lý mở mạch `CIRCUIT_BREAKER_OPEN`.
+      - Triển khai [`VnpayRefundGateway.java`](backend/src/main/java/com/ticketbox/api/module/payment/gateways/VnpayRefundGateway.java): Ký HMAC-SHA512 chuẩn VNPay Web API 2.1.0 cho `vnp_Command=refund` (loại 02 hoàn toàn phần), xác thực checksum phản hồi `vnp_SecureHash`, bọc qua CircuitBreaker ("vnpay-refund"), xử lý timeout trả về `PROCESSING` và mở mạch `CIRCUIT_BREAKER_OPEN`.
+    - **Unit Tests**:
+      - Viết [`MomoRefundGatewayTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/gateways/MomoRefundGatewayTest.java) (8 tests): bao phủ ký request, kiểm tra format, mock server response thành công, parameterized mapping mã kết quả (0, 1000, 1004, 99), xử lý timeout và circuit breaker open, kiểm tra validation đầu vào.
+      - Viết [`VnpayRefundGatewayTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/gateways/VnpayRefundGatewayTest.java) (12 tests): bao phủ ký request, kiểm tra checksum phản hồi, từ chối chữ ký sai, parameterized mapping response code/transaction status (00/00, 91, 94, 00/01, 00/02, 99, 02), xử lý timeout và circuit breaker open, kiểm tra validation đầu vào.
+    - **Verification**:
+      - Toàn bộ backend test suite đạt **242/242 passed** (0 failures, 0 errors, 2 skipped).
+      - Chạy `./init.sh` thành công 100% (cả backend tests và frontend build).
+  - Commits: Sẵn sàng commit Phase 2.
+  - Files or artifacts updated:
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/RefundGatewayRequest.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/RefundGatewayResult.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/gateways/PaymentRefundGateway.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/gateways/MomoRefundGateway.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/gateways/VnpayRefundGateway.java`
+    - `backend/src/main/resources/application.yml`
+    - `backend/src/test/resources/application.yml`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/gateways/MomoRefundGatewayTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/gateways/VnpayRefundGatewayTest.java`
+    - `PROGRESS.md`
+  - Known risk or unresolved issue: Không có.
+  - Next best step: Tiến hành Phase 3 (Refactor `PaymentServiceImpl` với hàm hội tụ `processPaymentResult`, triển khai `RefundService`, tích hợp Audit Log đầy đủ).

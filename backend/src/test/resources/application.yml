@@ -43,11 +43,13 @@ app:
   payment:
     vnpay:
       vnpay-url: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+      refund-url: https://sandbox.vnpayment.vn/merchant_webapi/api/transaction
       vnpay-tmn-code: TESTCODE
       vnpay-hash-secret: test-vnpay-hash-secret
       vnpay-return-url: http://localhost:3001/payment/return
     momo:
       momo-url: https://test-payment.momo.vn/v2/gateway/api/create
+      refund-url: https://test-payment.momo.vn/v2/gateway/api/refund
       partner-code: MOMO_TEST
       access-key: test-access-key
       secret-key: test-secret-key
