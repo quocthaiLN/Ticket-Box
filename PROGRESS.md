@@ -19,7 +19,7 @@
   - [x] Cập nhật Database Design: `payments.md`, tạo mới `payment_events.md`, `refunds.md`, cập nhật `database-design.md`.
   - [x] Ghi nhận Quyết định kiến trúc 04 vào `DECISIONS.md` và `.agents/DECISIONS/04-payment-resilience-events-and-refunds.md`.
   - [x] Lập Implementation Plan và Test Plan cụ thể, khả thi qua nhiều Session.
-  - [ ] Triển khai Phase 1: Flyway Migration V4, JPA Entities (`Payment`, `PaymentEvent`, `Refund`), Repositories.
+  - [x] Triển khai Phase 1: Flyway Migration V4, JPA Entities (`Payment`, `PaymentEvent`, `Refund`), Repositories, DTOs & Mappers.
   - [ ] Triển khai Phase 2: Gateway Refund Clients (`MomoRefundGateway`, `VnpayRefundGateway`) và unit tests.
   - [ ] Triển khai Phase 3: Refactor `PaymentServiceImpl` (hàm hội tụ `processPaymentResult`, khóa bi quan, xử lý Late IPN refund), `RefundService`.
   - [ ] Triển khai Phase 4: Schedulers & Worker Profile (`@Profile("worker")`, `PaymentReconciliationScheduler`, `RefundProcessingScheduler`).
@@ -50,17 +50,59 @@
       - Tạo [`04-payment-resilience-events-and-refunds.md`](.agents/DECISIONS/04-payment-resilience-events-and-refunds.md) và lập chỉ mục trong [`DECISIONS.md`](DECISIONS.md).
     - **Deliverable 5 (Implementation & Test Plan)**:
       - Xây dựng kế hoạch triển khai và kiểm thử 5 Phase chi tiết.
-  - Commits: Sẵn sàng commit các tài liệu đặc tả, DB design và quyết định kiến trúc trước khi bắt đầu code.
+  - Commits: `5285598` - docs: standardize baseline payment specs and design fault-tolerant resilience architecture.
   - Files or artifacts updated:
-    - `PROGRESS.md`
-    - `DECISIONS.md`
-    - `.agents/DECISIONS/04-payment-resilience-events-and-refunds.md`
-    - `blueprint/specs/details/03-payment-idempotency.md`
-    - `blueprint/specs/details/10-order-checkout.md`
-    - `blueprint/specs/details/17-payment-resilience.md`
-    - `blueprint/database-design/details/payments.md`
-    - `blueprint/database-design/details/payment_events.md`
-    - `blueprint/database-design/details/refunds.md`
-    - `blueprint/database-design/database-design.md`
+    - `PROGRESS.md`, `DECISIONS.md`, `.agents/DECISIONS/04-payment-resilience-events-and-refunds.md`, `03-payment-idempotency.md`, `10-order-checkout.md`, `17-payment-resilience.md`, `payments.md`, `payment_events.md`, `refunds.md`, `database-design.md`.
   - Known risk or unresolved issue: Không có.
-  - Next best step: Bắt đầu Phase 1 (Flyway Migration V4, JPA Entities và Repositories).
+  - Next best step: Bắt đầu triển khai Phase 1.
+
+- Session 002
+  - Goal: Triển khai hoàn thiện Phase 1 (Flyway Migration V4, JPA Entities, Repositories, DTOs & Mappers, Unit/Integration Tests).
+  - Completed:
+    - **Migration**: Tạo [`V4__payment_resilience_events_refunds.sql`](backend/src/main/resources/db/migration/V4__payment_resilience_events_refunds.sql) bổ sung `merchant_txn_ref` (UNIQUE), `version` (optimistic lock), `failure_code` cho `payments`; tạo bảng `payment_events` và `refunds`.
+    - **Enums & Entities**:
+      - Mở rộng [`PaymentStatus.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/entities/PaymentStatus.java) hỗ trợ `INITIATED` và `SUCCESS`.
+      - Tạo [`PaymentEventSource.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/entities/PaymentEventSource.java) và [`PaymentEventStatus.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/entities/PaymentEventStatus.java).
+      - Tạo [`RefundStatus.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/entities/RefundStatus.java).
+      - Cập nhật [`Payment.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/entities/Payment.java) với `merchantTxnRef`, `@Version Long version`, `failureCode`, quan hệ `paymentEvents` và `refunds`.
+      - Tạo entity [`PaymentEvent.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/entities/PaymentEvent.java) và [`Refund.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/entities/Refund.java).
+    - **Repositories**:
+      - Cập nhật [`PaymentRepository.java`](backend/src/main/java/com/ticketbox/api/module/payment/repositories/PaymentRepository.java) bổ sung `findByMerchantTxnRef` và `findByMerchantTxnRefForUpdate`.
+      - Tạo [`PaymentEventRepository.java`](backend/src/main/java/com/ticketbox/api/module/payment/repositories/PaymentEventRepository.java).
+      - Tạo [`RefundRepository.java`](backend/src/main/java/com/ticketbox/api/module/payment/repositories/RefundRepository.java).
+    - **DTOs & Mappers**:
+      - Tạo [`RefundResponse.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/RefundResponse.java) và [`PaymentEventResponse.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/PaymentEventResponse.java).
+      - Cập nhật [`PaymentResponse.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/PaymentResponse.java) bổ sung `merchantTxnRef`, `failureCode`, `version`.
+      - Tạo MapStruct mapper [`RefundMapper.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/mappers/RefundMapper.java) và [`PaymentEventMapper.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/mappers/PaymentEventMapper.java).
+    - **Testing & Verification**:
+      - Viết unit test [`RefundMapperTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/domain/mappers/RefundMapperTest.java).
+      - Viết unit test [`PaymentEventMapperTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/domain/mappers/PaymentEventMapperTest.java).
+      - Viết unit test [`PaymentEntityTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/domain/entities/PaymentEntityTest.java).
+      - Viết integration test [`PaymentPersistenceIntegrationTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/PaymentPersistenceIntegrationTest.java).
+      - Toàn bộ test suite backend đạt **222/222 passed** (0 failures, 0 errors, 2 skipped).
+      - Script `./init.sh` chạy thành công 100%.
+  - Commits: Sẵn sàng commit Phase 1.
+  - Files or artifacts updated:
+    - `backend/src/main/resources/db/migration/V4__payment_resilience_events_refunds.sql`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/entities/PaymentStatus.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/entities/PaymentEventSource.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/entities/PaymentEventStatus.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/entities/RefundStatus.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/entities/Payment.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/entities/PaymentEvent.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/entities/Refund.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/repositories/PaymentRepository.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/repositories/PaymentEventRepository.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/repositories/RefundRepository.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/RefundResponse.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/PaymentEventResponse.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/PaymentResponse.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/mappers/RefundMapper.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/mappers/PaymentEventMapper.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/domain/mappers/RefundMapperTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/domain/mappers/PaymentEventMapperTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/domain/entities/PaymentEntityTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/PaymentPersistenceIntegrationTest.java`
+    - `PROGRESS.md`
+  - Known risk or unresolved issue: Không có.
+  - Next best step: Tiến hành Phase 2 (Gateway Refund Clients cho MoMo và VNPay).

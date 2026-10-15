@@ -1,23 +1,47 @@
 package com.ticketbox.api.module.payment.domain.entities;
 
 import com.ticketbox.api.module.order.domain.entities.Order;
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import lombok.*;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.UUID;
-
 @Entity
 @Table(name = "payments", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_payments_merchant_txn_ref", columnNames = "merchant_txn_ref"),
         @UniqueConstraint(name = "uk_payments_idempotency_key", columnNames = "idempotency_key"),
         @UniqueConstraint(name = "uk_payments_provider_tx", columnNames = { "provider", "provider_transaction_id" })
 }, indexes = {
@@ -46,6 +70,10 @@ public class Payment {
     @Enumerated(EnumType.STRING)
     @Column(name = "provider", nullable = false, length = 50)
     private PaymentProvider provider;
+
+    @Size(max = 100, message = "Merchant transaction reference must not exceed 100 characters")
+    @Column(name = "merchant_txn_ref", nullable = false, length = 100)
+    private String merchantTxnRef;
 
     @Size(max = 255, message = "Provider transaction ID must not exceed 255 characters")
     @Column(name = "provider_transaction_id", length = 255)
@@ -93,8 +121,17 @@ public class Payment {
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 
+    @Size(max = 100, message = "Failure code must not exceed 100 characters")
+    @Column(name = "failure_code", length = 100)
+    private String failureCode;
+
     @Column(name = "failure_reason", columnDefinition = "TEXT")
     private String failureReason;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    @Builder.Default
+    private Long version = 0L;
 
     @Column(name = "next_reconcile_at")
     private LocalDateTime nextReconcileAt;
@@ -111,19 +148,52 @@ public class Payment {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<PaymentEvent> paymentEvents = new ArrayList<>();
+
+    @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<Refund> refunds = new ArrayList<>();
+
+    // --- Helper Accessors ---
+
+    public String getFailureMessage() {
+        return failureReason;
+    }
+
+    public void setFailureMessage(String failureMessage) {
+        this.failureReason = failureMessage;
+    }
+
+    public String getPaymentUrl() {
+        return checkoutUrl;
+    }
+
+    public void setPaymentUrl(String paymentUrl) {
+        this.checkoutUrl = paymentUrl;
+    }
+
     // --- Lifecycle Hooks for Validation ---
 
     @PrePersist
     @PreUpdate
     private void validatePaymentState() {
+        if (merchantTxnRef == null || merchantTxnRef.isBlank()) {
+            if (id != null) {
+                merchantTxnRef = id.toString().replace("-", "");
+            } else {
+                merchantTxnRef = UUID.randomUUID().toString().replace("-", "");
+            }
+        }
+
         if (amount != null && amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalStateException("Payment amount must be strictly greater than 0.");
         }
 
-        if (status == PaymentStatus.SUCCEEDED && paidAt == null) {
+        if ((status == PaymentStatus.SUCCEEDED || status == PaymentStatus.SUCCESS) && paidAt == null) {
             throw new IllegalStateException(
-                    "Payment confirmation time (paid_at) is required when status is SUCCEEDED.");
+                    "Payment confirmation time (paid_at) is required when status is SUCCEEDED/SUCCESS.");
         }
     }
-
 }
