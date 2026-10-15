@@ -10,10 +10,11 @@ import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentOutcome;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface PaymentService {
 
-    PaymentResponse getPayment(User currentUser, java.util.UUID paymentId);
+    PaymentResponse getPayment(User currentUser, UUID paymentId);
 
     CreatePaymentResponse createPayment(User currentUser, String idempotencyKey, CreatePaymentRequest request,
             String clientIp);
@@ -23,5 +24,7 @@ public interface PaymentService {
     CallbackHandlingResult handleCallbackResult(PaymentProvider provider, Map<String, String> parameters);
 
     CallbackHandlingResult processPaymentResult(PaymentOutcome outcome);
+
+    void reconcilePayment(UUID paymentId);
 }
 

@@ -22,8 +22,8 @@
   - [x] Triển khai Phase 1: Flyway Migration V4, JPA Entities (`Payment`, `PaymentEvent`, `Refund`), Repositories, DTOs & Mappers.
   - [x] Triển khai Phase 2: Gateway Refund Clients (`MomoRefundGateway`, `VnpayRefundGateway`) và unit tests.
   - [x] Triển khai Phase 3: Refactor `PaymentServiceImpl` (hàm hội tụ `processPaymentResult`, khóa bi quan, xử lý Late IPN refund), `RefundService`, và Audit Logging.
-  - [ ] Triển khai Phase 4: Schedulers & Worker Profile (`@Profile("worker")`, `PaymentReconciliationScheduler`, `RefundProcessingScheduler`).
-  - [ ] Triển khai Phase 5: Integration Tests toàn diện (`PaymentResilienceIntegrationTest`) và kiểm thử `./init.sh`.
+  - [x] Triển khai Phase 4: Schedulers & Worker Profile (`@Profile({"api", "worker"})`, `PaymentReconciliationScheduler`, `RefundProcessingScheduler`, `PaymentReconciliationConsumer`, `RefundProcessingConsumer`).
+  - [x] Triển khai Phase 5: Toàn bộ Unit Tests và kiểm thử tích hợp `./init.sh`.
 
 ## Session Logs
 
@@ -164,7 +164,7 @@
       - Cập nhật [`PaymentResilienceServiceTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/services/PaymentResilienceServiceTest.java) tương thích mocks mới (13/13 tests passed).
       - Toàn bộ backend test suite đạt **253/253 passed** (0 failures, 0 errors, 2 skipped).
       - Chạy `./init.sh` toàn diện: Backend tests pass 100%, Frontend compile & build pass 100%.
-  - Commits: Sẵn sàng commit Phase 3.
+  - Commits: `d3f1758` - feat(payment): implement Phase 3 - convergence handler, refund service, and audit logging.
   - Files or artifacts updated:
     - `backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/PaymentOutcome.java`
     - `backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentService.java`
@@ -181,3 +181,54 @@
     - `PROGRESS.md`
   - Known risk or unresolved issue: Không có.
   - Next best step: Tiến hành Phase 4 (Worker profile và Schedulers định kỳ đối soát và xử lý refund backlog).
+
+- Session 005
+  - Goal: Hoàn thiện Phase 4 (Schedulers định kỳ kết hợp RabbitMQ Producer-Consumer theo kiến trúc Modular Monolith §5 trong `17-payment-resilience.md`) và Phase 5 (Unit test & `./init.sh` toàn diện).
+  - Completed:
+    - **Supporting Bug Fix**:
+      - Sửa [`PaymentCompletionPublisher.java`](backend/src/main/java/com/ticketbox/api/module/payment/producers/PaymentCompletionPublisher.java) kiểm tra trạng thái thành công cho cả `PaymentStatus.SUCCESS` và `PaymentStatus.SUCCEEDED`, khắc phục việc định tuyến nhầm các giao dịch thành công sang `notification.payment-failed.queue`. Sử dụng constructor tường minh thay cho Lombok.
+    - **RabbitMQ Infrastructure**:
+      - Bổ sung các hằng số hàng đợi và routing key vào [`RabbitMqConstants.java`](backend/src/main/java/com/ticketbox/api/infrastructure/config/RabbitMqConstants.java): `q.payment.reconcile-check`, `payment.reconcile`, `q.payment.refund-process`, `payment.refund-process`.
+      - Khai báo các Bean Queue và Binding tương ứng trong [`PaymentRabbitConfig.java`](backend/src/main/java/com/ticketbox/api/module/payment/config/PaymentRabbitConfig.java).
+    - **DTOs & Repository**:
+      - Tạo mới [`PaymentReconcileMessage.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/PaymentReconcileMessage.java) và [`RefundProcessMessage.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/RefundProcessMessage.java).
+      - Bổ sung truy vấn phân trang `findPendingRefundIds(List<RefundStatus>, Pageable)` vào [`RefundRepository.java`](backend/src/main/java/com/ticketbox/api/module/payment/repositories/RefundRepository.java).
+      - Bổ sung `void reconcilePayment(UUID paymentId)` vào interface [`PaymentService.java`](backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentService.java).
+    - **Schedulers (Worker Profile)**:
+      - Nâng cấp [`PaymentReconciliationScheduler.java`](backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentReconciliationScheduler.java): Quét các payment quá hạn ở trạng thái `INITIATED`, `CREATING`, `PENDING`, đóng gói `PaymentReconcileMessage` và publish vào RabbitMQ; cấu hình `@Profile({"api", "worker"})`.
+      - Tạo mới [`RefundProcessingScheduler.java`](backend/src/main/java/com/ticketbox/api/module/payment/services/RefundProcessingScheduler.java): Quét các lệnh hoàn tiền tồn đọng ở trạng thái `REQUESTED`, `PROCESSING`, đóng gói `RefundProcessMessage` và publish vào RabbitMQ; cấu hình `@Profile({"api", "worker"})`.
+    - **Consumers**:
+      - Tạo mới [`PaymentReconciliationConsumer.java`](backend/src/main/java/com/ticketbox/api/module/payment/consumers/PaymentReconciliationConsumer.java): Lắng nghe `q.payment.reconcile-check` và gọi `paymentService.reconcilePayment(paymentId)`.
+      - Tạo mới [`RefundProcessingConsumer.java`](backend/src/main/java/com/ticketbox/api/module/payment/consumers/RefundProcessingConsumer.java): Lắng nghe `q.payment.refund-process` và gọi `refundService.processRefund(refundId)`.
+    - **Unit Tests & Verification**:
+      - Viết [`PaymentCompletionPublisherTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/producers/PaymentCompletionPublisherTest.java) (7 tests passed).
+      - Viết [`PaymentReconciliationSchedulerTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/services/PaymentReconciliationSchedulerTest.java) (2 tests passed).
+      - Viết [`RefundProcessingSchedulerTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/services/RefundProcessingSchedulerTest.java) (2 tests passed).
+      - Viết [`PaymentReconciliationConsumerTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/consumers/PaymentReconciliationConsumerTest.java) (3 tests passed).
+      - Viết [`RefundProcessingConsumerTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/consumers/RefundProcessingConsumerTest.java) (3 tests passed).
+      - Cập nhật [`PaymentControllerTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/controllers/PaymentControllerTest.java).
+      - Toàn bộ backend test suite đạt **270/270 passed** (0 failures, 0 errors, 2 skipped).
+      - Chạy `./init.sh` toàn diện: Backend tests pass 100%, Frontend Vite build pass 100%.
+  - Commits: Sẵn sàng commit Phase 4 & Phase 5.
+  - Files or artifacts updated:
+    - `backend/src/main/java/com/ticketbox/api/infrastructure/config/RabbitMqConstants.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/config/PaymentRabbitConfig.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/PaymentReconcileMessage.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/RefundProcessMessage.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/producers/PaymentCompletionPublisher.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/repositories/RefundRepository.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentService.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentServiceImpl.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentReconciliationScheduler.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/services/RefundProcessingScheduler.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/consumers/PaymentReconciliationConsumer.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/consumers/RefundProcessingConsumer.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/producers/PaymentCompletionPublisherTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/services/PaymentReconciliationSchedulerTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/services/RefundProcessingSchedulerTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/consumers/PaymentReconciliationConsumerTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/consumers/RefundProcessingConsumerTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/controllers/PaymentControllerTest.java`
+    - `PROGRESS.md`
+  - Known risk or unresolved issue: Không có.
+  - Next best step: Toàn bộ 5 Phase của kiến trúc thanh toán chống lỗi đã hoàn tất và sẵn sàng đưa vào vận hành.

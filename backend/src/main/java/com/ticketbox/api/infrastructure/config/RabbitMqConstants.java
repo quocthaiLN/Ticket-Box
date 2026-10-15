@@ -35,6 +35,12 @@ public final class RabbitMqConstants {
     public static final String TICKET_PAYMENT_SUCCEEDED_QUEUE = "ticket.payment-succeeded.queue";
     public static final String NOTIFICATION_PAYMENT_FAILED_QUEUE = "notification.payment-failed.queue";
 
+    public static final String PAYMENT_RECONCILE_QUEUE = "q.payment.reconcile-check";
+    public static final String PAYMENT_RECONCILE_ROUTING_KEY = "payment.reconcile";
+
+    public static final String PAYMENT_REFUND_PROCESS_QUEUE = "q.payment.refund-process";
+    public static final String PAYMENT_REFUND_PROCESS_ROUTING_KEY = "payment.refund-process";
+
     // Ticket Module Constants
     public static final String TICKET_EXCHANGE = "ticket.exchange";
     public static final String TICKET_ISSUED_ROUTING_KEY = "ticket.issued";

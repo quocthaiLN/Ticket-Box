@@ -38,4 +38,26 @@ public class PaymentRabbitConfig {
         return BindingBuilder.bind(notificationPaymentFailedQueue).to(paymentExchange)
                 .with(RabbitMqConstants.PAYMENT_FAILED_ROUTING_KEY);
     }
+
+    @Bean
+    public Queue paymentReconcileQueue() {
+        return new Queue(RabbitMqConstants.PAYMENT_RECONCILE_QUEUE, true);
+    }
+
+    @Bean
+    public Queue paymentRefundProcessQueue() {
+        return new Queue(RabbitMqConstants.PAYMENT_REFUND_PROCESS_QUEUE, true);
+    }
+
+    @Bean
+    public Binding paymentReconcileBinding(Queue paymentReconcileQueue, TopicExchange paymentExchange) {
+        return BindingBuilder.bind(paymentReconcileQueue).to(paymentExchange)
+                .with(RabbitMqConstants.PAYMENT_RECONCILE_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding paymentRefundProcessBinding(Queue paymentRefundProcessQueue, TopicExchange paymentExchange) {
+        return BindingBuilder.bind(paymentRefundProcessQueue).to(paymentExchange)
+                .with(RabbitMqConstants.PAYMENT_REFUND_PROCESS_ROUTING_KEY);
+    }
 }

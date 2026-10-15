@@ -7,6 +7,7 @@ import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentRequest;
 import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentResponse;
 import com.ticketbox.api.module.payment.domain.dtos.MomoIpnRequest;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentCallbackResponse;
+import com.ticketbox.api.module.payment.domain.dtos.PaymentOutcome;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentResponse;
 import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
 import com.ticketbox.api.module.payment.services.PaymentService;
@@ -122,8 +123,12 @@ class PaymentControllerTest {
         }
 
         @Override
-        public CallbackHandlingResult processPaymentResult(com.ticketbox.api.module.payment.domain.dtos.PaymentOutcome outcome) {
+        public CallbackHandlingResult processPaymentResult(PaymentOutcome outcome) {
             return result;
+        }
+
+        @Override
+        public void reconcilePayment(UUID paymentId) {
         }
     }
 }

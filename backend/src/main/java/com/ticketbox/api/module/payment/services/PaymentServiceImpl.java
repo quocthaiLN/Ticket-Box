@@ -179,6 +179,7 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public CallbackHandlingResult processPaymentResult(PaymentOutcome outcome) {
+        // Signature Check
         if (!outcome.signatureValid()) {
             PaymentEvent event = PaymentEvent.builder()
                     .payment(findPaymentOrNull(outcome.merchantTxnRef()))
@@ -209,12 +210,14 @@ public class PaymentServiceImpl implements PaymentService {
         record ConvergenceTxResult(CallbackHandlingResult result, UUID refundIdToExecute) {}
 
         ConvergenceTxResult txResult = transactionTemplate.execute(status -> {
+            // Chống lặp payment_event từ cổng thanh toán bằng dedupeKey
             Optional<PaymentEvent> existingEvent = paymentEventRepository.findByProviderAndDedupeKey(
                     outcome.provider(), outcome.dedupeKey());
             if (existingEvent.isPresent() && existingEvent.get().getProcessingStatus() == PaymentEventStatus.PROCESSED) {
                 return new ConvergenceTxResult(CallbackHandlingResult.ALREADY_PROCESSED, null);
             }
 
+            // Tìm kiếm bản ghi Payment và Khóa bi quan
             Payment payment = findPaymentForUpdate(outcome.merchantTxnRef()).orElse(null);
             if (payment == null || (outcome.provider() != null && payment.getProvider() != outcome.provider())) {
                 PaymentEvent event = PaymentEvent.builder()
@@ -242,6 +245,7 @@ public class PaymentServiceImpl implements PaymentService {
                 return new ConvergenceTxResult(CallbackHandlingResult.PAYMENT_NOT_FOUND, null);
             }
 
+            // Kiểm tra khớp số tiền
             if (outcome.amount() == null || payment.getAmount().compareTo(outcome.amount()) != 0) {
                 PaymentEvent event = PaymentEvent.builder()
                         .payment(payment)
@@ -269,12 +273,15 @@ public class PaymentServiceImpl implements PaymentService {
                 return new ConvergenceTxResult(CallbackHandlingResult.AMOUNT_MISMATCH, null);
             }
 
+            // Kiểm tra xung đột merchantTxnRef
+            // merchantTxnRef là của mình sinh
             if (payment.getProviderTransactionId() != null && outcome.providerTxnId() != null
                     && !payment.getProviderTransactionId().equals(outcome.providerTxnId())) {
                 log.error("Conflicting provider transaction ID for payment {}", payment.getId());
                 return new ConvergenceTxResult(CallbackHandlingResult.CONFLICTING_RESULT, null);
             }
 
+            // Xử lý status của payment
             PaymentStatus currentStatus = payment.getStatus();
             PaymentStatus targetStatus = outcome.targetStatus() != null ? outcome.targetStatus() : PaymentStatus.PENDING;
             if (isTerminalStatus(currentStatus)) {
@@ -307,6 +314,7 @@ public class PaymentServiceImpl implements PaymentService {
                 return new ConvergenceTxResult(CallbackHandlingResult.CONFLICTING_RESULT, null);
             }
 
+            // Ghi nhận thông tin payment từ cổng thanh toán
             if (outcome.providerTxnId() != null && !outcome.providerTxnId().isBlank()) {
                 payment.setProviderTransactionId(outcome.providerTxnId());
             }
@@ -318,12 +326,14 @@ public class PaymentServiceImpl implements PaymentService {
                 payment.setProviderPayload(writePayload(outcome.rawPayload()));
             }
 
+            // Cổng thanh toán trả về PENDING -> cập nhật nextReconcileAt để đối soát sau
             if (targetStatus == PaymentStatus.PENDING) {
                 payment.setNextReconcileAt(nextReconcileAt());
                 paymentRepository.saveAndFlush(payment);
                 return new ConvergenceTxResult(CallbackHandlingResult.PROCESSED, null);
             }
 
+            // Cổng thanh toán trả về FAILED, CANCELLED -> Cập nhật lý do thất bại, hủy lịch hẹn đối soát, lưu DB
             if (targetStatus == PaymentStatus.FAILED || targetStatus == PaymentStatus.CANCELLED) {
                 payment.setStatus(targetStatus);
                 payment.setFailureCode(outcome.failureCode());
@@ -361,6 +371,7 @@ public class PaymentServiceImpl implements PaymentService {
             }
 
             // SUCCESS / SUCCEEDED
+            // Khóa đơn hàng & Kiểm tra thời hạn giữ chỗ
             Order order = orderRepository.findByIdForUpdate(payment.getOrder().getId()).orElseThrow();
             boolean holdActive = order.getStatus() == OrderStatus.HELD
                     && order.getHoldExpiresAt() != null
@@ -374,6 +385,7 @@ public class PaymentServiceImpl implements PaymentService {
             UUID refundId = null;
 
             if (holdActive) {
+                // Thanh toán kịp thời
                 orderInventoryService.settlePaidOrder(order.getId(), paidAt);
                 Payment savedPayment = paymentRepository.saveAndFlush(payment);
 
@@ -403,6 +415,7 @@ public class PaymentServiceImpl implements PaymentService {
 
                 ticketIssuer.issueTickets(completedEvent(savedPayment));
             } else {
+                // Thanh toán muộn khi chỗ giữ đã hết hạ
                 payment.setFailureCode("LATE_PAYMENT_REFUND_INITIATED");
                 payment.setFailureMessage("Thanh toán thành công sau khi hết hạn giữ chỗ. Hệ thống tự động hoàn tiền.");
                 payment.setRefundRequired(true);
