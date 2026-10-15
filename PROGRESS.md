@@ -273,7 +273,7 @@
       - Bổ sung unit test `vnpayCreatePaymentSetsMerchantTxnRefMatching32HexTransactionReference` trong [`PaymentResilienceServiceTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/services/PaymentResilienceServiceTest.java) (14/14 passed).
       - Bổ sung integration test `testLatePaymentVNPay_passes32HexMerchantTxnRefToRefundGateway` trong [`PaymentResilienceIntegrationTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/PaymentResilienceIntegrationTest.java) (8/8 passed).
       - Chạy toàn diện `./init.sh`: Backend đạt **274/274 passed** (0 failures, 0 errors, 2 skipped), Frontend build hoàn tất 100%.
-  - Commits: Sẵn sàng commit.
+  - Commits: `1a09e51` - fix(payment): synchronize payment merchantTxnRef with gateway reference for refund.
   - Files or artifacts updated:
     - `backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentServiceImpl.java`
     - `backend/src/main/java/com/ticketbox/api/module/payment/gateways/VnpayRefundGateway.java`
@@ -282,3 +282,26 @@
     - `PROGRESS.md`
   - Known risk or unresolved issue: Trên môi trường VNPay Sandbox, chức năng hoàn tiền (Refund API) có thể bị hạn chế cấp quyền tùy cấu hình merchant test của VNPay. Log `rawResponse` đã được bổ sung để hiển thị rõ mã phản hồi thật từ VNPay.
   - Next best step: Chạy thử luồng Late IPN thực tế để kiểm tra log phản hồi hoàn tiền từ cổng VNPay Sandbox.
+
+- Session 008
+  - Goal: Khắc phục lỗi xung đột `provider_transaction_id` giữa QueryDR định kỳ và IPN chính thức của cổng thanh toán khi giao dịch đang PENDING.
+  - Completed:
+    - **Chẩn đoán nguyên nhân**:
+      - Khi user giữ chỗ và chờ quá hạn (Late IPN test), `PaymentReconciliationScheduler` kích hoạt QueryDR sang VNPay. Khi giao dịch đang chờ, VNPay trả về trạng thái PENDING kèm mã phiên tạm thời (ví dụ: `5529443`).
+      - Khi user thanh toán xong sau 1 phút, VNPay gửi IPN chính thức với mã giao dịch thật (ví dụ: `15705923`).
+      - Code cũ so sánh `payment.getProviderTransactionId() != outcome.providerTxnId()` mà không phân biệt trạng thái của Payment, dẫn đến việc IPN chính thức bị chặn nhầm là `CONFLICTING_RESULT`, return sớm mà không lưu `PaymentEvent`, không kích hoạt hoàn tiền Late IPN.
+    - **Triển khai Backend**:
+      - Cập nhật [`PaymentServiceImpl.java`](backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentServiceImpl.java): Điều kiện kiểm tra xung đột `provider_transaction_id` chỉ áp dụng khi payment đã ở trạng thái kết thúc (`isTerminalStatus`). Nếu payment đang `PENDING`, IPN chính thức được phép cập nhật `provider_transaction_id` chuẩn hóa.
+      - Nếu thực sự có xung đột trên payment ở trạng thái kết thúc, lưu `PaymentEvent` trạng thái `FAILED` kèm mô tả lỗi và ghi audit log `PAYMENT_RESULT_CONFLICT`.
+    - **Unit Tests & Verification**:
+      - Thêm 2 unit tests trong [`PaymentResilienceServiceTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/services/PaymentResilienceServiceTest.java):
+        - `pendingPaymentWithProvisionalProviderTxnId_updatesToOfficialIpnTxnIdWithoutConflict`: Xác nhận payment `PENDING` được cập nhật mã IPN chính thức mà không bị báo lỗi.
+        - `terminalPaymentWithDifferentProviderTxnId_isRejectedAsConflictingResult`: Xác nhận payment `SUCCEEDED` từ chối mã transaction khác và báo `CONFLICTING_RESULT`.
+      - Chạy toàn diện `./init.sh`: Backend đạt **276/276 passed** (0 failures, 0 errors, 2 skipped), Frontend build pass 100%.
+  - Commits: Sẵn sàng commit.
+  - Files or artifacts updated:
+    - `backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentServiceImpl.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/services/PaymentResilienceServiceTest.java`
+    - `PROGRESS.md`
+  - Known risk or unresolved issue: Không có.
+  - Next best step: Tiến hành test lại luồng thanh toán thực tế Late IPN trên VNPay Sandbox.

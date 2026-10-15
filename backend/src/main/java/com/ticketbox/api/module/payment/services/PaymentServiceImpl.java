@@ -273,17 +273,42 @@ public class PaymentServiceImpl implements PaymentService {
                 return new ConvergenceTxResult(CallbackHandlingResult.AMOUNT_MISMATCH, null);
             }
 
-            // Kiểm tra xung đột merchantTxnRef
-            // merchantTxnRef là của mình sinh
-            if (payment.getProviderTransactionId() != null && outcome.providerTxnId() != null
-                    && !payment.getProviderTransactionId().equals(outcome.providerTxnId())) {
-                log.error("Conflicting provider transaction ID for payment {}", payment.getId());
-                return new ConvergenceTxResult(CallbackHandlingResult.CONFLICTING_RESULT, null);
-            }
-
             // Xử lý status của payment
             PaymentStatus currentStatus = payment.getStatus();
             PaymentStatus targetStatus = outcome.targetStatus() != null ? outcome.targetStatus() : PaymentStatus.PENDING;
+
+            // Kiểm tra xung đột provider transaction ID (chỉ áp dụng khi payment đã ở trạng thái kết thúc)
+            if (isTerminalStatus(currentStatus) && payment.getProviderTransactionId() != null && outcome.providerTxnId() != null
+                    && !payment.getProviderTransactionId().equals(outcome.providerTxnId())) {
+                log.error("Conflicting provider transaction ID for payment {}: stored={}, incoming={}",
+                        payment.getId(), payment.getProviderTransactionId(), outcome.providerTxnId());
+
+                PaymentEvent event = PaymentEvent.builder()
+                        .payment(payment)
+                        .provider(outcome.provider())
+                        .eventSource(outcome.source() != null ? outcome.source() : PaymentEventSource.IPN)
+                        .dedupeKey(outcome.dedupeKey())
+                        .eventType(targetStatus.name())
+                        .rawPayload(writePayload(outcome.rawPayload()))
+                        .signatureValid(true)
+                        .processingStatus(PaymentEventStatus.FAILED)
+                        .errorMessage("Conflicting provider transaction ID: stored=" + payment.getProviderTransactionId()
+                                + ", incoming=" + outcome.providerTxnId())
+                        .receivedAt(LocalDateTime.now())
+                        .build();
+                saveOrUpdateEvent(existingEvent, event);
+
+                auditLogService.logInvestigativeFailure(
+                        AuditAction.PAYMENT_RESULT_CONFLICT,
+                        "PAYMENT",
+                        payment.getId().toString(),
+                        Map.of(
+                                "stored_provider_txn_id", payment.getProviderTransactionId(),
+                                "incoming_provider_txn_id", outcome.providerTxnId(),
+                                "payment_event_id", safeEventId(event)));
+
+                return new ConvergenceTxResult(CallbackHandlingResult.CONFLICTING_RESULT, null);
+            }
             if (isTerminalStatus(currentStatus)) {
                 if (isSameTerminalStatus(currentStatus, targetStatus)) {
                     return new ConvergenceTxResult(CallbackHandlingResult.ALREADY_PROCESSED, null);

@@ -230,6 +230,36 @@ class PaymentResilienceServiceTest {
     }
 
     @Test
+    void pendingPaymentWithProvisionalProviderTxnId_updatesToOfficialIpnTxnIdWithoutConflict() {
+        Payment payment = pendingPayment(PaymentStatus.PENDING);
+        payment.setProviderTransactionId("5529443"); // Provisional txn ID from QueryDR while pending
+
+        var ipnCallback = new GatewayCallback(true, Optional.of(PAYMENT_ID), Optional.of(AMOUNT), "15705923",
+                Optional.of(PaymentStatus.SUCCEEDED), Optional.empty(), Map.of("resultCode", "0"));
+        when(momoGateway.verifyCallback(anyMap())).thenReturn(ipnCallback);
+
+        assertThat(service.handleCallbackResult(PaymentProvider.MOMO, Map.of()))
+                .isEqualTo(CallbackHandlingResult.PROCESSED);
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
+        assertThat(payment.getProviderTransactionId()).isEqualTo("15705923");
+    }
+
+    @Test
+    void terminalPaymentWithDifferentProviderTxnId_isRejectedAsConflictingResult() {
+        Payment payment = pendingPayment(PaymentStatus.SUCCEEDED);
+        payment.setProviderTransactionId("15705923");
+
+        var conflictingCallback = new GatewayCallback(true, Optional.of(PAYMENT_ID), Optional.of(AMOUNT), "99999999",
+                Optional.of(PaymentStatus.SUCCEEDED), Optional.empty(), Map.of("resultCode", "0"));
+        when(momoGateway.verifyCallback(anyMap())).thenReturn(conflictingCallback);
+
+        assertThat(service.handleCallbackResult(PaymentProvider.MOMO, Map.of()))
+                .isEqualTo(CallbackHandlingResult.CONFLICTING_RESULT);
+        assertThat(payment.getProviderTransactionId()).isEqualTo("15705923");
+    }
+
+    @Test
     void queryTimeoutLeavesPendingAndSchedulesNextAttempt() {
         Payment payment = pendingPayment(PaymentStatus.PENDING);
         payment.setNextReconcileAt(LocalDateTime.now().minusSeconds(1));
