@@ -21,7 +21,7 @@
   - [x] Lập Implementation Plan và Test Plan cụ thể, khả thi qua nhiều Session.
   - [x] Triển khai Phase 1: Flyway Migration V4, JPA Entities (`Payment`, `PaymentEvent`, `Refund`), Repositories, DTOs & Mappers.
   - [x] Triển khai Phase 2: Gateway Refund Clients (`MomoRefundGateway`, `VnpayRefundGateway`) và unit tests.
-  - [ ] Triển khai Phase 3: Refactor `PaymentServiceImpl` (hàm hội tụ `processPaymentResult`, khóa bi quan, xử lý Late IPN refund), `RefundService`.
+  - [x] Triển khai Phase 3: Refactor `PaymentServiceImpl` (hàm hội tụ `processPaymentResult`, khóa bi quan, xử lý Late IPN refund), `RefundService`, và Audit Logging.
   - [ ] Triển khai Phase 4: Schedulers & Worker Profile (`@Profile("worker")`, `PaymentReconciliationScheduler`, `RefundProcessingScheduler`).
   - [ ] Triển khai Phase 5: Integration Tests toàn diện (`PaymentResilienceIntegrationTest`) và kiểm thử `./init.sh`.
 
@@ -139,3 +139,45 @@
     - `PROGRESS.md`
   - Known risk or unresolved issue: Không có.
   - Next best step: Tiến hành Phase 3 (Refactor `PaymentServiceImpl` với hàm hội tụ `processPaymentResult`, triển khai `RefundService`, tích hợp Audit Log đầy đủ).
+
+- Session 004
+  - Goal: Hoàn thành triển khai Phase 3: Hàm hội tụ `processPaymentResult`, khóa bi quan, xử lý Late IPN và hoàn tiền tự động, dịch vụ hoàn tiền `RefundService` / `RefundServiceImpl`, và Audit Logging đầy đủ.
+  - Completed:
+    - **Convergence Point & Resilience**:
+      - Tạo [`PaymentOutcome.java`](backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/PaymentOutcome.java) thống nhất dữ liệu từ IPN, Query Gateway, và Return URL.
+      - Cập nhật [`PaymentService.java`](backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentService.java) và [`PaymentServiceImpl.java`](backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentServiceImpl.java) triển khai hàm hội tụ duy nhất `processPaymentResult(PaymentOutcome)`.
+      - Triển khai cơ chế khóa bi quan (`findByMerchantTxnRefForUpdate` / fallback theo UUID `findByIdForUpdate`).
+      - Triển khai ghi sự kiện bất biến `payment_events (provider, dedupe_key)` nhằm chống trùng lặp IPN tuyệt đối.
+      - Xử lý Late IPN: Khi hold expired / order expired, đánh dấu payment `SUCCESS`, giữ nguyên đơn hàng `EXPIRED` (tuyệt đối không xuất vé), tự động tạo lệnh refund và kích hoạt qua `TransactionSynchronizationManager.registerSynchronization` sau khi commit giao dịch payment.
+    - **Refund Management (`RefundService` & `RefundServiceImpl`)**:
+      - Tạo interface [`RefundService.java`](backend/src/main/java/com/ticketbox/api/module/payment/services/RefundService.java).
+      - Triển khai [`RefundServiceImpl.java`](backend/src/main/java/com/ticketbox/api/module/payment/services/RefundServiceImpl.java) tuân thủ tách biệt 2 giao dịch theo Quyết định 04 trong `DECISIONS.md`:
+        - Tx1: Atomic claim trạng thái `REQUESTED -> PROCESSING` thông qua `RefundRepository.updateStatusIfExpected(...)`.
+        - External Gateway Call: Thực thi hoàn tiền với `MomoRefundGateway` / `VnpayRefundGateway` bên ngoài transaction/khóa payment.
+        - Tx2: Cập nhật kết quả cuối cùng (`SUCCESS`, `FAILED`, hoặc `PROCESSING` khi timeout) và ghi nhận audit log tương ứng.
+    - **Audit Logging**:
+      - Tích hợp chuẩn hóa `AuditLogService` ghi log nhóm 1 (`REQUIRED` trong nghiệp vụ chính) và nhóm 2 (`REQUIRES_NEW` cho các sự kiện độc lập) tuân thủ `16-audit-logging.md`.
+      - Ghi log chi tiết cho các hành động: `PAYMENT_CONVERGENCE_SUCCESS`, `PAYMENT_CONVERGENCE_FAILED`, `PAYMENT_CONVERGENCE_LATE_REFUND`, `REQUEST_REFUND`, `COMPLETE_REFUND`, `FAIL_REFUND`.
+    - **Verification & Testing**:
+      - Viết unit test suite [`RefundServiceImplTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/services/RefundServiceImplTest.java) (5/5 tests passed).
+      - Viết integration test suite [`PaymentResilienceIntegrationTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/PaymentResilienceIntegrationTest.java) (6/6 tests passed).
+      - Cập nhật [`PaymentResilienceServiceTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/services/PaymentResilienceServiceTest.java) tương thích mocks mới (13/13 tests passed).
+      - Toàn bộ backend test suite đạt **253/253 passed** (0 failures, 0 errors, 2 skipped).
+      - Chạy `./init.sh` toàn diện: Backend tests pass 100%, Frontend compile & build pass 100%.
+  - Commits: Sẵn sàng commit Phase 3.
+  - Files or artifacts updated:
+    - `backend/src/main/java/com/ticketbox/api/module/payment/domain/dtos/PaymentOutcome.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentService.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentServiceImpl.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/services/RefundService.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/services/RefundServiceImpl.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/repositories/RefundRepository.java`
+    - `backend/src/main/java/com/ticketbox/api/module/audit/domain/entities/AuditLog.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/services/PaymentReconciliationScheduler.java`
+    - `backend/src/test/resources/application.yml`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/services/RefundServiceImplTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/PaymentResilienceIntegrationTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/services/PaymentResilienceServiceTest.java`
+    - `PROGRESS.md`
+  - Known risk or unresolved issue: Không có.
+  - Next best step: Tiến hành Phase 4 (Worker profile và Schedulers định kỳ đối soát và xử lý refund backlog).

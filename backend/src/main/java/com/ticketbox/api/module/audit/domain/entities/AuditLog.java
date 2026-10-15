@@ -1,17 +1,29 @@
 package com.ticketbox.api.module.audit.domain.entities;
 
 import com.ticketbox.api.module.auth.domain.entities.User;
-
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import lombok.*;
+import java.time.LocalDateTime;
+import java.util.UUID;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * Entity biểu diễn bản ghi Audit Log bất biến (Immutable Audit Trail).
@@ -24,8 +36,6 @@ import java.util.UUID;
 })
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
 public class AuditLog {
 
@@ -66,4 +76,28 @@ public class AuditLog {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    public AuditLog() {
+    }
+
+    public AuditLog(
+            UUID id,
+            User actor,
+            AuditAction action,
+            String entityType,
+            String entityId,
+            String metadata,
+            String ipAddress,
+            String userAgent,
+            LocalDateTime createdAt) {
+        this.id = id;
+        this.actor = actor;
+        this.action = action;
+        this.entityType = entityType;
+        this.entityId = entityId;
+        this.metadata = metadata;
+        this.ipAddress = ipAddress;
+        this.userAgent = userAgent;
+        this.createdAt = createdAt;
+    }
 }

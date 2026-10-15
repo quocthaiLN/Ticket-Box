@@ -37,6 +37,7 @@ public class MomoRefundGateway implements PaymentRefundGateway {
     private final String secretKey;
     private final CircuitBreaker circuitBreaker;
 
+    // Dùng cho Spring IoC container
     @Autowired
     public MomoRefundGateway(
             @Value("${app.payment.momo.refund-url:https://test-payment.momo.vn/v2/gateway/api/refund}") String refundUrl,
@@ -46,6 +47,7 @@ public class MomoRefundGateway implements PaymentRefundGateway {
         this(client(), refundUrl, partnerCode, accessKey, secretKey, breaker());
     }
 
+    // Package-private dùng cho Unit Test
     MomoRefundGateway(RestClient restClient, String refundUrl, String partnerCode,
             String accessKey, String secretKey, CircuitBreaker circuitBreaker) {
         this.restClient = restClient;
@@ -63,6 +65,7 @@ public class MomoRefundGateway implements PaymentRefundGateway {
 
     @Override
     public RefundGatewayResult refund(RefundGatewayRequest request) {
+        // Input Validation
         if (request == null || request.refundId() == null) {
             throw new IllegalArgumentException("Refund ID is required");
         }
@@ -80,6 +83,7 @@ public class MomoRefundGateway implements PaymentRefundGateway {
             throw new IllegalArgumentException("Invalid MoMo transaction ID format: " + request.providerTxnId(), exception);
         }
 
+        // Chuẩn bị các tham số cho giao dịch hoàn tiền
         String orderId = (request.merchantTxnRef() != null && !request.merchantTxnRef().isBlank())
                 ? request.merchantTxnRef()
                 : request.refundId().toString();
@@ -89,6 +93,7 @@ public class MomoRefundGateway implements PaymentRefundGateway {
                 ? request.reason()
                 : "Refund order " + orderId;
 
+        // Tạo Signature
         String signature = hmacSha256("accessKey=" + accessKey
                 + "&amount=" + amount
                 + "&description=" + description
@@ -97,6 +102,7 @@ public class MomoRefundGateway implements PaymentRefundGateway {
                 + "&requestId=" + requestId
                 + "&transId=" + transId);
 
+        // Tạo Payload = thông tin refudn + Signature
         Map<String, Object> body = Map.of(
                 "partnerCode", partnerCode,
                 "orderId", orderId,
@@ -107,6 +113,7 @@ public class MomoRefundGateway implements PaymentRefundGateway {
                 "description", description,
                 "signature", signature);
 
+        // Gửi HTTP POST request được bảo vệ bởi CircuitBreaker
         MomoRefundResponse response;
         try {
             response = circuitBreaker.executeSupplier(() -> restClient.post()
@@ -115,6 +122,7 @@ public class MomoRefundGateway implements PaymentRefundGateway {
                     .retrieve()
                     .body(MomoRefundResponse.class));
         } catch (ResourceAccessException | HttpServerErrorException exception) {
+            // Lỗi mạng
             log.warn("MoMo refund call failed with network/server error: {}", exception.getMessage());
             return RefundGatewayResult.builder()
                     .status(RefundStatus.PROCESSING)
@@ -122,6 +130,7 @@ public class MomoRefundGateway implements PaymentRefundGateway {
                     .message(exception.getMessage())
                     .build();
         } catch (CallNotPermittedException exception) {
+            // Lỗi Circuit breaker open
             log.warn("MoMo refund circuit breaker is OPEN: {}", exception.getMessage());
             return RefundGatewayResult.builder()
                     .status(RefundStatus.PROCESSING)
@@ -130,10 +139,12 @@ public class MomoRefundGateway implements PaymentRefundGateway {
                     .build();
         }
 
+        // Đã gửi và nhận phản hồi từ Gateway
         if (response == null || response.resultCode() == null) {
             throw new IllegalStateException("MoMo refund response is incomplete");
         }
 
+        // Ánh xạ và return
         RefundStatus status = mapResultCode(response.resultCode());
         String providerRefundId = response.transId() != null
                 ? response.transId().toString()

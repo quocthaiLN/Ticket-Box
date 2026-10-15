@@ -120,5 +120,10 @@ class PaymentControllerTest {
         public Optional<PaymentCallbackResponse> handleCallback(PaymentProvider provider, Map<String, String> parameters) {
             throw new UnsupportedOperationException();
         }
+
+        @Override
+        public CallbackHandlingResult processPaymentResult(com.ticketbox.api.module.payment.domain.dtos.PaymentOutcome outcome) {
+            return result;
+        }
     }
 }

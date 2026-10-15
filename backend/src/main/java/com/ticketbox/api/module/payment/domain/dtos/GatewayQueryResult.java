@@ -1,4 +1,4 @@
-package com.ticketbox.api.module.payment.gateways;
+package com.ticketbox.api.module.payment.domain.dtos;
 
 import com.ticketbox.api.module.payment.domain.entities.PaymentStatus;
 import java.math.BigDecimal;

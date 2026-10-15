@@ -9,6 +9,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ticketbox.api.module.payment.domain.dtos.GatewayQueryResult;
 import com.ticketbox.api.module.payment.domain.entities.Payment;
 import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
 import com.ticketbox.api.module.payment.domain.entities.PaymentStatus;

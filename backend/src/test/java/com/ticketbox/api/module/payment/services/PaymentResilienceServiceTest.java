@@ -10,17 +10,20 @@ import com.ticketbox.api.module.payment.domain.dtos.CallbackHandlingResult;
 import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentRequest;
 import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentResponse;
 import com.ticketbox.api.module.payment.domain.dtos.GatewayCallback;
+import com.ticketbox.api.module.payment.domain.dtos.GatewayQueryResult;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentGatewayRequest;
 import com.ticketbox.api.module.payment.domain.entities.Payment;
 import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
 import com.ticketbox.api.module.payment.domain.entities.PaymentStatus;
 import com.ticketbox.api.module.payment.domain.mappers.PaymentMapperImpl;
 import com.ticketbox.api.module.payment.events.PaymentCompletedEvent;
-import com.ticketbox.api.module.payment.gateways.GatewayQueryResult;
+import com.ticketbox.api.module.audit.services.AuditLogService;
 import com.ticketbox.api.module.payment.gateways.MomoGateway;
 import com.ticketbox.api.module.payment.gateways.PaymentGatewayStrategy;
 import com.ticketbox.api.module.payment.gateways.PaymentStatusQueryGateway;
+import com.ticketbox.api.module.payment.repositories.PaymentEventRepository;
 import com.ticketbox.api.module.payment.repositories.PaymentRepository;
+import com.ticketbox.api.module.payment.services.RefundService;
 import com.ticketbox.api.module.shared.idempotency.IdempotencyService;
 import com.ticketbox.api.module.ticket.consumers.TicketPaymentSucceededConsumer;
 import java.math.BigDecimal;
@@ -68,6 +71,7 @@ class PaymentResilienceServiceTest {
 
     @Mock private OrderRepository orderRepository;
     @Mock private PaymentRepository paymentRepository;
+    @Mock private PaymentEventRepository paymentEventRepository;
     @Mock private PaymentGatewayStrategy momoGateway;
     @Mock private PaymentStatusQueryGateway queryGateway;
     @Mock private IdempotencyService idempotencyService;
@@ -76,6 +80,8 @@ class PaymentResilienceServiceTest {
     @Mock private OrderInventoryService orderInventoryService;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private TicketPaymentSucceededConsumer ticketIssuer;
+    @Mock private RefundService refundService;
+    @Mock private AuditLogService auditLogService;
 
     private PaymentServiceImpl service;
     private User user;
@@ -88,10 +94,10 @@ class PaymentResilienceServiceTest {
         order = Order.builder().id(ORDER_ID).user(user).status(OrderStatus.HELD)
                 .holdExpiresAt(LocalDateTime.now().plusMinutes(10)).totalAmount(AMOUNT).currency("VND").build();
         stored = new AtomicReference<>();
-        service = new PaymentServiceImpl(orderRepository, paymentRepository, List.of(momoGateway),
-                List.of(queryGateway), idempotencyService, transactionTemplate, orderInventoryService,
-                eventPublisher, new ObjectMapper(), ticketIssuer,
-                new PaymentMapperImpl());
+        service = new PaymentServiceImpl(orderRepository, paymentRepository, paymentEventRepository,
+                List.of(momoGateway), List.of(queryGateway), idempotencyService, transactionTemplate,
+                orderInventoryService, eventPublisher, new ObjectMapper(), ticketIssuer,
+                new PaymentMapperImpl(), refundService, auditLogService);
         lenient().when(momoGateway.getProvider()).thenReturn(PaymentProvider.MOMO);
         lenient().when(momoGateway.transactionReference(PAYMENT_ID)).thenReturn(PAYMENT_ID.toString());
         lenient().when(queryGateway.getProvider()).thenReturn(PaymentProvider.MOMO);

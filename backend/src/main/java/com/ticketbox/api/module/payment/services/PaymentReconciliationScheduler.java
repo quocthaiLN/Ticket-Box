@@ -13,10 +13,14 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Slf4j
-@RequiredArgsConstructor
 public class PaymentReconciliationScheduler {
     private final PaymentRepository paymentRepository;
     private final PaymentServiceImpl paymentService;
+
+    public PaymentReconciliationScheduler(PaymentRepository paymentRepository, PaymentServiceImpl paymentService) {
+        this.paymentRepository = paymentRepository;
+        this.paymentService = paymentService;
+    }
 
     @Scheduled(fixedDelay = 30_000)
     public void reconcileDuePayments() {

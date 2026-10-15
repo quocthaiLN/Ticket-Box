@@ -1,5 +1,6 @@
 package com.ticketbox.api.module.payment.gateways;
 
+import com.ticketbox.api.module.payment.domain.dtos.GatewayQueryResult;
 import com.ticketbox.api.module.payment.domain.entities.Payment;
 import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
 import com.ticketbox.api.module.payment.domain.entities.PaymentStatus;

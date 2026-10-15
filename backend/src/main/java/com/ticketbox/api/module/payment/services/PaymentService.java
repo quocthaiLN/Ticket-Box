@@ -7,6 +7,7 @@ import com.ticketbox.api.module.payment.domain.dtos.PaymentCallbackResponse;
 import com.ticketbox.api.module.payment.domain.dtos.CallbackHandlingResult;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentResponse;
 import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
+import com.ticketbox.api.module.payment.domain.dtos.PaymentOutcome;
 import java.util.Map;
 import java.util.Optional;
 
@@ -20,4 +21,7 @@ public interface PaymentService {
     Optional<PaymentCallbackResponse> handleCallback(PaymentProvider provider, Map<String, String> parameters);
 
     CallbackHandlingResult handleCallbackResult(PaymentProvider provider, Map<String, String> parameters);
+
+    CallbackHandlingResult processPaymentResult(PaymentOutcome outcome);
 }
+

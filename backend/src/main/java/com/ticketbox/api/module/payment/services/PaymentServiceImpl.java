@@ -1,29 +1,40 @@
 package com.ticketbox.api.module.payment.services;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ticketbox.api.infrastructure.exception.AppException;
+import com.ticketbox.api.module.audit.domain.entities.AuditAction;
+import com.ticketbox.api.module.audit.services.AuditLogService;
 import com.ticketbox.api.module.auth.domain.entities.User;
 import com.ticketbox.api.module.order.domain.entities.Order;
 import com.ticketbox.api.module.order.domain.entities.OrderStatus;
 import com.ticketbox.api.module.order.repositories.OrderRepository;
 import com.ticketbox.api.module.order.services.OrderInventoryService;
+import com.ticketbox.api.module.payment.domain.dtos.CallbackHandlingResult;
 import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentRequest;
 import com.ticketbox.api.module.payment.domain.dtos.CreatePaymentResponse;
-import com.ticketbox.api.module.payment.domain.dtos.PaymentGatewayRequest;
-import com.ticketbox.api.module.payment.domain.dtos.PaymentCallbackResponse;
-import com.ticketbox.api.module.payment.domain.dtos.CallbackHandlingResult;
 import com.ticketbox.api.module.payment.domain.dtos.GatewayCallback;
+import com.ticketbox.api.module.payment.domain.dtos.GatewayQueryResult;
+import com.ticketbox.api.module.payment.domain.dtos.PaymentCallbackResponse;
+import com.ticketbox.api.module.payment.domain.dtos.PaymentGatewayRequest;
+import com.ticketbox.api.module.payment.domain.dtos.PaymentOutcome;
 import com.ticketbox.api.module.payment.domain.dtos.PaymentResponse;
 import com.ticketbox.api.module.payment.domain.entities.Payment;
+import com.ticketbox.api.module.payment.domain.entities.PaymentEvent;
+import com.ticketbox.api.module.payment.domain.entities.PaymentEventSource;
+import com.ticketbox.api.module.payment.domain.entities.PaymentEventStatus;
 import com.ticketbox.api.module.payment.domain.entities.PaymentProvider;
 import com.ticketbox.api.module.payment.domain.entities.PaymentStatus;
+import com.ticketbox.api.module.payment.domain.entities.Refund;
+import com.ticketbox.api.module.payment.domain.mappers.PaymentMapper;
+import com.ticketbox.api.module.payment.events.PaymentCompletedEvent;
+import com.ticketbox.api.module.payment.gateways.MomoGateway;
 import com.ticketbox.api.module.payment.gateways.PaymentGatewayStrategy;
 import com.ticketbox.api.module.payment.gateways.PaymentStatusQueryGateway;
-import com.ticketbox.api.module.payment.gateways.GatewayQueryResult;
-import com.ticketbox.api.module.payment.gateways.MomoGateway;
+import com.ticketbox.api.module.payment.repositories.PaymentEventRepository;
 import com.ticketbox.api.module.payment.repositories.PaymentRepository;
-import com.ticketbox.api.module.payment.events.PaymentCompletedEvent;
-import com.ticketbox.api.module.ticket.consumers.TicketPaymentSucceededConsumer;
 import com.ticketbox.api.module.shared.idempotency.IdempotencyService;
+import com.ticketbox.api.module.ticket.consumers.TicketPaymentSucceededConsumer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -35,26 +46,25 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.http.HttpStatus;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
-@RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
 
     private static final Logger log = LoggerFactory.getLogger(PaymentServiceImpl.class);
     private static final Duration IDEMPOTENCY_TTL = Duration.ofHours(24);
     private static final Duration RECONCILE_DELAY = Duration.ofSeconds(60);
     private static final String IDEMPOTENCY_KEY_PREFIX = "idempotency:payment:";
+    private static final UUID SYSTEM_ACTOR_UUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
 
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
+    private final PaymentEventRepository paymentEventRepository;
     private final List<PaymentGatewayStrategy> paymentGateways;
     private final List<PaymentStatusQueryGateway> paymentStatusQueryGateways;
     private final IdempotencyService idempotencyService;
@@ -63,7 +73,40 @@ public class PaymentServiceImpl implements PaymentService {
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
     private final TicketPaymentSucceededConsumer ticketIssuer;
-    private final com.ticketbox.api.module.payment.domain.mappers.PaymentMapper paymentMapper;
+    private final PaymentMapper paymentMapper;
+    private final RefundService refundService;
+    private final AuditLogService auditLogService;
+
+    public PaymentServiceImpl(
+            OrderRepository orderRepository,
+            PaymentRepository paymentRepository,
+            PaymentEventRepository paymentEventRepository,
+            List<PaymentGatewayStrategy> paymentGateways,
+            List<PaymentStatusQueryGateway> paymentStatusQueryGateways,
+            IdempotencyService idempotencyService,
+            TransactionTemplate transactionTemplate,
+            OrderInventoryService orderInventoryService,
+            ApplicationEventPublisher eventPublisher,
+            ObjectMapper objectMapper,
+            TicketPaymentSucceededConsumer ticketIssuer,
+            PaymentMapper paymentMapper,
+            RefundService refundService,
+            AuditLogService auditLogService) {
+        this.orderRepository = orderRepository;
+        this.paymentRepository = paymentRepository;
+        this.paymentEventRepository = paymentEventRepository;
+        this.paymentGateways = paymentGateways;
+        this.paymentStatusQueryGateways = paymentStatusQueryGateways;
+        this.idempotencyService = idempotencyService;
+        this.transactionTemplate = transactionTemplate;
+        this.orderInventoryService = orderInventoryService;
+        this.eventPublisher = eventPublisher;
+        this.objectMapper = objectMapper;
+        this.ticketIssuer = ticketIssuer;
+        this.paymentMapper = paymentMapper;
+        this.refundService = refundService;
+        this.auditLogService = auditLogService;
+    }
 
     @Override
     public PaymentResponse getPayment(User currentUser, UUID paymentId) {
@@ -103,27 +146,365 @@ public class PaymentServiceImpl implements PaymentService {
     public CallbackHandlingResult handleCallbackResult(PaymentProvider provider, Map<String, String> parameters) {
         PaymentGatewayStrategy gateway = resolveGateway(provider);
         GatewayCallback callback = gateway.verifyCallback(parameters);
-        CallbackHandlingResult result;
 
-        if (!callback.signatureValid()) {
-            result = CallbackHandlingResult.INVALID_SIGNATURE;
-        } else if (callback.paymentId().isEmpty()) {
-            result = CallbackHandlingResult.PAYMENT_NOT_FOUND;
-        } else {
-            result = transactionTemplate
-                    .execute(status -> applyCallback(callback.paymentId().orElseThrow(), provider, callback));
-            if (result == null) {
-                throw new IllegalStateException("Payment callback transaction returned no result");
+        String merchantTxnRef = null;
+        if (provider == PaymentProvider.VNPAY) {
+            merchantTxnRef = parameters.get("vnp_TxnRef");
+        } else if (provider == PaymentProvider.MOMO) {
+            merchantTxnRef = parameters.get("orderId");
+        }
+        if (merchantTxnRef == null && callback.paymentId().isPresent()) {
+            merchantTxnRef = callback.paymentId().get().toString();
+        }
+
+        String dedupeKey = callback.providerTransactionId() != null && !callback.providerTransactionId().isBlank()
+                ? callback.providerTransactionId() + "_" + (callback.targetStatus().isPresent() ? callback.targetStatus().get().name() : "EVENT")
+                : (merchantTxnRef != null ? merchantTxnRef + "_CB" : UUID.randomUUID().toString());
+
+        PaymentOutcome outcome = PaymentOutcome.builder()
+                .provider(provider)
+                .source(PaymentEventSource.IPN)
+                .dedupeKey(dedupeKey)
+                .merchantTxnRef(merchantTxnRef)
+                .providerTxnId(callback.providerTransactionId())
+                .targetStatus(callback.targetStatus().orElse(null))
+                .amount(callback.amount().orElse(null))
+                .signatureValid(callback.signatureValid())
+                .failureMessage(callback.failureReason().orElse(null))
+                .rawPayload(callback.sanitizedPayload() != null ? callback.sanitizedPayload() : parameters)
+                .build();
+
+        return processPaymentResult(outcome);
+    }
+
+    @Override
+    public CallbackHandlingResult processPaymentResult(PaymentOutcome outcome) {
+        if (!outcome.signatureValid()) {
+            PaymentEvent event = PaymentEvent.builder()
+                    .payment(findPaymentOrNull(outcome.merchantTxnRef()))
+                    .provider(outcome.provider())
+                    .eventSource(outcome.source() != null ? outcome.source() : PaymentEventSource.IPN)
+                    .dedupeKey("INVALID_" + UUID.randomUUID())
+                    .eventType(outcome.targetStatus() != null ? outcome.targetStatus().name() : "UNKNOWN")
+                    .rawPayload(writePayload(outcome.rawPayload()))
+                    .signatureValid(false)
+                    .processingStatus(PaymentEventStatus.IGNORED)
+                    .errorMessage("Invalid signature")
+                    .receivedAt(LocalDateTime.now())
+                    .build();
+            paymentEventRepository.saveAndFlush(event);
+
+            auditLogService.logInvestigativeFailure(
+                    AuditAction.PAYMENT_WEBHOOK_REJECTED,
+                    "PAYMENT",
+                    outcome.merchantTxnRef() != null ? outcome.merchantTxnRef() : "UNKNOWN",
+                    Map.of(
+                            "reason", "INVALID_SIGNATURE",
+                            "provider", outcome.provider() != null ? outcome.provider().name() : "UNKNOWN",
+                            "payment_event_id", safeEventId(event)));
+
+            return CallbackHandlingResult.INVALID_SIGNATURE;
+        }
+
+        record ConvergenceTxResult(CallbackHandlingResult result, UUID refundIdToExecute) {}
+
+        ConvergenceTxResult txResult = transactionTemplate.execute(status -> {
+            Optional<PaymentEvent> existingEvent = paymentEventRepository.findByProviderAndDedupeKey(
+                    outcome.provider(), outcome.dedupeKey());
+            if (existingEvent.isPresent() && existingEvent.get().getProcessingStatus() == PaymentEventStatus.PROCESSED) {
+                return new ConvergenceTxResult(CallbackHandlingResult.ALREADY_PROCESSED, null);
+            }
+
+            Payment payment = findPaymentForUpdate(outcome.merchantTxnRef()).orElse(null);
+            if (payment == null || (outcome.provider() != null && payment.getProvider() != outcome.provider())) {
+                PaymentEvent event = PaymentEvent.builder()
+                        .provider(outcome.provider())
+                        .eventSource(outcome.source() != null ? outcome.source() : PaymentEventSource.IPN)
+                        .dedupeKey(outcome.dedupeKey())
+                        .eventType(outcome.targetStatus() != null ? outcome.targetStatus().name() : "UNKNOWN")
+                        .rawPayload(writePayload(outcome.rawPayload()))
+                        .signatureValid(true)
+                        .processingStatus(PaymentEventStatus.FAILED)
+                        .errorMessage("Payment not found for reference: " + outcome.merchantTxnRef())
+                        .receivedAt(LocalDateTime.now())
+                        .build();
+                paymentEventRepository.saveAndFlush(event);
+
+                auditLogService.logInvestigativeFailure(
+                        AuditAction.PAYMENT_WEBHOOK_REJECTED,
+                        "PAYMENT",
+                        outcome.merchantTxnRef() != null ? outcome.merchantTxnRef() : "UNKNOWN",
+                        Map.of(
+                                "reason", "PAYMENT_NOT_FOUND",
+                                "provider", outcome.provider() != null ? outcome.provider().name() : "UNKNOWN",
+                                "payment_event_id", safeEventId(event)));
+
+                return new ConvergenceTxResult(CallbackHandlingResult.PAYMENT_NOT_FOUND, null);
+            }
+
+            if (outcome.amount() == null || payment.getAmount().compareTo(outcome.amount()) != 0) {
+                PaymentEvent event = PaymentEvent.builder()
+                        .payment(payment)
+                        .provider(outcome.provider())
+                        .eventSource(outcome.source() != null ? outcome.source() : PaymentEventSource.IPN)
+                        .dedupeKey(outcome.dedupeKey())
+                        .eventType(outcome.targetStatus() != null ? outcome.targetStatus().name() : "UNKNOWN")
+                        .rawPayload(writePayload(outcome.rawPayload()))
+                        .signatureValid(true)
+                        .processingStatus(PaymentEventStatus.FAILED)
+                        .errorMessage("Amount mismatch: expected " + payment.getAmount() + " but got " + outcome.amount())
+                        .receivedAt(LocalDateTime.now())
+                        .build();
+                paymentEventRepository.saveAndFlush(event);
+
+                auditLogService.logInvestigativeFailure(
+                        AuditAction.PAYMENT_WEBHOOK_REJECTED,
+                        "PAYMENT",
+                        payment.getId().toString(),
+                        Map.of(
+                                "reason", "AMOUNT_MISMATCH",
+                                "provider", outcome.provider().name(),
+                                "payment_event_id", safeEventId(event)));
+
+                return new ConvergenceTxResult(CallbackHandlingResult.AMOUNT_MISMATCH, null);
+            }
+
+            if (payment.getProviderTransactionId() != null && outcome.providerTxnId() != null
+                    && !payment.getProviderTransactionId().equals(outcome.providerTxnId())) {
+                log.error("Conflicting provider transaction ID for payment {}", payment.getId());
+                return new ConvergenceTxResult(CallbackHandlingResult.CONFLICTING_RESULT, null);
+            }
+
+            PaymentStatus currentStatus = payment.getStatus();
+            PaymentStatus targetStatus = outcome.targetStatus() != null ? outcome.targetStatus() : PaymentStatus.PENDING;
+            if (isTerminalStatus(currentStatus)) {
+                if (isSameTerminalStatus(currentStatus, targetStatus)) {
+                    return new ConvergenceTxResult(CallbackHandlingResult.ALREADY_PROCESSED, null);
+                }
+                PaymentEvent event = PaymentEvent.builder()
+                        .payment(payment)
+                        .provider(outcome.provider())
+                        .eventSource(outcome.source() != null ? outcome.source() : PaymentEventSource.IPN)
+                        .dedupeKey(outcome.dedupeKey())
+                        .eventType(targetStatus.name())
+                        .rawPayload(writePayload(outcome.rawPayload()))
+                        .signatureValid(true)
+                        .processingStatus(PaymentEventStatus.FAILED)
+                        .errorMessage("Payment result conflict: stored=" + currentStatus + ", incoming=" + targetStatus)
+                        .receivedAt(LocalDateTime.now())
+                        .build();
+                paymentEventRepository.saveAndFlush(event);
+
+                auditLogService.logInvestigativeFailure(
+                        AuditAction.PAYMENT_RESULT_CONFLICT,
+                        "PAYMENT",
+                        payment.getId().toString(),
+                        Map.of(
+                                "stored_status", currentStatus.name(),
+                                "incoming_result", targetStatus.name(),
+                                "payment_event_id", safeEventId(event)));
+
+                return new ConvergenceTxResult(CallbackHandlingResult.CONFLICTING_RESULT, null);
+            }
+
+            if (outcome.providerTxnId() != null && !outcome.providerTxnId().isBlank()) {
+                payment.setProviderTransactionId(outcome.providerTxnId());
+            }
+            if (outcome.source() == PaymentEventSource.IPN) {
+                payment.setWebhookPayload(writePayload(outcome.rawPayload()));
+                payment.setWebhookReceivedAt(LocalDateTime.now());
+                payment.setWebhookSignatureValid(true);
+            } else {
+                payment.setProviderPayload(writePayload(outcome.rawPayload()));
+            }
+
+            if (targetStatus == PaymentStatus.PENDING) {
+                payment.setNextReconcileAt(nextReconcileAt());
+                paymentRepository.saveAndFlush(payment);
+                return new ConvergenceTxResult(CallbackHandlingResult.PROCESSED, null);
+            }
+
+            if (targetStatus == PaymentStatus.FAILED || targetStatus == PaymentStatus.CANCELLED) {
+                payment.setStatus(targetStatus);
+                payment.setFailureCode(outcome.failureCode());
+                String failureReason = outcome.failureMessage() != null ? outcome.failureMessage()
+                        : (outcome.failureCode() != null ? "ResultCode=" + outcome.failureCode() : "Payment rejected by provider");
+                payment.setFailureReason(failureReason);
+                payment.setNextReconcileAt(null);
+                Payment savedPayment = paymentRepository.saveAndFlush(payment);
+
+                PaymentEvent event = PaymentEvent.builder()
+                        .payment(savedPayment)
+                        .provider(outcome.provider())
+                        .eventSource(outcome.source() != null ? outcome.source() : PaymentEventSource.IPN)
+                        .dedupeKey(outcome.dedupeKey())
+                        .eventType(targetStatus.name())
+                        .rawPayload(writePayload(outcome.rawPayload()))
+                        .signatureValid(true)
+                        .processingStatus(PaymentEventStatus.PROCESSED)
+                        .receivedAt(LocalDateTime.now())
+                        .processedAt(LocalDateTime.now())
+                        .build();
+                paymentEventRepository.saveAndFlush(event);
+
+                auditLogService.logBusinessSuccess(
+                        AuditAction.FAIL_PAYMENT,
+                        "PAYMENT",
+                        savedPayment.getId().toString(),
+                        Map.of(
+                                "new_status", targetStatus.name(),
+                                "failure_code", outcome.failureCode() != null ? outcome.failureCode() : "",
+                                "source", outcome.source().name()));
+
+                eventPublisher.publishEvent(completedEvent(savedPayment));
+                return new ConvergenceTxResult(CallbackHandlingResult.PROCESSED, null);
+            }
+
+            // SUCCESS / SUCCEEDED
+            Order order = orderRepository.findByIdForUpdate(payment.getOrder().getId()).orElseThrow();
+            boolean holdActive = order.getStatus() == OrderStatus.HELD
+                    && order.getHoldExpiresAt() != null
+                    && LocalDateTime.now().isBefore(order.getHoldExpiresAt());
+
+            payment.setStatus(targetStatus == PaymentStatus.SUCCEEDED ? PaymentStatus.SUCCEEDED : PaymentStatus.SUCCESS);
+            LocalDateTime paidAt = LocalDateTime.now();
+            payment.setPaidAt(paidAt);
+            payment.setNextReconcileAt(null);
+
+            UUID refundId = null;
+
+            if (holdActive) {
+                orderInventoryService.settlePaidOrder(order.getId(), paidAt);
+                Payment savedPayment = paymentRepository.saveAndFlush(payment);
+
+                PaymentEvent event = PaymentEvent.builder()
+                        .payment(savedPayment)
+                        .provider(outcome.provider())
+                        .eventSource(outcome.source() != null ? outcome.source() : PaymentEventSource.IPN)
+                        .dedupeKey(outcome.dedupeKey())
+                        .eventType("PAYMENT_SUCCESS")
+                        .rawPayload(writePayload(outcome.rawPayload()))
+                        .signatureValid(true)
+                        .processingStatus(PaymentEventStatus.PROCESSED)
+                        .receivedAt(LocalDateTime.now())
+                        .processedAt(LocalDateTime.now())
+                        .build();
+                paymentEventRepository.saveAndFlush(event);
+
+                auditLogService.logBusinessSuccess(
+                        AuditAction.COMPLETE_PAYMENT,
+                        "PAYMENT",
+                        savedPayment.getId().toString(),
+                        Map.of(
+                                "order_id", order.getId().toString(),
+                                "provider_txn_id", outcome.providerTxnId() != null ? outcome.providerTxnId() : "",
+                                "source", outcome.source().name(),
+                                "payment_event_id", safeEventId(event)));
+
+                ticketIssuer.issueTickets(completedEvent(savedPayment));
+            } else {
+                payment.setFailureCode("LATE_PAYMENT_REFUND_INITIATED");
+                payment.setFailureMessage("Thanh toán thành công sau khi hết hạn giữ chỗ. Hệ thống tự động hoàn tiền.");
+                payment.setRefundRequired(true);
+                Payment savedPayment = paymentRepository.saveAndFlush(payment);
+
+                Refund refund = refundService.createRefund(
+                        savedPayment,
+                        savedPayment.getAmount(),
+                        "Late payment after hold expiry",
+                        "LATE_REFUND_" + savedPayment.getMerchantTxnRef(),
+                        SYSTEM_ACTOR_UUID);
+                refundId = refund != null ? refund.getId() : null;
+
+                PaymentEvent event = PaymentEvent.builder()
+                        .payment(savedPayment)
+                        .provider(outcome.provider())
+                        .eventSource(outcome.source() != null ? outcome.source() : PaymentEventSource.IPN)
+                        .dedupeKey(outcome.dedupeKey())
+                        .eventType("PAYMENT_SUCCESS")
+                        .rawPayload(writePayload(outcome.rawPayload()))
+                        .signatureValid(true)
+                        .processingStatus(PaymentEventStatus.PROCESSED)
+                        .receivedAt(LocalDateTime.now())
+                        .processedAt(LocalDateTime.now())
+                        .build();
+                paymentEventRepository.saveAndFlush(event);
+
+                auditLogService.logBusinessSuccess(
+                        AuditAction.RECORD_LATE_PAYMENT,
+                        "PAYMENT",
+                        savedPayment.getId().toString(),
+                        Map.of(
+                                "order_id", order.getId().toString(),
+                                "hold_expires_at", order.getHoldExpiresAt() != null ? order.getHoldExpiresAt().toString() : "",
+                                "paid_at", paidAt.toString(),
+                                "payment_event_id", safeEventId(event)));
+            }
+
+            return new ConvergenceTxResult(CallbackHandlingResult.PROCESSED, refundId);
+        });
+
+        if (txResult != null && txResult.refundIdToExecute() != null) {
+            try {
+                refundService.processRefund(txResult.refundIdToExecute());
+            } catch (Exception ex) {
+                log.error("Immediate refund processing failed for refund {}: {}", txResult.refundIdToExecute(), ex.getMessage());
             }
         }
-        return result;
+
+        return txResult != null ? txResult.result() : CallbackHandlingResult.PROCESSED;
+    }
+
+    private boolean isTerminalStatus(PaymentStatus status) {
+        return status == PaymentStatus.SUCCESS || status == PaymentStatus.SUCCEEDED
+                || status == PaymentStatus.FAILED || status == PaymentStatus.CANCELLED
+                || status == PaymentStatus.EXPIRED;
+    }
+
+    private boolean isSameTerminalStatus(PaymentStatus current, PaymentStatus target) {
+        if ((current == PaymentStatus.SUCCESS || current == PaymentStatus.SUCCEEDED)
+                && (target == PaymentStatus.SUCCESS || target == PaymentStatus.SUCCEEDED)) {
+            return true;
+        }
+        return current == target;
+    }
+
+    private Payment findPaymentOrNull(String reference) {
+        if (reference == null || reference.isBlank()) {
+            return null;
+        }
+        Optional<Payment> payment = paymentRepository.findByMerchantTxnRef(reference);
+        if (payment.isPresent()) {
+            return payment.get();
+        }
+        try {
+            UUID id = UUID.fromString(reference);
+            return paymentRepository.findById(id).orElse(null);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private Optional<Payment> findPaymentForUpdate(String reference) {
+        if (reference == null || reference.isBlank()) {
+            return Optional.empty();
+        }
+        Optional<Payment> payment = paymentRepository.findByMerchantTxnRefForUpdate(reference);
+        if (payment.isPresent()) {
+            return payment;
+        }
+        try {
+            UUID id = UUID.fromString(reference);
+            return paymentRepository.findByIdForUpdate(id);
+        } catch (IllegalArgumentException ignored) {
+            return Optional.empty();
+        }
     }
 
     private CreatePaymentResponse createNewPayment(User currentUser, String idempotencyKey,
             CreatePaymentRequest request, String clientIp) {
         PaymentGatewayStrategy gateway = resolveGateway(request.getProvider());
 
-        // VNPay
         if (request.getProvider() == PaymentProvider.VNPAY) {
             CreatePaymentResponse response = transactionTemplate.execute(status -> {
                 Payment payment = initializePayment(currentUser, idempotencyKey, request);
@@ -135,7 +516,6 @@ public class PaymentServiceImpl implements PaymentService {
             }
             return response;
         } else {
-        // MOMO
             Payment payment = transactionTemplate.execute(status -> initializePayment(currentUser, idempotencyKey, request));
             if (payment == null) {
                 throw new IllegalStateException("Payment initialization transaction returned no payment");
@@ -167,27 +547,40 @@ public class PaymentServiceImpl implements PaymentService {
         if (order.getHoldExpiresAt() == null || !LocalDateTime.now().isBefore(order.getHoldExpiresAt())) {
             throw new AppException(HttpStatus.CONFLICT, "ORDER_HOLD_EXPIRED", "Order hold has expired");
         }
-        if (paymentRepository.existsByOrderIdAndStatus(order.getId(), PaymentStatus.PENDING)) {
+        if (paymentRepository.existsByOrderIdAndStatus(order.getId(), PaymentStatus.PENDING)
+                || paymentRepository.existsByOrderIdAndStatus(order.getId(), PaymentStatus.CREATING)) {
             throw new AppException(HttpStatus.CONFLICT, "PAYMENT_IN_PROGRESS",
                     "Order already has a payment in progress");
         }
-        if (paymentRepository.existsByOrderIdAndStatus(order.getId(), PaymentStatus.CREATING)) {
-            throw new AppException(HttpStatus.CONFLICT, "PAYMENT_IN_PROGRESS",
-                    "Order already has a payment in progress");
-        }
-        if (paymentRepository.existsByOrderIdAndStatus(order.getId(), PaymentStatus.SUCCEEDED)) {
+        if (paymentRepository.existsByOrderIdAndStatus(order.getId(), PaymentStatus.SUCCESS)
+                || paymentRepository.existsByOrderIdAndStatus(order.getId(), PaymentStatus.SUCCEEDED)) {
             throw new AppException(HttpStatus.CONFLICT, "ORDER_ALREADY_PAID", "Order has already been paid");
         }
 
-        return paymentRepository.saveAndFlush(Payment.builder()
+        String merchantTxnRef = "TBX_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+
+        Payment payment = paymentRepository.saveAndFlush(Payment.builder()
                 .order(order)
                 .provider(request.getProvider())
+                .merchantTxnRef(merchantTxnRef)
                 .idempotencyKey(idempotencyKey)
                 .amount(order.getTotalAmount())
                 .currency(order.getCurrency())
                 .status(request.getProvider() == PaymentProvider.MOMO ? PaymentStatus.CREATING : PaymentStatus.PENDING)
                 .nextReconcileAt(request.getProvider() == PaymentProvider.MOMO ? nextReconcileAt() : null)
                 .build());
+
+        auditLogService.logBusinessSuccess(
+                AuditAction.CREATE_PAYMENT,
+                "PAYMENT",
+                payment.getId().toString(),
+                Map.of(
+                        "order_id", order.getId().toString(),
+                        "provider", payment.getProvider().name(),
+                        "merchant_txn_ref", payment.getMerchantTxnRef(),
+                        "amount", payment.getAmount().toString()));
+
+        return payment;
     }
 
     private CreatePaymentResponse saveCheckoutUrl(UUID paymentId, String checkoutUrl) {
@@ -252,92 +645,6 @@ public class PaymentServiceImpl implements PaymentService {
                         "PAYMENT_PROVIDER_UNAVAILABLE", "Payment provider is not available"));
     }
 
-    private CallbackHandlingResult applyCallback(UUID paymentId, PaymentProvider provider, GatewayCallback callback) {
-        return applyVerifiedOutcome(paymentId, provider, callback, true);
-    }
-
-    private CallbackHandlingResult applyVerifiedOutcome(UUID paymentId, PaymentProvider provider,
-            GatewayCallback callback, boolean fromIpn) {
-        Payment payment = paymentRepository.findByIdForUpdate(paymentId)
-                .orElse(null);
-        if (payment == null || payment.getProvider() != provider) {
-            return CallbackHandlingResult.PAYMENT_NOT_FOUND;
-        }
-        if (callback.amount().isEmpty() || payment.getAmount().compareTo(callback.amount().orElseThrow()) != 0) {
-            return CallbackHandlingResult.AMOUNT_MISMATCH;
-        }
-
-        PaymentStatus targetStatus = callback.targetStatus()
-                .orElseThrow(() -> new IllegalStateException("Verified callback has no target payment status"));
-        if (payment.getProviderTransactionId() != null && callback.providerTransactionId() != null
-                && !payment.getProviderTransactionId().equals(callback.providerTransactionId())) {
-            log.error("Conflicting provider transaction ID for payment {}", paymentId);
-            return CallbackHandlingResult.CONFLICTING_RESULT;
-        }
-        if (payment.getStatus() != PaymentStatus.PENDING && payment.getStatus() != PaymentStatus.CREATING) {
-            if (payment.getStatus() != targetStatus && targetStatus != PaymentStatus.PENDING) {
-                log.error("Conflicting {} result for payment {}: stored={}, incoming={}",
-                        fromIpn ? "IPN" : "query", paymentId, payment.getStatus(), targetStatus);
-                return CallbackHandlingResult.CONFLICTING_RESULT;
-            }
-            return CallbackHandlingResult.ALREADY_PROCESSED;
-        }
-
-        if (fromIpn) {
-            payment.setWebhookPayload(writePayload(callback.sanitizedPayload()));
-            payment.setWebhookReceivedAt(LocalDateTime.now());
-            payment.setWebhookSignatureValid(true);
-        } else {
-            payment.setProviderPayload(writePayload(callback.sanitizedPayload()));
-        }
-        if (callback.providerTransactionId() != null && !callback.providerTransactionId().isBlank()) {
-            payment.setProviderTransactionId(callback.providerTransactionId());
-        }
-
-        if (targetStatus == PaymentStatus.PENDING) {
-            payment.setNextReconcileAt(nextReconcileAt());
-            paymentRepository.saveAndFlush(payment);
-            return CallbackHandlingResult.PROCESSED;
-        }
-
-        boolean issueTickets = false;
-        if (targetStatus == PaymentStatus.SUCCEEDED) {
-            Order order = orderRepository.findByIdForUpdate(payment.getOrder().getId()).orElseThrow();
-            issueTickets = payment.getStatus() == PaymentStatus.PENDING && isHoldActive(order);
-            payment.setStatus(PaymentStatus.SUCCEEDED);
-            LocalDateTime paidAt = LocalDateTime.now();
-            payment.setPaidAt(paidAt);
-            if (issueTickets) {
-                orderInventoryService.settlePaidOrder(order.getId(), paidAt);
-            } else {
-                payment.setRefundRequired(true);
-                payment.setFailureReason("REFUND_REQUIRED: paid after hold expiry or before checkout URL was available");
-                log.warn("Payment {} requires manual refund", paymentId);
-            }
-        } else if (targetStatus == PaymentStatus.FAILED || targetStatus == PaymentStatus.CANCELLED) {
-            payment.setStatus(targetStatus);
-            payment.setFailureReason(callback.failureReason().orElse("Payment provider rejected payment"));
-        }
-        payment.setNextReconcileAt(null);
-
-        Payment savedPayment = paymentRepository.saveAndFlush(payment);
-        if (issueTickets) {
-            PaymentCompletedEvent event = completedEvent(savedPayment);
-            ticketIssuer.issueTickets(event);
-        } else if (targetStatus == PaymentStatus.FAILED || targetStatus == PaymentStatus.CANCELLED) {
-            eventPublisher.publishEvent(new PaymentCompletedEvent(
-                    savedPayment.getId(),
-                    savedPayment.getOrder().getId(),
-                    savedPayment.getOrder().getUser().getId(),
-                    savedPayment.getProvider(),
-                    savedPayment.getStatus(),
-                    savedPayment.getAmount(),
-                    savedPayment.getCurrency(),
-                    savedPayment.getProviderTransactionId()));
-        }
-        return CallbackHandlingResult.PROCESSED;
-    }
-
     private PaymentCompletedEvent completedEvent(Payment payment) {
         return new PaymentCompletedEvent(
                 payment.getId(), payment.getOrder().getId(), payment.getOrder().getUser().getId(),
@@ -384,11 +691,21 @@ public class PaymentServiceImpl implements PaymentService {
                     || result.amount() == null || payment.getAmount().compareTo(result.amount()) != 0) {
                 throw new IllegalStateException("Gateway query result does not match payment " + paymentId);
             }
-            GatewayCallback callback = new GatewayCallback(
-                    true, Optional.of(paymentId), Optional.of(result.amount()), result.providerTransactionId(),
-                    Optional.of(result.status()), Optional.of("Provider query resultCode=" + result.resultCode()),
-                    Map.of("source", "query", "resultCode", result.resultCode()));
-            transactionTemplate.execute(status -> applyVerifiedOutcome(paymentId, payment.getProvider(), callback, false));
+            PaymentOutcome outcome = PaymentOutcome.builder()
+                    .provider(payment.getProvider())
+                    .source(PaymentEventSource.QUERY_API)
+                    .dedupeKey(result.providerTransactionId() != null
+                            ? result.providerTransactionId() + "_" + result.status()
+                            : paymentId + "_QUERY")
+                    .merchantTxnRef(payment.getMerchantTxnRef() != null ? payment.getMerchantTxnRef() : paymentId.toString())
+                    .providerTxnId(result.providerTransactionId())
+                    .targetStatus(result.status())
+                    .amount(result.amount())
+                    .signatureValid(true)
+                    .failureCode(result.resultCode())
+                    .rawPayload(Map.of("source", "query", "resultCode", result.resultCode() != null ? result.resultCode() : ""))
+                    .build();
+            processPaymentResult(outcome);
         } catch (MomoGateway.CreateRejectedException exception) {
             transactionTemplate.execute(status -> failCreate(paymentId, exception.getMessage()));
         } catch (RuntimeException exception) {
@@ -404,11 +721,17 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElseThrow(() -> new IllegalStateException("No query gateway for provider " + provider));
     }
 
-    private String writePayload(Map<String, String> parameters) {
+    private String writePayload(Object payload) {
+        if (payload == null) {
+            return "{}";
+        }
+        if (payload instanceof String str) {
+            return str;
+        }
         try {
-            return objectMapper.writeValueAsString(parameters);
+            return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Cannot serialize payment callback payload", exception);
+            return "{}";
         }
     }
 
@@ -448,5 +771,9 @@ public class PaymentServiceImpl implements PaymentService {
 
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private String safeEventId(PaymentEvent event) {
+        return event != null && event.getId() != null ? event.getId().toString() : "";
     }
 }
