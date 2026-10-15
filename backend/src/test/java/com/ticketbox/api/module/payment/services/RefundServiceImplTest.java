@@ -295,4 +295,27 @@ class RefundServiceImplTest {
         assertEquals(RefundStatus.FAILED, response.status());
         assertEquals("MOMO_REF_FAILED_001", response.providerRefundId());
     }
+
+    @Test
+    @DisplayName("processRefund when already claimed or in processing status skips gateway invocation")
+    void testProcessRefund_whenAlreadyClaimed_skipsGateway() {
+        Refund refund = Refund.builder()
+                .id(refundId)
+                .payment(testPayment)
+                .amount(new BigDecimal("250000.00"))
+                .currency("VND")
+                .idempotencyKey("LATE_REFUND_TBX_REF_123456")
+                .status(RefundStatus.PROCESSING)
+                .build();
+
+        when(refundRepository.updateStatusIfExpected(refundId, RefundStatus.REQUESTED, RefundStatus.PROCESSING))
+                .thenReturn(0);
+        when(refundRepository.findWithPaymentById(refundId)).thenReturn(Optional.of(refund));
+
+        RefundResponse response = refundService.processRefund(refundId);
+
+        assertEquals(RefundStatus.PROCESSING, response.status());
+        verify(momoRefundGateway, never()).refund(any());
+        verify(vnpayRefundGateway, never()).refund(any());
+    }
 }

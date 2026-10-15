@@ -163,9 +163,17 @@ public class VnpayRefundGateway implements PaymentRefundGateway {
         Map<String, String> response = new HashMap<>();
         rawResponse.forEach((key, value) -> response.put(key, value == null ? "" : value.toString()));
 
-        if (!validSignature(response)) {
-            log.error("VNPay refund signature mismatch. Response: {}", response);
+        String responseSecureHash = response.get("vnp_SecureHash");
+        if (responseSecureHash != null && !responseSecureHash.isBlank()) {
+            if (!validSignature(response)) {
+                log.error("VNPay refund signature mismatch. Response: {}", response);
+                throw new IllegalStateException("VNPay refund response has invalid checksum");
+            }
+        } else if ("00".equals(response.get("vnp_ResponseCode"))) {
+            log.error("VNPay refund success response missing secure hash. Response: {}", response);
             throw new IllegalStateException("VNPay refund response has invalid checksum");
+        } else {
+            log.warn("VNPay refund returned error response without secure hash: {}", response);
         }
 
         String responseCode = response.getOrDefault("vnp_ResponseCode", "");

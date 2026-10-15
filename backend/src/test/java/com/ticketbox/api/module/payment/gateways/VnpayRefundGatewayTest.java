@@ -137,6 +137,58 @@ class VnpayRefundGatewayTest {
         server.verify();
     }
 
+    @Test
+    void handlesUnsignedDuplicateRequestResponseAsProcessing() throws Exception {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        VnpayRefundGateway gateway = gateway(builder.build(), CircuitBreaker.ofDefaults("test-vnpay-dup"));
+
+        Map<String, String> responseMap = new HashMap<>();
+        responseMap.put("vnp_ResponseCode", "94");
+        responseMap.put("vnp_Message", "Request is duplicated");
+
+        server.expect(once(), requestTo(REFUND_URL))
+                .andRespond(withSuccess(objectMapper.writeValueAsString(responseMap), MediaType.APPLICATION_JSON));
+
+        RefundGatewayRequest request = RefundGatewayRequest.builder()
+                .refundId(REFUND_ID)
+                .merchantTxnRef(TXN_REF)
+                .amount(new BigDecimal("500000"))
+                .build();
+
+        RefundGatewayResult result = gateway.refund(request);
+
+        assertThat(result.status()).isEqualTo(RefundStatus.PROCESSING);
+        assertThat(result.responseCode()).isEqualTo("94");
+        assertThat(result.message()).isEqualTo("Request is duplicated");
+        server.verify();
+    }
+
+    @Test
+    void rejectsSuccessResponseWithoutSecureHash() throws Exception {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        VnpayRefundGateway gateway = gateway(builder.build(), CircuitBreaker.ofDefaults("test-vnpay-unsigned-success"));
+
+        Map<String, String> responseMap = new HashMap<>();
+        responseMap.put("vnp_ResponseCode", "00");
+        responseMap.put("vnp_Message", "Refund success");
+
+        server.expect(once(), requestTo(REFUND_URL))
+                .andRespond(withSuccess(objectMapper.writeValueAsString(responseMap), MediaType.APPLICATION_JSON));
+
+        RefundGatewayRequest request = RefundGatewayRequest.builder()
+                .refundId(REFUND_ID)
+                .merchantTxnRef(TXN_REF)
+                .amount(new BigDecimal("500000"))
+                .build();
+
+        assertThatThrownBy(() -> gateway.refund(request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("checksum");
+        server.verify();
+    }
+
     @ParameterizedTest
     @CsvSource({
             "91, '', PROCESSING, 91",

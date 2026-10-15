@@ -100,8 +100,8 @@ public class RefundServiceImpl implements RefundService {
                 .or(() -> refundRepository.findById(refundId))
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "REFUND_NOT_FOUND", "Refund not found"));
 
-        if (!Boolean.TRUE.equals(claimed) && refund.getStatus() != RefundStatus.PROCESSING) {
-            log.info("Refund {} is already in terminal/processing state: {}", refundId, refund.getStatus());
+        if (!Boolean.TRUE.equals(claimed)) {
+            log.info("Refund {} is already claimed or in terminal state: {}", refundId, refund.getStatus());
             return refundMapper.toResponse(refund);
         }
 

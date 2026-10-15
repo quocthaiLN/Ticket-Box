@@ -327,7 +327,7 @@
       - Bổ sung test `testProcessRefund_gatewayFailedWithProviderRefundId` trong [`RefundServiceImplTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/services/RefundServiceImplTest.java) (6/6 passed).
       - Bổ sung tests `skipsPaymentFailedEmailWhenUserNotFound` và `skipsTicketIssuedEmailWhenUserNotFound` trong [`NotificationConsumerTest.java`](backend/src/test/java/com/ticketbox/api/module/notification/consumer/NotificationConsumerTest.java) (5/5 passed).
       - Chạy toàn diện `./init.sh`: Backend đạt **282/282 passed** (0 failures, 0 errors, 2 skipped), Frontend build hoàn tất 100%.
-  - Commits: Sẵn sàng commit.
+  - Commits: `a2db0fb` - fix(payment): refine vnpay refund status mapping, persist provider refund id, and eliminate notification poison pill.
   - Files or artifacts updated:
     - `backend/src/main/java/com/ticketbox/api/module/notification/consumer/NotificationConsumer.java`
     - `backend/src/main/java/com/ticketbox/api/module/payment/gateways/VnpayRefundGateway.java`
@@ -337,4 +337,33 @@
     - `backend/src/test/java/com/ticketbox/api/module/payment/services/RefundServiceImplTest.java`
     - `PROGRESS.md`
   - Known risk or unresolved issue: Không có.
-  - Next best step: Sẵn sàng commit và chạy lại luồng kiểm thử thực tế.
+  - Next best step: Tiến hành test lại luồng thanh toán thực tế Late IPN trên VNPay Sandbox.
+
+- Session 010
+  - Goal: Khắc phục lỗi checksum không hợp lệ khi VNPay trả về phản hồi trùng lặp không có chữ ký (`vnp_ResponseCode=94`, `vnp_Message=Request is duplicated`) và ngăn chặn gọi trùng API hoàn tiền khi lệnh đã được claim.
+  - Completed:
+    - **Chẩn đoán nguyên nhân**:
+      - Khi nhận được Late IPN, cả hook after-commit và `RefundProcessingConsumer` (hoặc scheduler) cùng kích hoạt `processRefund`. Trong `RefundServiceImpl`, điều kiện kiểm tra claim `if (!Boolean.TRUE.equals(claimed) && refund.getStatus() != RefundStatus.PROCESSING)` do nghịch đảo logic đã cho phép thread thứ 2 tiếp tục gọi `gateway.refund` ngay cả khi refund đã ở trạng thái `PROCESSING`.
+      - Khi VNPay nhận lệnh hoàn tiền thứ 2 với cùng `vnp_RequestId`, VNPay trả về mã `94` ("Request is duplicated") mà không kèm theo trường chữ ký `vnp_SecureHash`.
+      - Trong `VnpayRefundGateway`, phương thức `validSignature` yêu cầu bắt buộc phải có `vnp_SecureHash`, dẫn đến việc ném `IllegalStateException("VNPay refund response has invalid checksum")`, làm gián đoạn consumer thay vì tiếp nhận mã `94` và giữ trạng thái `PROCESSING`.
+    - **Triển khai Backend**:
+      - Cập nhật [`VnpayRefundGateway.java`](backend/src/main/java/com/ticketbox/api/module/payment/gateways/VnpayRefundGateway.java):
+        - Chỉ yêu cầu bắt buộc và kiểm tra `vnp_SecureHash` khi phản hồi thành công (`vnp_ResponseCode == "00"`).
+        - Đối với phản hồi lỗi hoặc trùng lặp từ cổng (`vnp_ResponseCode != "00"`), nếu không có `vnp_SecureHash`, ghi log warning và tiếp tục chuyển sang `mapResponseCode` (xử lý mã `94` thành `RefundStatus.PROCESSING`).
+      - Cập nhật [`RefundServiceImpl.java`](backend/src/main/java/com/ticketbox/api/module/payment/services/RefundServiceImpl.java):
+        - Sửa điều kiện claim: nếu `claimed == false` (tức không chuyển được trạng thái `REQUESTED -> PROCESSING`), lập tức return early không gọi cổng thanh toán lần 2.
+    - **Unit Tests & Verification**:
+      - Thêm 2 unit tests trong [`VnpayRefundGatewayTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/gateways/VnpayRefundGatewayTest.java):
+        - `handlesUnsignedDuplicateRequestResponseAsProcessing`: Xác nhận phản hồi trùng lặp không chữ ký (mã 94) được xử lý thành `PROCESSING` mà không ném exception.
+        - `rejectsSuccessResponseWithoutSecureHash`: Xác nhận phản hồi thành công (mã 00) bắt buộc phải có chữ ký.
+      - Thêm unit test `testProcessRefund_whenAlreadyClaimed_skipsGateway` trong [`RefundServiceImplTest.java`](backend/src/test/java/com/ticketbox/api/module/payment/services/RefundServiceImplTest.java) xác nhận bỏ qua gọi gateway khi lệnh đã được claim.
+      - Chạy toàn diện `./init.sh`: Backend đạt **285/285 passed** (0 failures, 0 errors, 2 skipped), Frontend build hoàn tất 100%.
+  - Commits: Sẵn sàng commit.
+  - Files or artifacts updated:
+    - `backend/src/main/java/com/ticketbox/api/module/payment/gateways/VnpayRefundGateway.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/services/RefundServiceImpl.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/gateways/VnpayRefundGatewayTest.java`
+    - `backend/src/test/java/com/ticketbox/api/module/payment/services/RefundServiceImplTest.java`
+    - `PROGRESS.md`
+  - Known risk or unresolved issue: Không có.
+  - Next best step: Sẵn sàng commit và test thực tế.
