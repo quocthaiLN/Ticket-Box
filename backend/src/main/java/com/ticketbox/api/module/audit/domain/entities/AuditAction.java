@@ -24,6 +24,22 @@ public enum AuditAction {
     CREATE_ARTIST_BIO_JOB,
     READ_AUDIT_LOGS,
 
+    // --- Order / Inventory ---
+    HOLD_ORDER,
+    RELEASE_ORDER,          // order HELD -> EXPIRED, hoàn kho; nguồn duy nhất: OrderExpirationScheduler
+
+    // --- Payment ---
+    CREATE_PAYMENT,
+    COMPLETE_PAYMENT,       // payment SUCCESS + order CONFIRMED + phát vé
+    FAIL_PAYMENT,           // metadata.new_status: FAILED | CANCELLED
+    EXPIRE_PAYMENT,
+    RECORD_LATE_PAYMENT,    // payment SUCCESS sau khi hold hết hạn, không phát vé
+
+    // --- Refund ---
+    REQUEST_REFUND,
+    COMPLETE_REFUND,
+    FAIL_REFUND,
+
     // =========================================================================
     // NHÓM 2: SỰ KIỆN THẤT BẠI CẦN ĐIỀU TRA (Propagation.REQUIRES_NEW)
     // Ghi trong transaction riêng biệt để tồn tại độc lập kể cả khi nghiệp vụ cha rollback.
@@ -32,5 +48,9 @@ public enum AuditAction {
     // =========================================================================
     LOGIN_FAILED,
     ACCESS_DENIED,
-    SUSPICIOUS_REQUEST
+    SUSPICIOUS_REQUEST,
+
+    // --- Payment investigative ---
+    PAYMENT_WEBHOOK_REJECTED, // metadata.reason: INVALID_SIGNATURE | AMOUNT_MISMATCH | PAYMENT_NOT_FOUND
+    PAYMENT_RESULT_CONFLICT
 }

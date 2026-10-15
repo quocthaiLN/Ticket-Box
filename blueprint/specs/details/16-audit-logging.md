@@ -65,9 +65,25 @@ Toàn bộ các hành động kiểm toán được định danh tập trung b�
 | **Nhóm 1 (REQUIRED)** | `CREATE_USER` | Admin tạo tài khoản nội bộ | `USER` | ID user | Email (che), role, status ban đầu |
 | **Nhóm 1 (REQUIRED)** | `CREATE_ARTIST_BIO_JOB` | Upload và kích hoạt AI trích xuất bio | `ARTIST_BIO_JOB` | ID job | `concert_id`, filename đã upload |
 | **Nhóm 1 (REQUIRED)** | `READ_AUDIT_LOGS` | Admin truy vấn hoặc xem chi tiết audit trail | `AUDIT_LOG` | ID log / "LIST" | Filter parameters, pagination info |
+| **Nhóm 1 (REQUIRED)** | `HOLD_ORDER` | Khán giả giữ vé thành công, tạo order `HELD` | `ORDER` | ID order | Items (`ticket_type_id`, `quantity`), tổng tiền, `hold_expires_at` |
+| **Nhóm 1 (REQUIRED)** | `RELEASE_ORDER` | `OrderExpirationScheduler` chuyển order `HELD → EXPIRED`, hoàn kho và quota (nguồn nhả kho duy nhất) | `ORDER` | ID order | Items hoàn kho, `hold_expires_at` |
+| **Nhóm 1 (REQUIRED)** | `CREATE_PAYMENT` | Tạo lượt thanh toán (`INITIATED` / `PENDING`) | `PAYMENT` | ID payment | `order_id`, `provider`, `merchant_txn_ref`, `amount` |
+| **Nhóm 1 (REQUIRED)** | `COMPLETE_PAYMENT` | Payment `SUCCESS` + order `CONFIRMED` + settle kho + phát vé | `PAYMENT` | ID payment | `order_id`, `provider_txn_id`, `source` (IPN / QUERY_API), `payment_event_id` |
+| **Nhóm 1 (REQUIRED)** | `FAIL_PAYMENT` | Payment chuyển `FAILED` / `CANCELLED` (cổng từ chối, khách hủy, query báo không tồn tại) | `PAYMENT` | ID payment | `new_status`, `failure_code`, `source` |
+| **Nhóm 1 (REQUIRED)** | `EXPIRE_PAYMENT` | Worker đối soát chuyển payment `EXPIRED` (không đụng order/kho) | `PAYMENT` | ID payment | `order_id`, kết quả query |
+| **Nhóm 1 (REQUIRED)** | `RECORD_LATE_PAYMENT` | Tiền về sau khi hold hết hạn: payment `SUCCESS`, không phát vé | `PAYMENT` | ID payment | `order_id`, `hold_expires_at`, `paid_at`, `payment_event_id` |
+| **Nhóm 1 (REQUIRED)** | `REQUEST_REFUND` | Tạo lệnh hoàn tiền `REQUESTED` | `REFUND` | ID refund | `payment_id`, `amount`, `reason`, `idempotency_key` |
+| **Nhóm 1 (REQUIRED)** | `COMPLETE_REFUND` | Refund `SUCCESS` (payment giữ nguyên `SUCCESS`) | `REFUND` | ID refund | `payment_id`, `provider_refund_id`, `amount` |
+| **Nhóm 1 (REQUIRED)** | `FAIL_REFUND` | Refund `FAILED`, cần đối soát thủ công | `REFUND` | ID refund | `payment_id`, `failure_code` |
 | **Nhóm 2 (REQUIRES_NEW)** | `LOGIN_FAILED` | Đăng nhập thất bại (sai pass, tài khoản lock/pending) | `USER` | Email (masked) | Lý do (`BAD_CREDENTIALS`, `LOCKED`, `UNVERIFIED`) |
 | **Nhóm 2 (REQUIRES_NEW)** | `ACCESS_DENIED` | Truy cập bị từ chối do không đủ quyền (403) | `SECURITY` | Request URI | Role của caller, HTTP method, required roles |
 | **Nhóm 2 (REQUIRES_NEW)** | `SUSPICIOUS_REQUEST` | Phát hiện token giả mạo, bất thường bảo mật | `SECURITY` | IP Address | Mô tả hành vi nghi vấn |
+| **Nhóm 2 (REQUIRES_NEW)** | `PAYMENT_WEBHOOK_REJECTED` | IPN/Query bị từ chối: sai chữ ký, lệch số tiền, không tìm thấy payment | `PAYMENT` | ID payment hoặc `merchant_txn_ref` nhận được | `reason` (`INVALID_SIGNATURE`, `AMOUNT_MISMATCH`, `PAYMENT_NOT_FOUND`), `provider`, `payment_event_id` |
+| **Nhóm 2 (REQUIRES_NEW)** | `PAYMENT_RESULT_CONFLICT` | Kết quả cổng mâu thuẫn với kết quả đã ghi (không ghi đè) | `PAYMENT` | ID payment | `stored_status`, `incoming_result`, `payment_event_id` |
+
+> [!NOTE]
+> **Phân vai với `payment_events`:** `payment_events` lưu nguyên văn "cổng đã báo gì" (raw payload, chống trùng). `audit_logs` chỉ ghi "TicketBox đã thay đổi gì / ai làm" và cảnh báo bảo mật; metadata chỉ tham chiếu `payment_event_id`, **không** sao chép raw payload hay chữ ký.
+> **Không audit:** hold thất bại (hết vé, vượt `max_per_user`), IPN/query trùng, bước trung gian `INITIATED → PENDING` và refund `REQUESTED → PROCESSING`, URL đến muộn bị từ chối, ReturnUrl.
 
 ---
 

@@ -9,9 +9,10 @@
    - Trạng thái thanh toán (`PaymentStatus`: `INITIATED`, `PENDING`, `SUCCESS`, `FAILED`, `CANCELLED`, `EXPIRED`) phản ánh dòng tiền thực tế với cổng.
    - Trạng thái đơn hàng (`OrderStatus`: `HELD`, `CONFIRMED`, `CANCELLED`, `EXPIRED`) phản ánh quyền sở hữu vé của khán giả.
    - *Hệ quả:* "Tiền đã thu thành công" không đồng nghĩa "Vé đã phát hành". Khi tiền về muộn lúc vé đã hết hạn giữ chỗ, thanh toán vẫn được ghi nhận `SUCCESS` nhưng đơn hàng không phát vé và hệ thống tự động hoàn tiền.
+   - *Hoàn tiền không đổi trạng thái payment:* `payments.status` chỉ ghi nhận sự thật "đã thu tiền" và **giữ nguyên `SUCCESS`** sau khi hoàn tiền. Trạng thái hoàn tiền (kể cả hoàn từng phần) chỉ nằm ở bảng `refunds`; số tiền đã hoàn = tổng `refunds.amount` có `status = SUCCESS`. Giá trị `REFUNDED` không được dùng cho luồng mới.
 2. **Khóa chống trùng 3 tầng (3-Tier Deduplication & Idempotency):**
    - *Tầng 1 (API Client)*: Redis Idempotency Store + `Idempotency-Key` (UUID v4) + Request Fingerprint (SHA-256).
-   - *Tầng 2 (Sự kiện Cổng)*: Bảng `payment_events` với khóa duy nhất `UNIQUE (provider, dedupe_key)` chặn đứng mọi Webhook/IPN trùng lặp ngay từ tầng cơ sở dữ liệu.
+   - *Tầng 2 (Sự kiện Cổng)*: Bảng `payment_events` với khóa duy nhất `UNIQUE (provider, dedupe_key)` chặn đứng mọi Webhook/IPN trùng lặp ngay từ tầng cơ sở dữ liệu. Chỉ sự kiện **đã xác thực chữ ký** mới được chiếm `dedupe_key` thật (xem §4).
    - *Tầng 3 (Giao dịch & Hoàn tiền)*: Bảng `payments` với `merchant_txn_ref` (UNIQUE) và bảng `refunds` với `idempotency_key` (UNIQUE).
 3. **Điểm hội tụ xử lý duy nhất (Single Convergence Point):**
    - Mọi tín hiệu kết quả (IPN webhook, Query DR định kỳ, hoặc ReturnUrl query) đều được quy đổi thành cấu trúc chuẩn `PaymentOutcome` và chuyển qua một hàm xử lý duy nhất `processPaymentResult`.
@@ -114,7 +115,10 @@ erDiagram
   3. Đưa kết quả xác minh vào hàm hội tụ `processPaymentResult`:
      - Nếu cổng báo **SUCCESS**: Xử lý hoàn tất đơn hàng và phát hành vé bình thường (nếu hold còn hạn). `dedupe_key` được tính bằng `provider_txn_id + "_SUCCESS"` để nếu sau đó IPN thật có về cũng sẽ bị chặn trùng lặp.
      - Nếu cổng báo **FAILED / CANCELLED**: Cập nhật payment tương ứng.
-     - Nếu cổng báo **chưa thanh toán** và đơn hàng đã quá hạn `hold_expires_at`: Worker chuyển payment sang `EXPIRED`, nhả kho giữ vé.
+     - Nếu cổng báo **chưa thanh toán** và đơn hàng đã quá hạn `hold_expires_at`: Worker chỉ chuyển **payment** sang `EXPIRED`. Worker đối soát **không** đụng tới `orders` hay tồn kho.
+
+  > [!NOTE]
+  > **Nguồn nhả kho duy nhất là `OrderExpirationScheduler`.** Đơn quá hạn đã (hoặc sẽ) được scheduler này chuyển `EXPIRED` và hoàn `held_quantity`/`held_count`. Nếu worker đối soát cũng nhả kho, cùng một đơn có thể bị hoàn tồn kho hai lần và phát sinh hai bản ghi audit `RELEASE_ORDER`.
 
 ### Ca 4: IPN thành công đến sau khi thời hạn giữ vé đã hết hạn (Late IPN)
 - **Tình huống:** Cổng trừ tiền thành công của khách, nhưng IPN bị trễ nhiều phút và đến sau khi đơn hàng đã bị `OrderExpirationScheduler` nhả kho và chuyển sang `EXPIRED`. Ghế có thể đã bị người khác mua.
@@ -137,11 +141,22 @@ erDiagram
      - `status = 'REQUESTED'`
      - `reason = 'Late payment after hold expiry'`
      - `requested_by = SYSTEM_ACTOR_UUID`
-  8. Gọi trực tiếp `RefundGateway.refund(...)` sang cổng:
-     - **Nếu cổng xác nhận thành công**: Cập nhật `refunds.status = 'SUCCESS'`, `completed_at = now()`, lưu `provider_refund_id`.
-     - **Nếu cổng phản hồi đang xử lý hoặc timeout**: Cập nhật `refunds.status = 'PROCESSING'` để worker retry đối soát tiếp theo hoàn tất.
-     - **Nếu cổng từ chối**: Cập nhật `refunds.status = 'FAILED'`, bắn cảnh báo khẩn cho quản trị viên đối soát thủ công.
-  9. Đánh dấu `payment_events.processing_status = 'PROCESSED'` và trả mã thành công (VNPAY `00`, MoMo `204`) cho cổng.
+  8. Đánh dấu `payment_events.processing_status = 'PROCESSED'`, **commit Transaction 1** (payment `SUCCESS` + `refunds REQUESTED` + audit cùng commit), rồi trả mã thành công (VNPAY `00`, MoMo `204`) cho cổng. **Không gọi Refund API trong Transaction 1.**
+  9. **Sau commit**, gọi `RefundGateway.refund(...)` **ngoài** transaction đang khóa payment:
+     - Kích hoạt nhanh bằng hook after-commit; `RefundProcessingScheduler` quét `REQUESTED`/`PROCESSING` là lưới an toàn nếu app crash ngay sau commit.
+     - **Nhận việc (claim) trước khi gọi cổng:** `UPDATE refunds SET status = 'PROCESSING' WHERE id = :id AND status = 'REQUESTED'`. Chỉ tiến trình cập nhật được 1 dòng mới được gọi cổng → hook after-commit và scheduler không gọi hoàn tiền hai lần.
+     - Dùng `refunds.id` làm mã yêu cầu hoàn tiền gửi sang cổng để lần gửi lại được cổng nhận diện là cùng một lệnh. Với lệnh `PROCESSING` quá ngưỡng, scheduler **query trạng thái hoàn tiền trước**, chỉ gửi lại khi cổng xác nhận chưa nhận lệnh.
+     - Ghi kết quả trong **Transaction 2** riêng:
+       - **Cổng xác nhận thành công**: `refunds.status = 'SUCCESS'`, `completed_at = now()`, lưu `provider_refund_id`.
+       - **Cổng phản hồi đang xử lý hoặc timeout**: giữ `refunds.status = 'PROCESSING'` để scheduler đối soát tiếp.
+       - **Cổng từ chối**: `refunds.status = 'FAILED'`, bắn cảnh báo khẩn cho quản trị viên đối soát thủ công.
+
+> [!WARNING]
+> **Vì sao không gọi Refund API trong transaction đang khóa payment?**
+> 1. Nếu cổng đã hoàn tiền xong nhưng transaction sau đó rollback (lỗi DB, lỗi ghi audit), tiền đã trả cho khách mà DB và audit không có dấu vết — một "thay đổi vô hình" ngược chiều.
+> 2. Lời gọi HTTP ra ngoài kéo dài thời gian giữ `SELECT ... FOR UPDATE` và có thể làm IPN vượt hạn phản hồi 15 giây của MoMo, khiến cổng gửi lại IPN.
+>
+> Tách 2 transaction: nếu Transaction 2 lỗi sau khi cổng đã hoàn tiền, lệnh vẫn ở `PROCESSING` và scheduler query lại cổng để hội tụ đúng kết quả.
 
 ---
 
@@ -151,26 +166,36 @@ Mọi luồng tiếp nhận kết quả (IPN webhook, kết quả truy vấn Que
 
 ~~~mermaid
 flowchart TD
-    A[Nhận tín hiệu: IPN / Query API / ReturnUrl] --> B[Ghi nhận vào payment_events: status = RECEIVED]
-    B -->|Vi phạm UNIQUE provider + dedupe_key| C[Sự kiện trùng: ACK idempotency ngay, DỪNG]
-    B -->|Thành công| D{Kiểm tra chữ ký số?}
-    D -->|Sai| E[Cập nhật signature_valid = FALSE, status = IGNORED; Báo lỗi cổng]
-    D -->|Đúng| F[Khóa bi quan payment: SELECT ... FOR UPDATE]
+    A[Nhận tín hiệu: IPN / Query API / ReturnUrl] --> D{Kiểm tra chữ ký số?}
+    D -->|Sai| E["Lưu payment_events: signature_valid = FALSE, IGNORED, dedupe_key riêng INVALID_uuid; Audit PAYMENT_WEBHOOK_REJECTED; Báo lỗi cổng"]
+    D -->|Đúng| B["Mở transaction; ghi payment_events RECEIVED với dedupe_key thật"]
+    B -->|Vi phạm UNIQUE provider + dedupe_key| C[Sự kiện trùng đã có kết quả PROCESSED/FAILED: ACK idempotency, DỪNG]
+    B -->|Thành công| F[Khóa bi quan payment: SELECT ... FOR UPDATE]
     F --> G{Kiểm tra số tiền amount?}
-    G -->|Không khớp| H[payment_events: FAILED; Báo lỗi lệch tiền]
+    G -->|Không khớp| H[payment_events: FAILED; Audit PAYMENT_WEBHOOK_REJECTED; Báo lỗi lệch tiền]
     G -->|Khớp| I{Trạng thái hiện tại của payment?}
-    I -->|Đã SUCCESS / Terminal| J[Đã xử lý trước đó: ACK idempotency trùng]
+    I -->|Terminal, cùng kết quả| J[Đã xử lý trước đó: ACK idempotency trùng]
+    I -->|Terminal, kết quả mâu thuẫn| S[Không ghi đè; Audit PAYMENT_RESULT_CONFLICT; Báo lỗi xung đột]
     I -->|INITIATED hoặc PENDING| K{Kết quả giao dịch?}
     K -->|FAILED / CANCELLED| L[Cập nhật payment FAILED/CANCELLED; Order giữ HELD nếu còn hạn]
     K -->|SUCCESS| M{Hold của order còn hạn?}
     M -->|Còn hạn| N[payment: SUCCESS; order: CONFIRMED; Settle kho & Phát hành vé]
-    M -->|Hết hạn| O[payment: SUCCESS; order: EXPIRED; Tạo refunds & Gọi Gateway Refund API]
+    M -->|Hết hạn| O["payment: SUCCESS; order giữ EXPIRED; Tạo refunds REQUESTED (KHÔNG gọi cổng)"]
     L --> P[payment_events: PROCESSED]
     N --> P
     O --> P
     P --> Q[Commit Database Transaction]
     Q --> R[Trả phản hồi ACK cho cổng: VNPAY 00, MoMo 204]
+    Q -.->|Chỉ khi có refund mới| T[Sau commit: gọi Refund API ngoài transaction - xem Ca 4]
 ~~~
+
+> [!IMPORTANT]
+> **Vì sao kiểm tra chữ ký TRƯỚC khi chiếm `dedupe_key`?**
+> Nếu INSERT `payment_events` với `dedupe_key` thật trước khi verify, kẻ tấn công biết `provider_txn_id` có thể gửi một IPN giả (sai chữ ký) để chiếm trước khóa `provider_txn_id + "_SUCCESS"`. Khi IPN thật đến, nó bị coi là trùng và được ACK mà không xử lý → khách mất tiền nhưng không có vé.
+> Quy tắc:
+> 1. Chỉ sự kiện **chữ ký hợp lệ** mới được dùng `dedupe_key` thật.
+> 2. Sự kiện sai chữ ký vẫn được lưu để điều tra nhưng với `dedupe_key = "INVALID_" + UUID ngẫu nhiên`, không bao giờ va chạm với khóa thật. Endpoint IPN cần rate limit để chặn spam bản ghi rác.
+> 3. Việc INSERT `payment_events` (dedupe_key thật) và xử lý nghiệp vụ nằm trong **cùng một transaction**. Nếu xử lý lỗi và rollback, khóa dedupe cũng được giải phóng để IPN gửi lại / Query bù có thể xử lý; nhờ vậy "vi phạm UNIQUE" luôn đồng nghĩa với "đã xử lý xong", ACK trùng là an toàn.
 
 ---
 

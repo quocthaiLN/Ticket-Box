@@ -36,7 +36,7 @@
 | | `FAILED` | Giao dịch bị từ chối hoặc thất bại |
 | | `CANCELLED` | Người dùng chủ động hủy giao dịch trên trang cổng |
 | | `EXPIRED` | Phiên thanh toán hết hạn mà không nhận được tiền |
-| | `REFUNDED` | Giao dịch đã được hoàn trả lại tiền cho người dùng |
+| | `REFUNDED` *(không dùng cho luồng mới)* | Giữ trong CHECK để tương thích code cũ. Sau khi hoàn tiền, payment **giữ nguyên `SUCCESS`**; trạng thái hoàn tiền nằm ở [`refunds`](refunds.md) |
 
 **Quan hệ**
 
