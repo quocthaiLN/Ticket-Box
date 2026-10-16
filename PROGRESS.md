@@ -105,3 +105,30 @@
   - Known risk or unresolved issue: Không có.
   - Next best step: Khởi động backend với cấu hình mới và chạy k6 `./k6/performance-testing/run-tests.sh e2e` để đo đạc và so sánh kết quả.
 
+- Session 003
+  - Goal: Khắc phục lỗi `Invalid JWT signature: JWT signature does not match locally computed signature` do secret key mismatch giữa generator và backend `.env`.
+  - Completed:
+    - **Chẩn đoán nguyên nhân**:
+      - Backend khi chạy nạp cấu hình từ `backend/.env` qua `spring.config.import: - file:.env[.properties]`, sử dụng `JWT_ACCESS_TOKEN=9fd9c265e56bf6ba2ac6f62f53a189eba9457b7bf3a0010a31649df22e0b942a`.
+      - `generate-data.js` trước đó chỉ đọc `process.env.JWT_ACCESS_TOKEN` mà không đọc `backend/.env`, rơi vào fallback `test5709...`. Đồng thời chuỗi `test5709...` không phải hex hợp lệ nên `Buffer.from(..., 'hex')` trả về rỗng (0 bytes), tạo ra token có chữ ký không khớp.
+    - **Khắc phục & Cải tiến**:
+      - Cập nhật [`generate-data.js`](k6/performance-testing/data/generate-data.js): Tự động nạp secret từ `backend/.env` nếu có; bổ sung hàm `getSecretKeyBytes` mô phỏng chính xác thuật toán phân giải key của `JwtUtils.java` (Hex -> Base64 -> UTF-8).
+      - Tái sinh toàn bộ 10.000 pre-signed tokens hợp lệ trong [`users.json`](k6/performance-testing/data/users.json).
+      - Bổ sung unit test `testValidateTokenWithHexSecret` trong [`JwtUtilsTest.java`](backend/src/test/java/com/ticketbox/api/infrastructure/security/JwtUtilsTest.java) xác nhận backend giải mã thành công token được sinh ra từ Node.js (286/286 passed).
+      - Cập nhật [`flash-sale-e2e.js`](k6/performance-testing/scenarios/flash-sale-e2e.js), [`order-isolated.js`](k6/performance-testing/scenarios/order-isolated.js), [`catalog-isolated.js`](k6/performance-testing/scenarios/catalog-isolated.js): Thêm cơ chế tự động re-authenticate gọi `/auth/login` nếu gặp phản hồi `HTTP 401 Unauthorized`.
+      - Cập nhật [`run-tests.sh`](k6/performance-testing/run-tests.sh): Tự động trích xuất và export `JWT_ACCESS_TOKEN` từ `backend/.env`.
+    - **Verification**:
+      - Chạy toàn diện `./init.sh`: Backend tests đạt **286/286 passed**, Frontend build hoàn tất 100%.
+  - Commits: Sẵn sàng commit.
+  - Files or artifacts updated:
+    - `backend/src/test/java/com/ticketbox/api/infrastructure/security/JwtUtilsTest.java`
+    - `k6/performance-testing/data/generate-data.js`
+    - `k6/performance-testing/data/users.json`
+    - `k6/performance-testing/run-tests.sh`
+    - `k6/performance-testing/scenarios/catalog-isolated.js`
+    - `k6/performance-testing/scenarios/order-isolated.js`
+    - `k6/performance-testing/scenarios/flash-sale-e2e.js`
+    - `PROGRESS.md`
+  - Known risk or unresolved issue: Không có.
+  - Next best step: Chạy lại k6 `./k6/performance-testing/run-tests.sh e2e`.
+

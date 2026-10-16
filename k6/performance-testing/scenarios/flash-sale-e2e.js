@@ -140,11 +140,25 @@ export default function () {
   });
 
   const holdStart = Date.now();
-  const holdRes = http.post(`${baseUrl}/orders`, orderPayload, {
+  let holdRes = http.post(`${baseUrl}/orders`, orderPayload, {
     headers: holdHeaders,
     tags: { name: 'POST /orders' },
   });
   orderHoldDuration.add(Date.now() - holdStart);
+
+  if (holdRes.status === 401) {
+    const freshToken = loginUser(baseUrl, user.email, user.password);
+    if (freshToken) {
+      authHeaders.Authorization = `Bearer ${freshToken}`;
+      holdHeaders.Authorization = `Bearer ${freshToken}`;
+      const retryStart = Date.now();
+      holdRes = http.post(`${baseUrl}/orders`, orderPayload, {
+        headers: holdHeaders,
+        tags: { name: 'POST /orders' },
+      });
+      orderHoldDuration.add(Date.now() - retryStart);
+    }
+  }
 
   if (holdRes.status === 201) {
     ordersHeldSuccess.add(1);

@@ -115,13 +115,25 @@ export default function () {
     const user = users[(__VU - 1) % users.length];
     const token = user.token || loginUser(baseUrl, user.email, user.password);
     if (token) {
-      const authHeaders = Object.assign({}, headers, {
+      let authHeaders = Object.assign({}, headers, {
         Authorization: `Bearer ${token}`,
       });
-      const res = http.get(`${baseUrl}/concerts/${concertId}/quota`, {
+      let res = http.get(`${baseUrl}/concerts/${concertId}/quota`, {
         headers: authHeaders,
         tags: { name: 'GET /concerts/:id/quota' },
       });
+      if (res.status === 401) {
+        const freshToken = loginUser(baseUrl, user.email, user.password);
+        if (freshToken) {
+          authHeaders = Object.assign({}, headers, {
+            Authorization: `Bearer ${freshToken}`,
+          });
+          res = http.get(`${baseUrl}/concerts/${concertId}/quota`, {
+            headers: authHeaders,
+            tags: { name: 'GET /concerts/:id/quota' },
+          });
+        }
+      }
       catalogQuotaDuration.add(res.timings.duration);
       check(res, {
         'quota status 200': (r) => r.status === 200,

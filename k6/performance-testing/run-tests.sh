@@ -8,6 +8,12 @@ mkdir -p "${REPORTS_DIR}"
 BASE_URL="${BASE_URL:-http://localhost:8082}"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 
+# Automatically pick up backend/.env if present
+if [ -f "${SCRIPT_DIR}/../../backend/.env" ]; then
+    eval $(grep -E '^JWT_ACCESS_TOKEN=' "${SCRIPT_DIR}/../../backend/.env" | tr -d '\r')
+    export JWT_ACCESS_TOKEN
+fi
+
 echo "========================================================"
 echo " TicketBox K6 Performance & Load Testing Runner"
 echo " Target Base URL: ${BASE_URL}"

@@ -11,8 +11,44 @@ const USERS_JSON_PATH = path.join(__dirname, 'users.json');
 const SEED_SQL_PATH = path.join(__dirname, 'seed-users.sql');
 
 const crypto = require('crypto');
-const JWT_SECRET_HEX = process.env.JWT_ACCESS_TOKEN || 'test5709e9900945c4f72186cf92b6ae9ddb30eb3f3906ef92e4e3ffa2dc986f';
-const secretKey = Buffer.from(JWT_SECRET_HEX, 'hex');
+
+// Resolve JWT secret: 1) process.env, 2) backend/.env, 3) fallback
+function resolveJwtSecret() {
+  if (process.env.JWT_ACCESS_TOKEN && process.env.JWT_ACCESS_TOKEN.trim()) {
+    return process.env.JWT_ACCESS_TOKEN.trim();
+  }
+  const rootDir = path.resolve(__dirname, '../../..');
+  const envPath = path.join(rootDir, 'backend', '.env');
+  if (fs.existsSync(envPath)) {
+    const content = fs.readFileSync(envPath, 'utf-8');
+    const match = content.match(/^JWT_ACCESS_TOKEN=(.+)$/m);
+    if (match && match[1].trim()) {
+      return match[1].trim();
+    }
+  }
+  return 'test5709e9900945c4f72186cf92b6ae9ddb30eb3f3906ef92e4e3ffa2dc986f';
+}
+
+function getSecretKeyBytes(secret) {
+  // 1. Matches java.util.HexFormat.of().parseHex(secret)
+  if (/^[0-9a-fA-F]+$/.test(secret) && secret.length % 2 === 0) {
+    try {
+      const hexBuf = Buffer.from(secret, 'hex');
+      if (hexBuf.length > 0) return hexBuf;
+    } catch (e) {}
+  }
+  // 2. Matches Decoders.BASE64.decode(secret)
+  try {
+    const b64Buf = Buffer.from(secret, 'base64');
+    if (b64Buf.length >= 32) return b64Buf;
+  } catch (e) {}
+  // 3. Fallback to UTF-8 bytes
+  return Buffer.from(secret, 'utf-8');
+}
+
+const resolvedSecret = resolveJwtSecret();
+const secretKey = getSecretKeyBytes(resolvedSecret);
+console.log(`Using JWT Secret (${secretKey.length} bytes derived from "${resolvedSecret.substring(0, 10)}...")...`);
 
 function generateJwt(userId) {
   const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
