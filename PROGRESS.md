@@ -119,7 +119,7 @@
       - Cập nhật [`run-tests.sh`](k6/performance-testing/run-tests.sh): Tự động trích xuất và export `JWT_ACCESS_TOKEN` từ `backend/.env`.
     - **Verification**:
       - Chạy toàn diện `./init.sh`: Backend tests đạt **286/286 passed**, Frontend build hoàn tất 100%.
-  - Commits: Sẵn sàng commit.
+  - Commits: `646f452` - fix(k6): resolve jwt secret mismatch with backend env and add auto-login fallback on 401.
   - Files or artifacts updated:
     - `backend/src/test/java/com/ticketbox/api/infrastructure/security/JwtUtilsTest.java`
     - `k6/performance-testing/data/generate-data.js`
