@@ -99,3 +99,7 @@ logs/
 *.swp
 *.swo
 summary-*.json
+
+# Tests
+users.json
+seed-users.sql
