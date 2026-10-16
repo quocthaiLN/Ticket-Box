@@ -29,11 +29,11 @@ export const options = {
       executor: 'ramping-vus',
       startVUs: 0,
       stages: [
-        { duration: '15s', target: 1000 },  // Spike tức thì lên đỉnh ngay khi mở cổng
-        { duration: '45s', target: 1000 },  // Duy trì đỉnh trong phút đầu (70% lưu lượng dồn vào đây)
-        { duration: '15s', target: 300 },   // Giảm tải xuống mức 30%
-        { duration: '3m45s', target: 300 }, // Duy trì 300 VUs trong 4 phút tiếp theo
-        { duration: '15s', target: 0 },     // Hạ nhiệt hoàn tất đợt mở bán 5 phút
+        { duration: '10s', target: 1000 },   // Spike vọt lên 800 VUs trong 10s
+        { duration: '50s', target: 1000 },   // Duy trì đỉnh trong phút đầu tiên
+        { duration: '10s', target: 300 },   // Giảm tải về 30%
+        { duration: '1m50s', target: 300 },    // Duy trì 2 phút tiếp theo
+        { duration: '10s', target: 0 },     // Hạ nhiệt
       ],
       gracefulRampDown: '15s',
     },
