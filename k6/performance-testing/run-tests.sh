@@ -14,7 +14,21 @@ echo " Target Base URL: ${BASE_URL}"
 echo " Reports Directory: ${REPORTS_DIR}"
 echo "========================================================"
 
+ensure_data_seeded() {
+    echo ""
+    echo ">>> Checking load test user data in PostgreSQL database..."
+    local user_count
+    user_count=$(docker exec ticketbox-postgres psql -U postgres -d ticketbox -t -c "SELECT COUNT(*) FROM users WHERE email LIKE 'loadtest_user_%';" 2>/dev/null | tr -d '[:space:]' || echo "0")
+    if [ -z "${user_count}" ] || [ "${user_count}" -lt 10000 ]; then
+        echo "⚠️ Database has ${user_count:-0} load test users (< 10,000). Running automatic generator & seeder..."
+        node "${SCRIPT_DIR}/data/generate-data.js"
+    else
+        echo "✅ Verified: ${user_count} load test users are already present in DB."
+    fi
+}
+
 run_catalog() {
+    ensure_data_seeded
     echo ""
     echo ">>> Running Scenario 1: Isolated Public Catalog Benchmarking..."
     k6 run \
@@ -25,6 +39,7 @@ run_catalog() {
 }
 
 run_order() {
+    ensure_data_seeded
     echo ""
     echo ">>> Running Scenario 2: Isolated Order & Payment Benchmarking..."
     k6 run \
@@ -35,6 +50,7 @@ run_order() {
 }
 
 run_e2e() {
+    ensure_data_seeded
     echo ""
     echo ">>> Running Scenario 3: Full E2E Flash Sale Rush (1,000 VUs)..."
     k6 run \

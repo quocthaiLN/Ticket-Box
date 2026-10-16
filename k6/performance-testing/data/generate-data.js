@@ -74,6 +74,56 @@ sqlLines.push('');
 
 fs.writeFileSync(SEED_SQL_PATH, sqlLines.join('\n'), 'utf-8');
 
-console.log('✅ Generation completed successfully:');
+console.log('✅ File generation completed successfully:');
 console.log(` - users.json: ${(fs.statSync(USERS_JSON_PATH).size / (1024 * 1024)).toFixed(2)} MB`);
 console.log(` - seed-users.sql: ${(fs.statSync(SEED_SQL_PATH).size / (1024 * 1024)).toFixed(2)} MB`);
+
+// Step 4: Automatically seed into PostgreSQL database
+if (process.argv.includes('--skip-db')) {
+  console.log('\n⏩ Skipping database seed (--skip-db passed).');
+} else {
+  const { execSync } = require('child_process');
+  console.log('\n[4/4] Seeding 10,000 users into PostgreSQL database...');
+  let seeded = false;
+
+  // Attempt 1: Via Docker container 'ticketbox-postgres'
+  try {
+    execSync(`docker exec -i ticketbox-postgres psql -U postgres -d ticketbox < "${SEED_SQL_PATH}"`, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    console.log('✅ Successfully seeded 10,000 users into PostgreSQL via Docker (ticketbox-postgres)!');
+    seeded = true;
+  } catch (dockerErr) {
+    // Attempt 2: Via local psql CLI
+    try {
+      const psqlEnv = { ...process.env, PGPASSWORD: process.env.DB_PASSWORD || 'password' };
+      const host = process.env.DB_HOST || 'localhost';
+      const port = process.env.DB_PORT || '5432';
+      const user = process.env.DB_USER || 'postgres';
+      const db = process.env.DB_NAME || 'ticketbox';
+      execSync(`psql -h ${host} -p ${port} -U ${user} -d ${db} -f "${SEED_SQL_PATH}"`, {
+        env: psqlEnv,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      console.log(`✅ Successfully seeded 10,000 users into PostgreSQL via local psql (${host}:${port})!`);
+      seeded = true;
+    } catch (fallbackErr) {
+      console.warn('⚠️ Could not automatically execute seed script into database:');
+      console.warn(`   Docker error: ${dockerErr.message.split('\n')[0]}`);
+      console.warn(`   psql error: ${fallbackErr.message.split('\n')[0]}`);
+      console.warn(`👉 To seed manually, please run:\n   docker exec -i ticketbox-postgres psql -U postgres -d ticketbox < "${SEED_SQL_PATH}"`);
+    }
+  }
+
+  if (seeded) {
+    try {
+      const countOutput = execSync(
+        `docker exec ticketbox-postgres psql -U postgres -d ticketbox -t -c "SELECT COUNT(*) FROM users WHERE email LIKE 'loadtest_user_%';"`,
+        { encoding: 'utf-8' }
+      );
+      console.log(`📊 Verified in database: ${countOutput.trim()} load test users are ready!`);
+    } catch (e) {
+      // ignore
+    }
+  }
+}
