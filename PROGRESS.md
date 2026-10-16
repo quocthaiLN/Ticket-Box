@@ -90,7 +90,7 @@
       - [`metrics.js`](k6/performance-testing/helpers/metrics.js): Bổ sung hàm `trackErrorStatus` bóc tách lỗi chi tiết (`http_429_rate_limited`, `http_500_server_error`, `http_503_unavailable`, `http_5xx_other`) để phục vụ quan sát chính xác nguyên nhân lỗi.
     - **Verification**:
       - Chạy toàn diện `./init.sh`: Backend tests đạt **285/285 passed** (0 failures, 0 errors, 2 skipped), Frontend build hoàn tất 100%.
-  - Commits: Sẵn sàng commit.
+  - Commits: `1729f4d` - feat(perf): optimize tomcat threads, hikari pool, rate limits, and pre-signed tokens for k6 flash sale.
   - Files or artifacts updated:
     - `backend/src/main/resources/application.yml`
     - `backend/src/main/java/com/ticketbox/api/module/order/config/OrderRateLimitPolicy.java`
