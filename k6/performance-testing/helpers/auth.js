@@ -28,7 +28,7 @@ export function loginUser(baseUrl, email, password) {
     'login has accessToken': (r) => {
       try {
         const body = r.json();
-        return body && body.data && !!body.data.accessToken;
+        return body && body.data && !!(body.data.access_token || body.data.accessToken);
       } catch (e) {
         return false;
       }
@@ -40,5 +40,6 @@ export function loginUser(baseUrl, email, password) {
     return null;
   }
 
-  return res.json().data.accessToken;
+  const data = res.json().data;
+  return data.access_token || data.accessToken;
 }

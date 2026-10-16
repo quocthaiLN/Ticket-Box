@@ -28,12 +28,13 @@ export const options = {
       executor: 'ramping-vus',
       startVUs: 0,
       stages: [
-        { duration: '1m', target: 200 },   // Warm-up stage
-        { duration: '2m', target: 1000 },  // Rush stage (gate opens)
-        { duration: '3m', target: 1000 },  // Sustained peak (measure P50, P95, P99)
-        { duration: '1m', target: 0 },     // Ramp-down
+        { duration: '15s', target: 1000 },  // Spike tức thì lên đỉnh ngay khi mở cổng
+        { duration: '45s', target: 1000 },  // Duy trì đỉnh trong phút đầu (70% lưu lượng dồn vào đây)
+        { duration: '15s', target: 300 },   // Giảm tải xuống mức 30%
+        { duration: '3m45s', target: 300 }, // Duy trì 300 VUs trong 4 phút tiếp theo
+        { duration: '15s', target: 0 },     // Hạ nhiệt hoàn tất đợt mở bán 5 phút
       ],
-      gracefulRampDown: '30s',
+      gracefulRampDown: '15s',
     },
   },
   // Exploratory benchmarking: display full percentile distribution
@@ -147,7 +148,7 @@ export default function () {
     let orderId = null;
     try {
       const body = holdRes.json();
-      orderId = body.data ? body.data.id : null;
+      orderId = body.data ? (body.data.order_id || body.data.id) : null;
     } catch (e) {
       systemErrors.add(1);
     }
@@ -178,9 +179,10 @@ export default function () {
 
       const paySuccess = check(payRes, {
         'payment created status 201': (r) => r.status === 201,
-        'payment URL present': (r) => {
+        'checkout URL present': (r) => {
           try {
-            return !!r.json().data.paymentUrl;
+            const data = r.json().data;
+            return !!(data.checkout_url || data.paymentUrl);
           } catch (e) {
             return false;
           }

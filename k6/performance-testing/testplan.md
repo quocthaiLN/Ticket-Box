@@ -179,23 +179,36 @@ sequenceDiagram
     end
 ```
 
-#### Hồ sơ Tải K6 cho Luồng E2E (1.000 Peak VUs):
-- **Giai đoạn 1 (Warm-up)**: 0 -> 200 VUs trong 1 phút.
-- **Giai đoạn 2 (Spike / Rush)**: 200 -> 1.000 VUs trong 2 phút (Mô phỏng cổng bán vé vừa mở).
-- **Giai đoạn 3 (Sustained Peak)**: Duy trì 1.000 VUs trong 3 phút (Đo đạc chỉ số P50, P95, P99 khi tranh chấp cao nhất).
-- **Giai đoạn 4 (Cooldown)**: 1.000 -> 0 VUs trong 1 phút.
-- **Tổng thời gian chạy**: 7 phút.
+#### 4.2.2. Hồ sơ Tải K6: Mô hình Đột biến Đầu giờ (Front-loaded Burst / Spike Profile - 5 phút)
+
+Trong thực tế mở bán sự kiện Flash Sale (ví dụ quy mô 80.000 lượt truy cập trong 5 phút đầu), hành vi người dùng **không tăng dần từ từ** mà **dồn dập ngay từ giây đầu tiên** khi hệ thống mở cổng:
+- **Phút thứ nhất (0:00 - 1:00)**: Chiếm **70% tổng lưu lượng** (~56.000 lượt truy cập), tạo ra một đợt Spike cực lớn với hàng nghìn user gửi yêu cầu cùng lúc.
+- **Phút thứ 2 đến 5 (1:00 - 5:00)**: Chiếm **30% lưu lượng còn lại** (~24.000 lượt truy cập, trung bình 6.000 lượt/phút), phân bổ đều đặn cho những người vào sau hoặc thử lại (retry).
+
+##### Cấu hình Stages chi tiết (Ramping VUs - 1.000 Peak VUs):
+1. **Stage 1 (Spike tức thì)**: `0s -> 15s` vút thẳng từ 0 lên đỉnh **1.000 VUs** (mô phỏng cổng bán vé mở, người dùng ùa vào lập tức).
+2. **Stage 2 (Duy trì 70% tải đỉnh)**: `15s -> 1m00s` (45 giây) giữ liên tục ở mức **1.000 VUs** với pacing ngắn (100 - 300ms) để dồn 70% tổng số giao dịch vào phút đầu tiên.
+3. **Stage 3 (Hạ tải về nhóm còn lại)**: `1m00s -> 1m15s` (15 giây) giảm tải từ 1.000 VUs xuống **300 VUs** (tương ứng mức 30% lưu lượng).
+4. **Stage 4 (Duy trì 30% tải trong 4 phút sau)**: `1m15s -> 5m00s` (3 phút 45 giây) duy trì đều ở mức **300 VUs**.
+5. **Stage 5 (Hạ nhiệt)**: `5m00s -> 5m15s` giảm từ 300 về 0 VUs, hoàn tất phiên test 5 phút.
 
 ```
 VUs
-1000 |              ┌──────────────────────┐
-     |             /                        \
- 500 |            /                          \
-     |           /                            \
- 200 |    ┌─────┘                              \
-   0 └────┴───────┴──────┴──────┴──────┴───────┴────
-     0m   1m      2m     3m     4m     5m      6m   7m  Time
+1000 |  ┌───────────────────────┐ (Phút 1: 70% tải - Rush)
+     |  │                       │
+ 500 |  │                       │
+ 300 |  │                       └────┬─────────────────────────────┐ (Phút 2-5: 30% tải)
+     |  │                                                      │
+   0 └──┴──────────────────────────────────────────────────────┴────
+       0s  15s                 1m                             5m    Time
 ```
+
+##### Cấu hình mẫu qua `ramping-arrival-rate` (Đo Throughput tuyệt đối):
+Nếu muốn kiểm soát chính xác số lượng request/giây theo đúng tỷ lệ 80.000 users trong 5 phút:
+- Phút 1 (60s): 56.000 requests / 60s $\approx$ **933 requests/giây**.
+- Phút 2 - 5 (240s): 24.000 requests / 240s $\approx$ **100 requests/giây**.
+Kịch bản K6 hỗ trợ linh hoạt chuyển đổi giữa `ramping-vus` (khảo sát năng lực xử lý đồng thời) và `ramping-arrival-rate` (ép tải cố định theo chỉ tiêu RPS).
+
 
 ---
 

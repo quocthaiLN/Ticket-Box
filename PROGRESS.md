@@ -43,28 +43,24 @@
       - Tạo [`metrics.js`](k6/performance-testing/helpers/metrics.js) khai báo các Trends đo P50, P95, P99 và Counters lỗi/hết vé.
       - Tạo [`auth.js`](k6/performance-testing/helpers/auth.js) helper đăng nhập và cấp phát Bearer JWT token.
     - **Kịch bản K6 Scenarios (Sử dụng `SharedArray`)**:
-      - Tạo [`catalog-isolated.js`](k6/performance-testing/scenarios/catalog-isolated.js): Đo đạc độc lập 5 API Public Catalog (`/concerts`, `/concerts/{id}`, `/seat-map`, `/ticket-types`, `/inventory`) và `/quota`.
-      - Tạo [`order-isolated.js`](k6/performance-testing/scenarios/order-isolated.js): Đo đạc độc lập API giữ vé `POST /orders`, xem đơn `GET /orders/{id}`, và tạo thanh toán `POST /orders/{id}/payments`.
-      - Tạo [`flash-sale-e2e.js`](k6/performance-testing/scenarios/flash-sale-e2e.js): Mô phỏng toàn diện luồng người dùng Flash Sale 1.000 VUs tranh mua vé (Đăng nhập -> Xem thông tin -> Giữ vé -> Thanh toán VNPay HMAC).
+      - Tinh chỉnh mô hình tải: Chuyển đổi từ tăng từ từ sang **Mô hình Đột biến Đầu giờ (Front-loaded Burst / Spike Profile - 5 phút)** theo yêu cầu thực tế (70% lưu lượng dồn vào phút đầu tiên, 30% phân bổ trong 4 phút tiếp theo).
+      - [`catalog-isolated.js`](k6/performance-testing/scenarios/catalog-isolated.js): Đo đạc độc lập 5 API Public Catalog (`/concerts`, `/concerts/{id}`, `/seat-map`, `/ticket-types`, `/inventory`) và `/quota` (Spike 500 VUs ở phút 1, 150 VUs ở 2 phút sau).
+      - [`order-isolated.js`](k6/performance-testing/scenarios/order-isolated.js): Đo đạc độc lập API giữ vé `POST /orders`, xem đơn `GET /orders/{id}`, và tạo thanh toán `POST /orders/{id}/payments` (Spike 300 VUs ở phút 1, 100 VUs ở 2 phút sau).
+      - [`flash-sale-e2e.js`](k6/performance-testing/scenarios/flash-sale-e2e.js): Mô phỏng toàn diện luồng người dùng Flash Sale 1.000 VUs (15s vút lên 1.000 VUs, duy trì 45s phút đầu; 15s hạ về 300 VUs duy trì 3m45s tiếp theo).
     - **Automation Runner**:
       - Tạo [`run-tests.sh`](k6/performance-testing/run-tests.sh) hỗ trợ chạy linh hoạt `catalog`, `order`, `e2e` hoặc `all` và xuất báo cáo summary JSON vào thư mục `reports/`.
     - **Verification**:
-      - Chạy smoke check K6 thành công cho cả 3 script kịch bản (`catalog-isolated.js`, `order-isolated.js`, `flash-sale-e2e.js`).
+      - Chuẩn hóa trích xuất dữ liệu JSON phản hồi: Khớp chính xác `access_token` trong `LoginResponse`, `order_id` trong `OrderResponse`, và `checkout_url` trong `CreatePaymentResponse`.
+      - Chạy smoke check K6 end-to-end trên môi trường thực tế đạt **100% checks passed** (8/8 checks, 0 failure) trên luồng Flash Sale E2E.
       - Chạy `./init.sh` toàn diện: Backend tests đạt **285/285 passed**, Frontend build thành công 100%.
-  - Commits: `fc15da9` (Test Plan docs), sẵn sàng commit code kịch bản K6.
+  - Commits: Sẵn sàng commit.
   - Files or artifacts updated:
     - `PROGRESS.md`
     - `k6/performance-testing/testplan.md`
-    - `k6/performance-testing/data/generate-data.js`
-    - `k6/performance-testing/data/users.json`
-    - `k6/performance-testing/data/seed-users.sql`
-    - `k6/performance-testing/config/environments.js`
-    - `k6/performance-testing/helpers/uuid.js`
-    - `k6/performance-testing/helpers/metrics.js`
     - `k6/performance-testing/helpers/auth.js`
     - `k6/performance-testing/scenarios/catalog-isolated.js`
     - `k6/performance-testing/scenarios/order-isolated.js`
     - `k6/performance-testing/scenarios/flash-sale-e2e.js`
-    - `k6/performance-testing/run-tests.sh`
   - Known risk or unresolved issue: Không có.
-  - Next best step: Khởi động Backend API (`./mvnw spring-boot:run`) và thực thi kịch bản K6 theo nhu cầu đo đạc.
+  - Next best step: Sẵn sàng chạy bài test hiệu năng quy mô đầy đủ với `./k6/performance-testing/run-tests.sh e2e`.
+

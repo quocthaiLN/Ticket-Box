@@ -24,12 +24,13 @@ export const options = {
       executor: 'ramping-vus',
       startVUs: 0,
       stages: [
-        { duration: '30s', target: 50 },
-        { duration: '1m', target: 200 },
-        { duration: '1m30s', target: 200 },
-        { duration: '30s', target: 0 },
+        { duration: '10s', target: 300 },   // Spike tức thì lên đỉnh 300 VUs
+        { duration: '50s', target: 300 },   // Duy trì áp lực giữ vé phút đầu tiên
+        { duration: '10s', target: 100 },   // Hạ tải về mức 30%
+        { duration: '2m', target: 100 },    // Duy trì tải đều 2 phút tiếp theo
+        { duration: '10s', target: 0 },     // Hạ nhiệt
       ],
-      gracefulRampDown: '15s',
+      gracefulRampDown: '10s',
     },
   },
   summaryTrendStats: ['avg', 'min', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
@@ -86,7 +87,7 @@ export default function () {
     let orderId = null;
     try {
       const body = holdRes.json();
-      orderId = body.data ? body.data.id : null;
+      orderId = body.data ? (body.data.order_id || body.data.id) : null;
     } catch (e) {
       systemErrors.add(1);
     }
@@ -122,9 +123,10 @@ export default function () {
 
       check(payRes, {
         'payment created status 201': (r) => r.status === 201,
-        'payment has paymentUrl': (r) => {
+        'payment has checkout_url': (r) => {
           try {
-            return !!r.json().data.paymentUrl;
+            const data = r.json().data;
+            return !!(data.checkout_url || data.paymentUrl);
           } catch (e) {
             return false;
           }

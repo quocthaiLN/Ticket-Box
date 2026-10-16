@@ -24,10 +24,11 @@ export const options = {
       executor: 'ramping-vus',
       startVUs: 0,
       stages: [
-        { duration: '30s', target: 100 },
-        { duration: '1m', target: 300 },
-        { duration: '1m30s', target: 300 },
-        { duration: '30s', target: 0 },
+        { duration: '10s', target: 500 },   // Spike vọt lên 500 VUs trong 10s
+        { duration: '50s', target: 500 },   // Duy trì đỉnh trong phút đầu tiên
+        { duration: '10s', target: 150 },   // Giảm tải về 30%
+        { duration: '2m', target: 150 },    // Duy trì 2 phút tiếp theo
+        { duration: '10s', target: 0 },     // Hạ nhiệt
       ],
       gracefulRampDown: '10s',
     },
