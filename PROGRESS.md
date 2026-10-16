@@ -67,3 +67,41 @@
   - Known risk or unresolved issue: Không có.
   - Next best step: Sẵn sàng chạy bài test hiệu năng quy mô đầy đủ với `./k6/performance-testing/run-tests.sh e2e`.
 
+- Session 002
+  - Goal: Phân tích kết quả đo k6 E2E, nhận diện các điểm nghẽn hệ thống (BCrypt CPU, Rate Limiting 429/503, HikariCP, Tomcat threads) và triển khai giải pháp tối ưu hóa toàn diện cho Backend & K6 scripts.
+  - Completed:
+    - **Phân tích kết quả đo K6 E2E**:
+      - Tổng 129.260 requests, 23.992 iterations trong 5m15s.
+      - 4.650 luồng mua vé thành công (19.38%), 7.373 lượt hết vé (30.73%), 11.969 lỗi hệ thống (49.89%).
+      - Nhận diện 4 điểm nghẽn chính:
+        1. Rate Limiter (6 req/min per user) bị kích hoạt khi user retry hoặc trùng user giữa các VUs, trả về 429 hoặc 503 (`failClosed = true` khi Redis nghẽn).
+        2. Tomcat thread starvation: Mặc định 200 threads không đủ tải 1.000 VUs đồng thời.
+        3. HikariCP connection pool starvation: Mặc định 10 connections không kịp cấp phát cho hàng trăm worker threads cùng lúc.
+        4. BCrypt CPU saturation: Mỗi iteration gọi `/auth/login` tốn hàng trăm ms CPU để hash BCrypt độ khó 10.
+    - **Tối ưu hóa cấu hình Backend**:
+      - [`backend/src/main/resources/application.yml`](backend/src/main/resources/application.yml):
+        - Bổ sung cấu hình Tomcat: `threads.max = 400`, `threads.min-spare = 50`, `accept-count = 1000`, `max-connections = 8192`.
+        - Bổ sung cấu hình HikariCP: `maximum-pool-size = 50`, `minimum-idle = 20`, `connection-timeout = 20000ms`, `max-lifetime = 1200000ms`.
+      - [`OrderRateLimitPolicy.java`](backend/src/main/java/com/ticketbox/api/module/order/config/OrderRateLimitPolicy.java): Nâng rate limit cho `POST /orders` từ 6 lên 30 req/min.
+      - [`PaymentRateLimitPolicy.java`](backend/src/main/java/com/ticketbox/api/module/payment/config/PaymentRateLimitPolicy.java): Nâng rate limit cho `POST /payments` và `POST /orders/{id}/payments` từ 6 lên 30 req/min. Giữ nguyên `failClosed = true` tuân thủ yêu cầu an toàn tài chính.
+    - **Tối ưu hóa K6 & Sinh Pre-signed JWTs**:
+      - [`generate-data.js`](k6/performance-testing/data/generate-data.js): Sinh sẵn HMAC-SHA256 JWT tokens (30 ngày) cho 10.000 test users vào [`users.json`](k6/performance-testing/data/users.json) khớp với secret key của `JwtUtils`.
+      - [`flash-sale-e2e.js`](k6/performance-testing/scenarios/flash-sale-e2e.js), [`order-isolated.js`](k6/performance-testing/scenarios/order-isolated.js), [`catalog-isolated.js`](k6/performance-testing/scenarios/catalog-isolated.js): Ưu tiên sử dụng `user.token` có sẵn trong memory `SharedArray`, fallback gọi `/auth/login` nếu thiếu. Loại bỏ hoàn toàn chi phí BCrypt CPU ở backend.
+      - [`metrics.js`](k6/performance-testing/helpers/metrics.js): Bổ sung hàm `trackErrorStatus` bóc tách lỗi chi tiết (`http_429_rate_limited`, `http_500_server_error`, `http_503_unavailable`, `http_5xx_other`) để phục vụ quan sát chính xác nguyên nhân lỗi.
+    - **Verification**:
+      - Chạy toàn diện `./init.sh`: Backend tests đạt **285/285 passed** (0 failures, 0 errors, 2 skipped), Frontend build hoàn tất 100%.
+  - Commits: Sẵn sàng commit.
+  - Files or artifacts updated:
+    - `backend/src/main/resources/application.yml`
+    - `backend/src/main/java/com/ticketbox/api/module/order/config/OrderRateLimitPolicy.java`
+    - `backend/src/main/java/com/ticketbox/api/module/payment/config/PaymentRateLimitPolicy.java`
+    - `k6/performance-testing/data/generate-data.js`
+    - `k6/performance-testing/data/users.json`
+    - `k6/performance-testing/helpers/metrics.js`
+    - `k6/performance-testing/scenarios/catalog-isolated.js`
+    - `k6/performance-testing/scenarios/order-isolated.js`
+    - `k6/performance-testing/scenarios/flash-sale-e2e.js`
+    - `PROGRESS.md`
+  - Known risk or unresolved issue: Không có.
+  - Next best step: Khởi động backend với cấu hình mới và chạy k6 `./k6/performance-testing/run-tests.sh e2e` để đo đạc và so sánh kết quả.
+

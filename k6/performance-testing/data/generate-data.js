@@ -10,15 +10,37 @@ const BCRYPT_HASH = '$2a$10$1g0K0QuYuLodqHt0ljhRhOeqPvCdujHcGvrd1Rc7.apSnGvvwzDc
 const USERS_JSON_PATH = path.join(__dirname, 'users.json');
 const SEED_SQL_PATH = path.join(__dirname, 'seed-users.sql');
 
-console.log(`[1/3] Generating ${TOTAL_USERS} user credentials...`);
+const crypto = require('crypto');
+const JWT_SECRET_HEX = process.env.JWT_ACCESS_TOKEN || 'test5709e9900945c4f72186cf92b6ae9ddb30eb3f3906ef92e4e3ffa2dc986f';
+const secretKey = Buffer.from(JWT_SECRET_HEX, 'hex');
+
+function generateJwt(userId) {
+  const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+  const header = b64({ alg: 'HS256', typ: 'JWT' });
+  const now = Math.floor(Date.now() / 1000);
+  const payload = b64({
+    jti: crypto.randomUUID(),
+    sub: userId,
+    role: 'AUDIENCE',
+    iat: now,
+    exp: now + 86400 * 30, // 30 days validity
+  });
+  const sig = crypto.createHmac('sha256', secretKey).update(`${header}.${payload}`).digest('base64url');
+  return `${header}.${payload}.${sig}`;
+}
+
+console.log(`[1/3] Generating ${TOTAL_USERS} user credentials and pre-signed JWT tokens...`);
 
 const users = [];
 for (let i = 1; i <= TOTAL_USERS; i++) {
   const indexStr = String(i).padStart(5, '0');
+  const userId = `a0000000-0000-0000-0000-${String(i).padStart(12, '0')}`;
   const email = `loadtest_user_${indexStr}@ticketbox.test`;
   users.push({
+    id: userId,
     email: email,
-    password: PASSWORD
+    password: PASSWORD,
+    token: generateJwt(userId),
   });
 }
 

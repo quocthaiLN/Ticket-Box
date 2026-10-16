@@ -15,6 +15,7 @@ import {
   ordersSoldOut,
   systemErrors,
   successfulFlows,
+  trackErrorStatus,
 } from '../helpers/metrics.js';
 
 // Load 10,000 user credentials into shared memory (read-only buffer for all VUs)
@@ -47,11 +48,14 @@ export default function () {
   const user = users[(__VU - 1) % users.length];
 
   // --------------------------------------------------------------------------
-  // STEP 1: User Login
+  // STEP 1: User Authentication (Pre-signed JWT token or fallback to login)
   // --------------------------------------------------------------------------
-  const token = loginUser(baseUrl, user.email, user.password);
+  let token = user.token;
   if (!token) {
-    systemErrors.add(1);
+    token = loginUser(baseUrl, user.email, user.password);
+  }
+  if (!token) {
+    trackErrorStatus(500);
     sleep(1);
     return;
   }
@@ -190,7 +194,7 @@ export default function () {
       });
 
       if (!paySuccess) {
-        systemErrors.add(1);
+        trackErrorStatus(payRes.status);
       } else {
         // ------------------------------------------------------------------
         // STEP 7: Verify Order Status (GET /orders/{id})
@@ -213,8 +217,8 @@ export default function () {
     ordersSoldOut.add(1);
     successfulFlows.add(0);
   } else {
-    // Unexpected system error (500, 502, 504)
-    systemErrors.add(1);
+    // Unexpected system error (429, 500, 503, 504)
+    trackErrorStatus(holdRes.status);
     successfulFlows.add(0);
   }
 

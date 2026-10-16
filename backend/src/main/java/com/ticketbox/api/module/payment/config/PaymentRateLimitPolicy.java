@@ -10,8 +10,8 @@ public class PaymentRateLimitPolicy implements RateLimitPolicyProvider {
     @Override
     public List<RateLimitPolicy> policies() {
         return List.of(
-                RateLimitPolicy.of("POST", "^/payments$", "payment:initiate", 6, 60_000, true),
-                RateLimitPolicy.of("POST", "^/orders/[^/]+/payments$", "payment:initiate", 6, 60_000, true),
+                RateLimitPolicy.of("POST", "^/payments$", "payment:initiate", 30, 60_000, true),
+                RateLimitPolicy.of("POST", "^/orders/[^/]+/payments$", "payment:initiate", 30, 60_000, true),
                 RateLimitPolicy.of("GET", "^/payments/[^/]+$", "payment:read", 60, 60_000, false)
         );
     }

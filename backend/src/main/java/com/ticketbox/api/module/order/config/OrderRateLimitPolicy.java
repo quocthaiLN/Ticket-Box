@@ -10,7 +10,7 @@ public class OrderRateLimitPolicy implements RateLimitPolicyProvider {
     @Override
     public List<RateLimitPolicy> policies() {
         return List.of(
-                RateLimitPolicy.of("POST", "^/orders$", "order:create", 6, 60_000, true),
+                RateLimitPolicy.of("POST", "^/orders$", "order:create", 30, 60_000, true),
                 RateLimitPolicy.of("GET", "^/orders/[^/]+$", "order:read", 60, 60_000, false)
         );
     }

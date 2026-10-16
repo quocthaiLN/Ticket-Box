@@ -11,6 +11,7 @@ import {
   ordersHeldSuccess,
   ordersSoldOut,
   systemErrors,
+  trackErrorStatus,
 } from '../helpers/metrics.js';
 
 // Load 10,000 user credentials into shared memory
@@ -41,9 +42,13 @@ export default function () {
   const concertId = config.targetConcertId;
   const user = users[(__VU - 1) % users.length];
 
-  // 1. Authenticate user to obtain Bearer token
-  const token = loginUser(baseUrl, user.email, user.password);
+  // 1. Authenticate user to obtain Bearer token (pre-signed token or fallback)
+  let token = user.token;
   if (!token) {
+    token = loginUser(baseUrl, user.email, user.password);
+  }
+  if (!token) {
+    trackErrorStatus(500);
     sleep(1);
     return;
   }
@@ -131,14 +136,14 @@ export default function () {
             return false;
           }
         },
-      }) || systemErrors.add(1);
+      }) || trackErrorStatus(payRes.status);
     }
   } else if (holdRes.status === 400 || holdRes.status === 409) {
     // Sold out, limit exceeded, or business conflict
     ordersSoldOut.add(1);
   } else {
-    // System error (5xx or connection issue)
-    systemErrors.add(1);
+    // System error (429, 500, 503, 504)
+    trackErrorStatus(holdRes.status);
   }
 
   sleep(0.2);

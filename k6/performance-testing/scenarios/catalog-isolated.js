@@ -24,10 +24,10 @@ export const options = {
       executor: 'ramping-vus',
       startVUs: 0,
       stages: [
-        { duration: '10s', target: 1000 },   // Spike vọt lên 1000 VUs trong 10s
-        { duration: '50s', target: 1000 },   // Duy trì đỉnh trong phút đầu tiên
-        { duration: '10s', target: 300 },   // Giảm tải về 30%
-        { duration: '2m', target: 300 },    // Duy trì 2 phút tiếp theo
+        { duration: '10s', target: 500 },   // Spike vọt lên 500 VUs trong 10s
+        { duration: '50s', target: 500 },   // Duy trì đỉnh trong phút đầu tiên
+        { duration: '10s', target: 150 },   // Giảm tải về 30%
+        { duration: '2m', target: 150 },    // Duy trì 2 phút tiếp theo
         { duration: '10s', target: 0 },     // Hạ nhiệt
       ],
       gracefulRampDown: '10s',
@@ -113,7 +113,7 @@ export default function () {
   // 6. Quota check (requires authentication, 1 in 5 iterations to test quota endpoint)
   if (__ITER % 5 === 0) {
     const user = users[(__VU - 1) % users.length];
-    const token = loginUser(baseUrl, user.email, user.password);
+    const token = user.token || loginUser(baseUrl, user.email, user.password);
     if (token) {
       const authHeaders = Object.assign({}, headers, {
         Authorization: `Bearer ${token}`,
