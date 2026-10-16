@@ -47,16 +47,19 @@
       - [`catalog-isolated.js`](k6/performance-testing/scenarios/catalog-isolated.js): Đo đạc độc lập 5 API Public Catalog (`/concerts`, `/concerts/{id}`, `/seat-map`, `/ticket-types`, `/inventory`) và `/quota` (Spike 500 VUs ở phút 1, 150 VUs ở 2 phút sau).
       - [`order-isolated.js`](k6/performance-testing/scenarios/order-isolated.js): Đo đạc độc lập API giữ vé `POST /orders`, xem đơn `GET /orders/{id}`, và tạo thanh toán `POST /orders/{id}/payments` (Spike 300 VUs ở phút 1, 100 VUs ở 2 phút sau).
       - [`flash-sale-e2e.js`](k6/performance-testing/scenarios/flash-sale-e2e.js): Mô phỏng toàn diện luồng người dùng Flash Sale 1.000 VUs (15s vút lên 1.000 VUs, duy trì 45s phút đầu; 15s hạ về 300 VUs duy trì 3m45s tiếp theo).
-    - **Automation Runner**:
-      - Tạo [`run-tests.sh`](k6/performance-testing/run-tests.sh) hỗ trợ chạy linh hoạt `catalog`, `order`, `e2e` hoặc `all` và xuất báo cáo summary JSON vào thư mục `reports/`.
+    - **Automation Runner & Auto-seed**:
+      - Tích hợp bước [4/4] trực tiếp vào [`generate-data.js`](k6/performance-testing/data/generate-data.js): Tự động nạp `seed-users.sql` vào container PostgreSQL (`ticketbox-postgres`) hoặc qua `psql` ngay sau khi sinh file.
+      - Tích hợp kiểm tra tự động `ensure_data_seeded` vào [`run-tests.sh`](k6/performance-testing/run-tests.sh): Tự động đếm số lượng user test trong DB; nếu < 10.000 user thì tự động chạy script sinh và nạp DB trước khi bắt đầu test.
     - **Verification**:
       - Chuẩn hóa trích xuất dữ liệu JSON phản hồi: Khớp chính xác `access_token` trong `LoginResponse`, `order_id` trong `OrderResponse`, và `checkout_url` trong `CreatePaymentResponse`.
       - Chạy smoke check K6 end-to-end trên môi trường thực tế đạt **100% checks passed** (8/8 checks, 0 failure) trên luồng Flash Sale E2E.
       - Chạy `./init.sh` toàn diện: Backend tests đạt **285/285 passed**, Frontend build thành công 100%.
-  - Commits: Sẵn sàng commit.
+  - Commits: `5bfc2ad` (burst profile), `c468f2f` (auto-seed to postgres).
   - Files or artifacts updated:
     - `PROGRESS.md`
     - `k6/performance-testing/testplan.md`
+    - `k6/performance-testing/data/generate-data.js`
+    - `k6/performance-testing/run-tests.sh`
     - `k6/performance-testing/helpers/auth.js`
     - `k6/performance-testing/scenarios/catalog-isolated.js`
     - `k6/performance-testing/scenarios/order-isolated.js`
