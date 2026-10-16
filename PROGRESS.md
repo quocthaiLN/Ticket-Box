@@ -17,24 +17,54 @@
   - [x] Phỏng vấn làm rõ yêu cầu với `interview-me`: Thống nhất kịch bản Flash Sale (1.000 VUs dồn vào 1 sự kiện hot, phân tán nhiều hạng vé), 10k users tải qua `SharedArray`, mục tiêu thuần đo đạc P50/P95/P99 không gán ngưỡng fail.
   - [x] Khởi tạo môi trường task mới, lưu trữ progress task cũ vào `.agents/progress/payment-resilience-progress.md`, cập nhật `PROGRESS.md`.
   - [x] Soạn thảo toàn diện tài liệu Test Plan tại `k6/performance-testing/testplan.md`.
-  - [ ] Thiết kế script sinh 10.000 user (seed DB & export `users.json`).
-  - [ ] Thiết kế script K6 kiểm thử độc lập từng API.
-  - [ ] Thiết kế script K6 kiểm thử luồng tích hợp E2E Flash Sale.
-  - [ ] Hướng dẫn chạy kiểm thử, phân tích kết quả và xuất báo cáo P50, P95, P99.
+  - [x] Thiết kế script sinh 10.000 user (seed DB & export `users.json`).
+  - [x] Thiết kế script K6 kiểm thử độc lập từng API Public Catalog (`catalog-isolated.js`).
+  - [x] Thiết kế script K6 kiểm thử độc lập API Order (`order-isolated.js`).
+  - [x] Thiết kế script K6 kiểm thử luồng tích hợp E2E Flash Sale (`flash-sale-e2e.js`).
+  - [x] Xây dựng runner script `run-tests.sh` tự động hóa chạy và xuất kết quả summary.
+  - [x] Chạy smoke validation kiểm tra cú pháp và khả năng thực thi k6 cho toàn bộ các script.
 
 ## Session Logs
 
 - Session 001
-  - Goal: Khởi động task mới, backup progress cũ, hoàn thành Test Plan chi tiết tại `k6/performance-testing/testplan.md`.
+  - Goal: Khởi động task mới, backup progress cũ, hoàn thành Test Plan chi tiết tại `k6/performance-testing/testplan.md`, xây dựng toàn bộ data generator và kịch bản K6 hoàn chỉnh.
   - Completed:
-    - Phỏng vấn làm rõ yêu cầu thành công theo skill `interview-me`: xác định kịch bản Flash Sale cạnh tranh 1 sự kiện, 1.000 VUs đỉnh điểm, cấu trúc đo đạc thuần túy P50/P95/P99.
-    - Lưu trữ lịch sử `PROGRESS.md` của task trước vào `.agents/progress/payment-resilience-progress.md`.
-    - Tạo mới `PROGRESS.md` định hình mục tiêu, phạm vi và tiêu chí nghiệm thu của bài test hiệu năng K6.
-    - Soạn thảo tài liệu Test Plan toàn diện tại `k6/performance-testing/testplan.md`.
-  - Commits: Đang thực hiện.
+    - **Phỏng vấn yêu cầu**: Phỏng vấn làm rõ yêu cầu thành công theo skill `interview-me`: xác định kịch bản Flash Sale cạnh tranh 1 sự kiện ("Anh Trai Say Hi Live Concert 2026"), 1.000 VUs đỉnh điểm, cấu trúc đo đạc thuần túy P50/P95/P99.
+    - **Lưu trữ & Khởi tạo tiến trình**: Lưu trữ lịch sử `PROGRESS.md` của task trước vào `.agents/progress/payment-resilience-progress.md`, khởi tạo mới `PROGRESS.md`.
+    - **Tài liệu Kế hoạch**: Soạn thảo tài liệu Test Plan chi tiết tại [`k6/performance-testing/testplan.md`](k6/performance-testing/testplan.md).
+    - **Dữ liệu 10.000 Users**:
+      - Viết script Node.js [`generate-data.js`](k6/performance-testing/data/generate-data.js).
+      - Xuất file credentials [`users.json`](k6/performance-testing/data/users.json) (10.000 users định dạng JSON, kích thước 0.87 MB).
+      - Tạo file [`seed-users.sql`](k6/performance-testing/data/seed-users.sql) (4.05 MB) với hash BCrypt chuẩn hóa `$2a$10$...`.
+      - Nạp thành công toàn bộ 10.000 user và 10.000 user accounts vào PostgreSQL container (`ticketbox-postgres`).
+    - **K6 Configuration & Helpers**:
+      - Tạo [`environments.js`](k6/performance-testing/config/environments.js) định nghĩa Base URL, Target Concert ID (`a1111111-1111-1111-1111-111111111111`) và danh sách 3 loại vé (`c1111111...`, `c2222222...`, `c3333333...`).
+      - Tạo [`uuid.js`](k6/performance-testing/helpers/uuid.js) sinh UUID v4 RFC 4122 chuẩn cho Header `Idempotency-Key`.
+      - Tạo [`metrics.js`](k6/performance-testing/helpers/metrics.js) khai báo các Trends đo P50, P95, P99 và Counters lỗi/hết vé.
+      - Tạo [`auth.js`](k6/performance-testing/helpers/auth.js) helper đăng nhập và cấp phát Bearer JWT token.
+    - **Kịch bản K6 Scenarios (Sử dụng `SharedArray`)**:
+      - Tạo [`catalog-isolated.js`](k6/performance-testing/scenarios/catalog-isolated.js): Đo đạc độc lập 5 API Public Catalog (`/concerts`, `/concerts/{id}`, `/seat-map`, `/ticket-types`, `/inventory`) và `/quota`.
+      - Tạo [`order-isolated.js`](k6/performance-testing/scenarios/order-isolated.js): Đo đạc độc lập API giữ vé `POST /orders`, xem đơn `GET /orders/{id}`, và tạo thanh toán `POST /orders/{id}/payments`.
+      - Tạo [`flash-sale-e2e.js`](k6/performance-testing/scenarios/flash-sale-e2e.js): Mô phỏng toàn diện luồng người dùng Flash Sale 1.000 VUs tranh mua vé (Đăng nhập -> Xem thông tin -> Giữ vé -> Thanh toán VNPay HMAC).
+    - **Automation Runner**:
+      - Tạo [`run-tests.sh`](k6/performance-testing/run-tests.sh) hỗ trợ chạy linh hoạt `catalog`, `order`, `e2e` hoặc `all` và xuất báo cáo summary JSON vào thư mục `reports/`.
+    - **Verification**:
+      - Chạy smoke check K6 thành công cho cả 3 script kịch bản (`catalog-isolated.js`, `order-isolated.js`, `flash-sale-e2e.js`).
+      - Chạy `./init.sh` toàn diện: Backend tests đạt **285/285 passed**, Frontend build thành công 100%.
+  - Commits: `fc15da9` (Test Plan docs), sẵn sàng commit code kịch bản K6.
   - Files or artifacts updated:
-    - `.agents/progress/payment-resilience-progress.md`
     - `PROGRESS.md`
     - `k6/performance-testing/testplan.md`
-  - Known risk or unresolved issue: Cần chú ý cấu hình Rate Limit của hệ thống khi chạy tải lớn để tránh bị HTTP 429 ngoài ý muốn.
-  - Next best step: Triển khai script sinh dữ liệu 10k users và các file kịch bản K6.
+    - `k6/performance-testing/data/generate-data.js`
+    - `k6/performance-testing/data/users.json`
+    - `k6/performance-testing/data/seed-users.sql`
+    - `k6/performance-testing/config/environments.js`
+    - `k6/performance-testing/helpers/uuid.js`
+    - `k6/performance-testing/helpers/metrics.js`
+    - `k6/performance-testing/helpers/auth.js`
+    - `k6/performance-testing/scenarios/catalog-isolated.js`
+    - `k6/performance-testing/scenarios/order-isolated.js`
+    - `k6/performance-testing/scenarios/flash-sale-e2e.js`
+    - `k6/performance-testing/run-tests.sh`
+  - Known risk or unresolved issue: Không có.
+  - Next best step: Khởi động Backend API (`./mvnw spring-boot:run`) và thực thi kịch bản K6 theo nhu cầu đo đạc.
